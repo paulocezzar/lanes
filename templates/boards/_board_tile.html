@@ -1,0 +1,4 @@
+<a class="board-tile bg-{{ b.background }}" href="{% url 'board' b.pk %}">
+  <span class="board-tile-title">{{ b.title }}</span>
+  <span class="board-tile-meta">{% if b.visibility == 'private' %}Private{% endif %}{% if b.pk in starred_ids %} ★{% endif %}</span>
+</a>

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Boards · Lanes{% endblock %}
+{% block content %}
+<main class="home">
+  {% if starred %}
+  <section class="home-section">
+    <h2>★ Starred boards</h2>
+    <div class="tile-grid">
+      {% for b in starred %}{% include "boards/_board_tile.html" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% for g in groups %}
+  <section class="home-section">
+    <h2><span class="ws-badge">{{ g.workspace.initial }}</span>{{ g.workspace.name }}</h2>
+    <div class="tile-grid">
+      {% for b in g.boards %}{% include "boards/_board_tile.html" %}{% endfor %}
+      <button class="board-tile new" data-new-board="{{ g.workspace.pk }}">Create new board</button>
+    </div>
+  </section>
+  {% empty %}
+  <section class="empty-state">
+    <h2>You're not in a department yet</h2>
+    <p class="muted">Ask an admin to add you to your department's workspace. Boards shared with you will still appear below.</p>
+  </section>
+  {% endfor %}
+
+  {% if guest_boards %}
+  <section class="home-section">
+    <h2>Shared with you from other departments</h2>
+    <div class="tile-grid">
+      {% for b in guest_boards %}{% include "boards/_board_tile.html" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</main>
+
+<dialog id="new-board" class="dialog">
+  <form method="post" action="{% url 'board_create' %}">
+    {% csrf_token %}
+    <h3>Create board</h3>
+    <div class="bg-picker">
+      {% for key, name in backgrounds %}
+      <label class="bg-swatch bg-{{ key }}" title="{{ name }}"><input type="radio" name="background" value="{{ key }}" {% if forloop.first %}checked{% endif %}></label>
+      {% endfor %}
+    </div>
+    <label>Board title<input name="title" required maxlength="120" placeholder="e.g. Christmas production"></label>
+    <label>Department
+      <select name="workspace">{% for ws in create_workspaces %}<option value="{{ ws.pk }}">{{ ws.name }}</option>{% endfor %}</select>
+    </label>
+    <label>Visibility
+      <select name="visibility">
+        <option value="workspace">Department — everyone in the department can see it</option>
+        <option value="private">Private — only people you add</option>
+      </select>
+    </label>
+    <div class="dialog-actions">
+      <button type="button" class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary">Create</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script>
+  const dlg = document.getElementById('new-board');
+  document.querySelectorAll('[data-new-board]').forEach(b => b.addEventListener('click', () => {
+    dlg.querySelector('select[name=workspace]').value = b.dataset.newBoard;
+    dlg.showModal();
+    dlg.querySelector('input[name=title]').focus();
+  }));
+  dlg.querySelector('[data-close]').addEventListener('click', () => dlg.close());
+</script>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}Lanes{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'lanes/app.css' %}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  {% if user.is_authenticated %}
+  <header class="topbar">
+    <a class="brand" href="{% url 'home' %}">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>Lanes
+    </a>
+    <nav class="topnav">
+      <a href="{% url 'home' %}" class="{% if request.resolver_match.url_name == 'home' %}on{% endif %}">Boards</a>
+      <a href="{% url 'my_cards' %}" class="{% if request.resolver_match.url_name == 'my_cards' %}on{% endif %}">My cards</a>
+    </nav>
+    <div class="topbar-right">
+      {% if user.is_staff %}<a class="btn ghost sm" href="{% url 'admin:index' %}">Admin</a>{% endif %}
+      <details class="menu">
+        <summary class="avatar lg" style="--h:{{ user.avatar_hue }}" title="{{ user.display_name }}">{{ user.initials }}</summary>
+        <div class="menu-panel right">
+          <div class="menu-head">{{ user.display_name }}<small>{{ user.email }}</small></div>
+          <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="menu-item">Log out</button></form>
+        </div>
+      </details>
+    </div>
+  </header>
+  {% endif %}
+  {% if messages %}
+    <div class="toasts">{% for m in messages %}<div class="toast {{ m.tags }}">{{ m }}</div>{% endfor %}</div>
+  {% endif %}
+  {% block content %}{% endblock %}
+  <div id="toast" class="toast floating" hidden></div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

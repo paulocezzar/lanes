@@ -1,0 +1,141 @@
+<div class="cm" data-card="{{ card.pk }}">
+  <header class="cm-top">
+    {% if can_edit %}
+    <label class="list-picker" title="Move to list">
+      <select data-move-list aria-label="List">
+        {% for l in lists %}<option value="{{ l.pk }}" {% if l.pk == card.list_id %}selected{% endif %}>{{ l.title }}</option>{% endfor %}
+      </select>
+    </label>
+    {% else %}<span class="list-picker static">{{ card.list.title }}</span>{% endif %}
+    {% if card.is_archived %}<span class="archived-flag">Archived</span>{% endif %}
+    <button class="icon-btn" data-close-card title="Close">{% include "boards/_icon.html" with i="close" %}</button>
+  </header>
+
+  <div class="cm-body">
+    <div class="cm-main">
+      <div class="cm-title-row">
+        <button class="complete-toggle{% if card.is_complete %} on{% endif %}" {% if can_edit %}data-toggle-complete{% else %}disabled{% endif %} title="{% if card.is_complete %}Mark incomplete{% else %}Mark complete{% endif %}">✓</button>
+        <h2 class="cm-title" {% if can_edit %}contenteditable="plaintext-only" spellcheck="false" data-card-title{% endif %}>{{ card.title }}</h2>
+      </div>
+
+      {% if can_edit %}
+      <div class="cm-actions">
+        <div class="pop-wrap"><button class="chip-btn" data-pop="labels">{% include "boards/_icon.html" with i="label" %}Labels</button>
+          <div class="pop" data-pop-panel="labels" hidden>
+            <div class="pop-head">Labels</div>
+            {% for l in board.labels.all %}
+            <label class="label-opt"><input type="checkbox" data-label="{{ l.pk }}" {% if l in card.labels.all %}checked{% endif %}><span class="label-swatch lc-{{ l.colour }}">{{ l.name }}</span></label>
+            {% endfor %}
+            <form class="label-new" data-label-new>
+              <input name="name" placeholder="New label name" maxlength="40">
+              <div class="colour-row">{% for key, name in label_colours %}<label class="colour-dot lc-{{ key }}" title="{{ name }}"><input type="radio" name="colour" value="{{ key }}" {% if forloop.first %}checked{% endif %}></label>{% endfor %}</div>
+              <button class="btn sm">Create label</button>
+            </form>
+          </div>
+        </div>
+        <div class="pop-wrap"><button class="chip-btn" data-pop="dates">{% include "boards/_icon.html" with i="clock" %}Dates</button>
+          <div class="pop" data-pop-panel="dates" hidden>
+            <div class="pop-head">Dates</div>
+            <form data-dates>
+              <label>Start date<input type="date" name="start_date" value="{{ card.start_date|date:'Y-m-d' }}"></label>
+              <label>Due<input type="datetime-local" name="due_at" value="{% if card.due_at %}{{ card.due_at|date:'Y-m-d\TH:i' }}{% endif %}"></label>
+              <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-clear-dates>Remove</button></div>
+            </form>
+          </div>
+        </div>
+        <div class="pop-wrap"><button class="chip-btn" data-pop="checklist">{% include "boards/_icon.html" with i="check" %}Checklist</button>
+          <div class="pop" data-pop-panel="checklist" hidden>
+            <div class="pop-head">Add checklist</div>
+            <form data-checklist-new><label>Title<input name="title" value="Checklist" maxlength="120"></label><button class="btn primary sm">Add</button></form>
+          </div>
+        </div>
+        <div class="pop-wrap"><button class="chip-btn" data-pop="members">{% include "boards/_icon.html" with i="person" %}Members</button>
+          <div class="pop" data-pop-panel="members" hidden>
+            <div class="pop-head">Board members</div>
+            {% for u in people %}
+            <button class="person-opt" data-member="{{ u.pk }}">{% include "boards/_avatar.html" %}<span>{{ u.display_name }}</span>{% if u in card.members.all %}<b class="tick">✓</b>{% endif %}</button>
+            {% endfor %}
+          </div>
+        </div>
+        <button class="chip-btn" data-archive-card="{{ card.is_archived|yesno:'0,1' }}">{% include "boards/_icon.html" with i="archive" %}{% if card.is_archived %}Restore{% else %}Archive{% endif %}</button>
+      </div>
+      {% endif %}
+
+      {% if card.labels.all or card.members.all or card.due_at or card.start_date %}
+      <div class="cm-meta">
+        {% if card.members.all %}<div><h4 class="section-label">Members</h4><div class="avatar-row">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="lg" %}{% endfor %}</div></div>{% endif %}
+        {% if card.labels.all %}<div><h4 class="section-label">Labels</h4><div class="label-row">{% for l in card.labels.all %}<span class="label-swatch lc-{{ l.colour }}">{{ l.name }}</span>{% endfor %}</div></div>{% endif %}
+        {% if card.start_date or card.due_at %}<div><h4 class="section-label">Dates</h4>
+          <span class="date-pill due-{{ card.due_state|default:'none' }}">{% if card.start_date %}{{ card.start_date|date:"j M" }}{% if card.due_at %} – {% endif %}{% endif %}{% if card.due_at %}{{ card.due_at|date:"j M, H:i" }}{% endif %}
+          {% if card.due_state == 'overdue' %}<em>Overdue</em>{% elif card.due_state == 'soon' %}<em>Due soon</em>{% elif card.due_state == 'complete' %}<em>Complete</em>{% endif %}</span></div>{% endif %}
+      </div>
+      {% endif %}
+
+      <section class="cm-section">
+        <h4 class="cm-h">{% include "boards/_icon.html" with i="desc" %}Description</h4>
+        {% if can_edit %}
+        <form data-description>
+          <textarea name="description" rows="{% if card.description %}5{% else %}3{% endif %}" placeholder="Add a more detailed description…">{{ card.description }}</textarea>
+          <div class="row save-row" hidden><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-cancel-desc>Cancel</button></div>
+        </form>
+        {% else %}<div class="desc-read">{{ card.description|default:"No description."|linebreaksbr }}</div>{% endif %}
+      </section>
+
+      {% for cl in card.checklists.all %}
+      <section class="cm-section checklist" data-checklist="{{ cl.pk }}">
+        <div class="cm-h-row">
+          <h4 class="cm-h">{% include "boards/_icon.html" with i="check" %}{{ cl.title }}</h4>
+          {% if can_edit %}
+          <button class="btn ghost sm" data-hide-checked="{{ cl.hide_checked|yesno:'0,1' }}">{% if cl.hide_checked %}Show checked items{% else %}Hide checked items{% endif %}</button>
+          <button class="btn ghost sm" data-delete-checklist>Delete</button>
+          {% endif %}
+        </div>
+        {% with p=cl.progress %}
+        <div class="progress"><span>{{ p }}%</span><div class="bar"><i style="width:{{ p }}%" class="{% if p == 100 %}full{% endif %}"></i></div></div>
+        {% endwith %}
+        <ul class="items">
+          {% for item in cl.items.all %}{% if not cl.hide_checked or not item.is_done %}
+          <li class="item{% if item.is_done %} done{% endif %}">
+            <input type="checkbox" data-item="{{ item.pk }}" {% if item.is_done %}checked{% endif %} {% if not can_edit %}disabled{% endif %} aria-label="{{ item.text }}">
+            <span class="item-text">{{ item.text }}</span>
+            {% if can_edit %}<button class="icon-btn xs" data-delete-item="{{ item.pk }}" title="Delete item">{% include "boards/_icon.html" with i="close" %}</button>{% endif %}
+          </li>
+          {% endif %}{% endfor %}
+        </ul>
+        {% if can_edit %}
+        <form class="item-new" data-item-new><input name="text" placeholder="Add an item" maxlength="250" autocomplete="off"><button class="btn sm">Add</button></form>
+        {% endif %}
+      </section>
+      {% endfor %}
+    </div>
+
+    <aside class="cm-side">
+      <h4 class="cm-h">{% include "boards/_icon.html" with i="comment" %}Comments and activity</h4>
+      {% if can_comment %}
+      <form class="comment-new" data-comment-new>
+        <textarea name="body" rows="2" placeholder="Write a comment…" maxlength="5000"></textarea>
+        <button class="btn primary sm" hidden>Save</button>
+      </form>
+      {% endif %}
+      <div class="feed">
+        {% for f in feed %}
+          {% if f.kind == "comment" %}{% with c=f.obj %}
+          <div class="feed-item comment">
+            {% if c.author %}{% include "boards/_avatar.html" with u=c.author %}{% endif %}
+            <div class="feed-main">
+              <div><b>{{ c.author.display_name|default:"Former user" }}</b> <time>{{ c.created_at|timesince }} ago{% if c.edited_at %} (edited){% endif %}</time></div>
+              <div class="comment-body">{{ c.body|linebreaksbr }}</div>
+              {% if c.author == request.user %}<button class="link-btn" data-delete-comment="{{ c.pk }}">Delete</button>{% endif %}
+            </div>
+          </div>
+          {% endwith %}{% else %}{% with a=f.obj %}
+          <div class="feed-item">
+            {% if a.actor %}{% include "boards/_avatar.html" with u=a.actor %}{% endif %}
+            <div class="feed-main"><b>{{ a.actor.display_name|default:"Someone" }}</b> {{ a.text }}<time>{{ a.created_at|timesince }} ago</time></div>
+          </div>
+          {% endwith %}{% endif %}
+        {% endfor %}
+      </div>
+    </aside>
+  </div>
+</div>

@@ -1,0 +1,27 @@
+<section class="list" data-list-id="{{ list.pk }}">
+  <header class="list-head">
+    <h3 class="list-title" {% if can_edit %}contenteditable="plaintext-only" spellcheck="false" data-list-title{% endif %}>{{ list.title }}</h3>
+    <span class="list-count">{{ list.cards.all|length }}</span>
+    {% if can_edit %}
+    <details class="menu">
+      <summary class="icon-btn" title="List actions">{% include "boards/_icon.html" with i="dots" %}</summary>
+      <div class="menu-panel right">
+        <button class="menu-item" data-add-card-top>Add card</button>
+        <button class="menu-item danger" data-archive-list>Archive this list</button>
+      </div>
+    </details>
+    {% endif %}
+  </header>
+  <div class="list-cards" data-list-cards>
+    {% for card in list.cards.all %}{% include "boards/_card_tile.html" %}{% endfor %}
+  </div>
+  {% if can_edit %}
+  <footer class="list-foot">
+    <button class="add-card-btn" data-add-card>{% include "boards/_icon.html" with i="plus" %}Add a card</button>
+    <form class="add-card-form" data-add-card-form hidden>
+      <textarea name="title" rows="2" placeholder="Enter a title for this card…" maxlength="250"></textarea>
+      <div class="row"><button class="btn primary sm">Add card</button><button type="button" class="icon-btn" data-cancel>{% include "boards/_icon.html" with i="close" %}</button></div>
+    </form>
+  </footer>
+  {% endif %}
+</section>

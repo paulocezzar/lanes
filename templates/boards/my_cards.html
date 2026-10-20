@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}My cards · Lanes{% endblock %}
+{% block content %}
+<main class="home">
+  <section class="home-section">
+    <h2>Cards assigned to you</h2>
+    {% regroup cards by list.board as by_board %}
+    {% for group in by_board %}
+    <div class="mine-group">
+      <h3><a href="{% url 'board' group.grouper.pk %}">{{ group.grouper.title }}</a> <span class="muted">· {{ group.grouper.workspace.name }}</span></h3>
+      <div class="mine-cards">
+        {% for card in group.list %}
+        <a class="mine-link" href="{% url 'board' group.grouper.pk %}?card={{ card.pk }}">
+          <span class="mine-list">{{ card.list.title }}</span>
+          {% include "boards/_card_tile.html" %}
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% empty %}
+    <p class="muted">Nothing assigned to you. When someone adds you to a card it shows up here.</p>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}
