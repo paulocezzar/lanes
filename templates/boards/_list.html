@@ -17,7 +17,10 @@
   </div>
   {% if can_edit %}
   <footer class="list-foot">
-    <button class="add-card-btn" data-add-card>{% include "boards/_icon.html" with i="plus" %}Add a card</button>
+    <div class="foot-row">
+      <button class="add-card-btn" data-add-card>{% include "boards/_icon.html" with i="plus" %}Add a card</button>
+      <button class="icon-btn" data-from-template title="Create from template">{% include "boards/_icon.html" with i="copy" %}</button>
+    </div>
     <form class="add-card-form" data-add-card-form hidden>
       <textarea name="title" rows="2" placeholder="Enter a title for this card…" maxlength="250"></textarea>
       <div class="row"><button class="btn primary sm">Add card</button><button type="button" class="icon-btn" data-cancel>{% include "boards/_icon.html" with i="close" %}</button></div>

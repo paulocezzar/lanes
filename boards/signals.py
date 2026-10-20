@@ -7,8 +7,8 @@ from django.db.models import F
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
-from .models import (Board, BoardMember, Card, CardFieldValue, Checklist, ChecklistItem, Comment, CustomField,
-                     Label, List)
+from .models import (Attachment, Board, BoardMember, Card, CardFieldValue, Checklist, ChecklistItem, Comment,
+                     CustomField, Label, List)
 
 
 def board_id_for(instance):
@@ -18,7 +18,7 @@ def board_id_for(instance):
         return instance.board_id
     if isinstance(instance, Card):
         return List.objects.filter(pk=instance.list_id).values_list("board_id", flat=True).first()
-    if isinstance(instance, (Checklist, Comment, CardFieldValue)):
+    if isinstance(instance, (Checklist, Comment, CardFieldValue, Attachment)):
         return Card.objects.filter(pk=instance.card_id).values_list("list__board_id", flat=True).first()
     if isinstance(instance, ChecklistItem):
         return Checklist.objects.filter(pk=instance.checklist_id).values_list(
@@ -31,7 +31,7 @@ def bump(board_id):
         Board.objects.filter(pk=board_id).update(version=F("version") + 1)
 
 
-TRACKED = (List, Card, Checklist, ChecklistItem, Comment, Label, BoardMember, CustomField, CardFieldValue)
+TRACKED = (List, Card, Checklist, ChecklistItem, Comment, Label, BoardMember, CustomField, CardFieldValue, Attachment)
 
 
 @receiver(post_save)

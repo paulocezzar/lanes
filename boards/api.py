@@ -158,6 +158,8 @@ def card_update(request, card_id):
             log(board, user, "due_removed", card=card)
     if "start_date" in d:
         card.start_date = parse_date(d["start_date"]) if d["start_date"] else None
+    if "is_template" in d:
+        card.is_template = bool(d["is_template"])
     if "archive" in d:
         card.is_archived = bool(d["archive"])
         log(board, user, "card_archived" if card.is_archived else "card_restored", card=card)
@@ -407,6 +409,8 @@ def board_update(request, board_id):
         board.visibility = d["visibility"]
     if "description" in d:
         board.description = (d["description"] or "")[:5000]
+    if "is_template" in d:
+        board.is_template = bool(d["is_template"])
     if d.get("archive"):
         board.is_archived = True
     board.save()
@@ -466,4 +470,46 @@ def card_field_set(request, card_id):
         CardFieldValue.objects.filter(card=card, field=field).delete()
     else:
         CardFieldValue.objects.update_or_create(card=card, field=field, defaults={"value": value})
+    return card_response(card.pk, request)
+
+
+# ---------- copying and templates ----------
+
+@api
+def card_copy(request, card_id):
+    card = _card(request, card_id)
+    d = request.data
+    target = get_object_or_404(List, pk=d.get("list_id") or card.list_id, board=card.list.board, is_archived=False)
+    from .copying import copy_card
+    new = copy_card(card, target, user=request.user, title=(d.get("title") or "").strip() or card.title,
+                    keep_labels=d.get("labels", True), keep_members=d.get("members", True),
+                    keep_checklists=d.get("checklists", True))
+    data = card_response(new.pk, request)
+    data["copied_from"] = card.pk
+    return data
+
+
+@api
+def card_from_template(request, list_id):
+    lst = get_object_or_404(List.objects.select_related("board"), pk=list_id, is_archived=False)
+    _edit(lst.board, request.user)
+    tpl = get_object_or_404(Card, pk=request.data.get("template_id"), list__board=lst.board, is_template=True)
+    from .copying import copy_card
+    new = copy_card(tpl, lst, user=request.user, keep_members=True, keep_dates=False)
+    automation.fire(new, Rule.ADDED, list_=lst)
+    return card_response(new.pk, request)
+
+
+@api
+def attachment_update(request, attachment_id):
+    from .models import Attachment
+    att = get_object_or_404(Attachment.objects.select_related("card__list__board"), pk=attachment_id)
+    card = att.card
+    _edit(card.list.board, request.user)
+    if request.data.get("delete"):
+        att.file.delete(save=False)
+        att.delete()
+    elif "cover" in request.data:
+        card.cover = att if request.data["cover"] and att.is_image else None
+        card.save(update_fields=["cover", "updated_at"])
     return card_response(card.pk, request)

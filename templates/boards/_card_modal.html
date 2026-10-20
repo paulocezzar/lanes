@@ -57,6 +57,21 @@
             {% endfor %}
           </div>
         </div>
+        <label class="chip-btn file-btn">{% include "boards/_icon.html" with i="clip" %}Attach<input type="file" data-attach hidden></label>
+        <div class="pop-wrap"><button class="chip-btn" data-pop="copy">{% include "boards/_icon.html" with i="copy" %}Copy</button>
+          <div class="pop" data-pop-panel="copy" hidden>
+            <div class="pop-head">Copy card</div>
+            <form data-copy-card>
+              <label>Title<input name="title" value="{{ card.title }}" maxlength="250"></label>
+              <label>To list<select name="list_id">{% for l in lists %}<option value="{{ l.pk }}" {% if l.pk == card.list_id %}selected{% endif %}>{{ l.title }}</option>{% endfor %}</select></label>
+              <label class="check-inline dark"><input type="checkbox" name="checklists" checked> Checklists</label>
+              <label class="check-inline dark"><input type="checkbox" name="labels" checked> Labels</label>
+              <label class="check-inline dark"><input type="checkbox" name="members" checked> Members</label>
+              <button class="btn primary sm">Create copy</button>
+            </form>
+          </div>
+        </div>
+        <button class="chip-btn{% if card.is_template %} on{% endif %}" data-template-toggle="{{ card.is_template|yesno:'0,1' }}" title="Templates can be stamped out from any list's copy button">{% include "boards/_icon.html" with i="copy" %}{% if card.is_template %}Template ✓{% else %}Make template{% endif %}</button>
         <button class="chip-btn" data-archive-card="{{ card.is_archived|yesno:'0,1' }}">{% include "boards/_icon.html" with i="archive" %}{% if card.is_archived %}Restore{% else %}Archive{% endif %}</button>
       </div>
       {% endif %}
@@ -103,6 +118,28 @@
         </form>
         {% else %}<div class="desc-read">{{ card.description|default:"No description."|linebreaksbr }}</div>{% endif %}
       </section>
+
+      {% if card.attachments.all %}
+      <section class="cm-section">
+        <h4 class="cm-h">{% include "boards/_icon.html" with i="clip" %}Attachments</h4>
+        {% if not attachments_persistent and user.is_superuser %}<p class="warn-note">File storage isn't set up yet, so attachments are lost whenever Lanes is redeployed. Fine for testing only.</p>{% endif %}
+        <div class="attachments">
+          {% for a in card.attachments.all %}
+          <div class="att">
+            <a class="att-thumb" href="{% url 'attachment' a.pk %}" target="_blank" rel="noopener">{% if a.is_image %}<img src="{% url 'attachment' a.pk %}" alt="" loading="lazy">{% else %}<span>{{ a.name|slice:"-4:"|upper|cut:"." }}</span>{% endif %}</a>
+            <div class="att-meta">
+              <a href="{% url 'attachment' a.pk %}" target="_blank" rel="noopener"><b>{{ a.name }}</b></a>
+              <small>{{ a.size_label }} · {{ a.created_at|timesince }} ago{% if card.cover_id == a.pk %} · Cover{% endif %}</small>
+              {% if can_edit %}<div class="att-actions">
+                {% if a.is_image %}<button class="link-btn" data-cover="{{ a.pk }}" data-on="{% if card.cover_id == a.pk %}0{% else %}1{% endif %}">{% if card.cover_id == a.pk %}Remove cover{% else %}Make cover{% endif %}</button>{% endif %}
+                <button class="link-btn" data-delete-attachment="{{ a.pk }}">Delete</button>
+              </div>{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
 
       {% for cl in card.checklists.all %}
       <section class="cm-section checklist" data-checklist="{{ cl.pk }}">

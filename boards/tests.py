@@ -500,3 +500,103 @@ class ScheduleTests(TestCase):
         from .automation import run_due_schedules
         self.make(is_enabled=False)
         self.assertEqual(run_due_schedules(), 0)
+
+
+class CopyTemplateAttachmentTests(TestCase):
+    def setUp(self):
+        from .models import Checklist, ChecklistItem, CustomField, CardFieldValue, Rule
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.other_ws = Workspace.objects.create(name="Butchery")
+        self.user = User.objects.create_user("u@x.com", "pw", first_name="Una")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.user, role="admin")
+        self.board = Board.objects.create(workspace=self.ws, title="Xmas")
+        BoardMember.objects.create(board=self.board, user=self.user, role="admin")
+        self.todo = List.objects.create(board=self.board, title="To do", position=1)
+        self.done = List.objects.create(board=self.board, title="Done", position=2)
+        self.label = Label.objects.create(board=self.board, colour="red", name="Urgent")
+        self.field = CustomField.objects.create(board=self.board, name="Qty", kind="number")
+        self.card = Card.objects.create(list=self.todo, title="Cakes")
+        self.card.labels.add(self.label)
+        self.card.members.add(self.user)
+        cl = Checklist.objects.create(card=self.card, title="Steps")
+        ChecklistItem.objects.create(checklist=cl, text="Bake")
+        CardFieldValue.objects.create(card=self.card, field=self.field, value=12)
+        Rule.objects.create(board=self.board, trigger="card_moved", trigger_list=self.done,
+                            actions=[{"type": "complete"}, {"type": "add_label", "label": self.label.pk}])
+        self.client.force_login(self.user)
+
+    def api(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_copy_card(self):
+        r = self.api(f"/api/cards/{self.card.pk}/copy/", {"title": "Cakes 2", "list_id": self.done.pk})
+        self.assertEqual(r.status_code, 200)
+        new = Card.objects.get(title="Cakes 2")
+        self.assertEqual(new.list, self.done)
+        self.assertEqual(new.checklist_counts(), (0, 1))
+        self.assertIn(self.label, new.labels.all())
+        self.assertEqual(new.field_values.get().value, 12)
+
+    def test_card_template_flow(self):
+        self.api(f"/api/cards/{self.card.pk}/update/", {"is_template": True})
+        r = self.api(f"/api/lists/{self.done.pk}/from-template/", {"template_id": self.card.pk})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(Card.objects.filter(title="Cakes", list=self.done, is_template=False).count(), 1)
+        normal = Card.objects.create(list=self.todo, title="Plain")
+        r = self.api(f"/api/lists/{self.done.pk}/from-template/", {"template_id": normal.pk})
+        self.assertEqual(r.status_code, 404)
+
+    def test_copy_board_to_other_department_remaps(self):
+        from .models import Rule
+        WorkspaceMember.objects.create(workspace=self.other_ws, user=self.user)
+        r = self.client.post(reverse("board_copy", args=[self.board.pk]),
+                             {"title": "Xmas 2027", "workspace": self.other_ws.pk, "keep_cards": "on"})
+        new = Board.objects.get(title="Xmas 2027")
+        self.assertRedirects(r, reverse("board", args=[new.pk]))
+        self.assertEqual(new.workspace, self.other_ws)
+        new_card = Card.objects.get(list__board=new)
+        new_label = new.labels.get()
+        self.assertEqual(list(new_card.labels.all()), [new_label])
+        self.assertEqual(new_card.members.count(), 0)
+        self.assertEqual(new_card.field_values.get().field.board, new)
+        rule = Rule.objects.get(board=new)
+        self.assertEqual(rule.trigger_list.board, new)
+        self.assertEqual(rule.actions[1]["label"], new_label.pk)
+
+    def test_cannot_copy_into_foreign_department(self):
+        self.client.post(reverse("board_copy", args=[self.board.pk]), {"title": "Nope", "workspace": self.other_ws.pk})
+        self.assertFalse(Board.objects.filter(title="Nope").exists())
+
+    def test_template_board_listed_on_home(self):
+        self.board.is_template = True
+        self.board.save()
+        self.assertContains(self.client.get(reverse("home")), "Use template")
+
+    def test_attachment_upload_download_and_permissions(self):
+        import shutil, tempfile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+        tmp = tempfile.mkdtemp()
+        try:
+            with override_settings(MEDIA_ROOT=tmp):
+                png = (b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+                r = self.client.post(f"/api/cards/{self.card.pk}/attachments/",
+                                     {"file": SimpleUploadedFile("photo.png", png, content_type="image/png")})
+                self.assertEqual(r.status_code, 200)
+                att = self.card.attachments.get()
+                self.card.refresh_from_db()
+                self.assertEqual(self.card.cover, att)     # first image becomes the cover
+                self.assertEqual(self.client.get(reverse("attachment", args=[att.pk])).status_code, 200)
+                bad = self.client.post(f"/api/cards/{self.card.pk}/attachments/",
+                                       {"file": SimpleUploadedFile("x.exe", b"MZ", content_type="application/octet-stream")})
+                self.assertEqual(bad.status_code, 400)
+                outsider = User.objects.create_user("o@x.com", "pw")
+                self.board.visibility = Board.PRIVATE
+                self.board.save()
+                self.client.force_login(outsider)
+                self.assertEqual(self.client.get(reverse("attachment", args=[att.pk])).status_code, 404)
+                self.client.force_login(self.user)
+                self.api(f"/api/attachments/{att.pk}/", {"delete": True})
+                self.assertFalse(self.card.attachments.exists())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)

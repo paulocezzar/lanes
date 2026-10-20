@@ -33,7 +33,15 @@ def board_context(request, board_id, view):
         "archived_cards": cards_qs().filter(list__board=board, is_archived=True)[:50],
         "activity": board.activity.select_related("actor", "card")[:40],
         "open_card": request.GET.get("card"),
+        "my_workspaces": _my_workspaces(request.user),
     }
+
+
+def _my_workspaces(user):
+    from .models import Workspace
+    if user.is_superuser:
+        return Workspace.objects.all()
+    return Workspace.objects.filter(memberships__user=user).distinct()
 
 
 def open_cards(board):

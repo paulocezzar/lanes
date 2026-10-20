@@ -1,4 +1,5 @@
 """Shared helpers for views: activity logging, query shapes, rendering."""
+from django.conf import settings
 from django.db.models import Prefetch
 from django.template.loader import render_to_string
 
@@ -12,7 +13,8 @@ def log(board, actor, verb, card=None, **data):
 
 def cards_qs():
     """Everything a card tile needs, in a fixed number of queries."""
-    return Card.objects.select_related("list__board").prefetch_related(
+    return Card.objects.select_related("list__board", "cover").prefetch_related(
+        "attachments",
         "labels",
         "members",
         Prefetch("checklists", queryset=Checklist.objects.prefetch_related(
@@ -43,6 +45,8 @@ def render_modal(card, request):
         "feed": _feed(card),
         "label_colours": Label.COLOURS,
         "fields": _field_rows(card, board),
+        "attachments_persistent": settings.ATTACHMENTS_PERSISTENT,
+        "max_mb": settings.ATTACHMENT_MAX_MB,
         "field_kinds": CustomField.KINDS,
     }
     return render_to_string("boards/_card_modal.html", ctx, request=request)

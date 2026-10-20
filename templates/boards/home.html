@@ -11,6 +11,23 @@
   </section>
   {% endif %}
 
+  {% if templates %}
+  <section class="home-section">
+    <h2>Templates</h2>
+    <div class="tile-grid">
+      {% for b in templates %}
+      <div class="board-tile tpl bg-{{ b.background }}">
+        <span class="board-tile-title">{{ b.title }}</span>
+        <span class="tpl-actions">
+          <button class="btn light sm" data-use-template="{{ b.pk }}" data-title="{{ b.title }}">Use template</button>
+          <a class="btn ghost sm light-text" href="{% url 'board' b.pk %}">Open</a>
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   {% for g in groups %}
   <section class="home-section">
     <h2><span class="ws-badge">{{ g.workspace.initial }}</span>{{ g.workspace.name }}
@@ -52,6 +69,17 @@
   {% endif %}
 </main>
 
+<dialog id="use-template" class="dialog">
+  <form method="post" data-template-form>
+    {% csrf_token %}
+    <h3>New board from template</h3>
+    <label>Board title<input name="title" required maxlength="120"></label>
+    <label>Department<select name="workspace">{% for ws in create_workspaces %}<option value="{{ ws.pk }}">{{ ws.name }}</option>{% endfor %}</select></label>
+    <input type="hidden" name="keep_cards" value="on">
+    <div class="dialog-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary">Create board</button></div>
+  </form>
+</dialog>
+
 <dialog id="new-board" class="dialog">
   <form method="post" action="{% url 'board_create' %}">
     {% csrf_token %}
@@ -87,5 +115,13 @@
     dlg.querySelector('input[name=title]').focus();
   }));
   dlg.querySelector('[data-close]').addEventListener('click', () => dlg.close());
+  const tdlg = document.getElementById('use-template');
+  document.querySelectorAll('[data-use-template]').forEach(b => b.addEventListener('click', () => {
+    const f = tdlg.querySelector('form');
+    f.action = `/b/${b.dataset.useTemplate}/copy/`;
+    f.title.value = b.dataset.title.replace(/template/i, '').trim() || b.dataset.title;
+    tdlg.showModal();
+  }));
+  tdlg.querySelector('[data-close]').addEventListener('click', () => tdlg.close());
 </script>
 {% endblock %}

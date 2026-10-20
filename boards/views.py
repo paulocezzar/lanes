@@ -26,6 +26,8 @@ def home(request):
     else:
         workspaces = Workspace.objects.filter(memberships__user=user).distinct()
     groups = []
+    templates = [b for b in boards if b.is_template]
+    boards = [b for b in boards if not b.is_template]
     for ws in workspaces:
         groups.append({"workspace": ws, "boards": [b for b in boards if b.workspace_id == ws.pk]})
     # Boards the user was invited to as a guest from another department
@@ -38,6 +40,7 @@ def home(request):
         "starred_ids": starred,
         "backgrounds": Board.BACKGROUNDS,
         "create_workspaces": workspaces,
+        "templates": templates,
     })
 
 

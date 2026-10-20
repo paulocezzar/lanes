@@ -66,6 +66,7 @@ class Board(models.Model):
     # Bumped on every change to anything on the board; browsers poll it to
     # know when to refresh (see signals.py and api.board_state).
     version = models.PositiveBigIntegerField(default=0)
+    is_template = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["title"]
@@ -128,6 +129,8 @@ class Card(models.Model):
     due_at = models.DateTimeField(null=True, blank=True)
     is_complete = models.BooleanField(default=False)
     is_archived = models.BooleanField(default=False)
+    is_template = models.BooleanField(default=False)
+    cover = models.ForeignKey("Attachment", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     labels = models.ManyToManyField(Label, blank=True, related_name="cards")
     members = models.ManyToManyField(User, blank=True, related_name="assigned_cards")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
@@ -322,6 +325,7 @@ class Activity(models.Model):
             "board_created": "created this board",
             "board_member_added": f"added {d.get('name', '')} to this board",
             "automation": d.get("summary", "ran an automation"),
+            "attachment_added": f"attached {d.get('name', 'a file')}",
         }.get(self.verb, self.verb.replace("_", " "))
 
 
@@ -393,3 +397,34 @@ class Schedule(models.Model):
 
     class Meta:
         ordering = ["next_run_at"]
+
+
+def attachment_path(instance, filename):
+    import uuid
+    ext = filename.rsplit(".", 1)[-1].lower()[:10] if "." in filename else "bin"
+    return f"attachments/{instance.card.list.board_id}/{uuid.uuid4().hex}.{ext}"
+
+
+class Attachment(models.Model):
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="attachments")
+    file = models.FileField(upload_to=attachment_path, max_length=255)
+    name = models.CharField(max_length=255)
+    size = models.PositiveBigIntegerField(default=0)
+    content_type = models.CharField(max_length=120, blank=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def is_image(self):
+        return self.content_type in ("image/jpeg", "image/png", "image/gif", "image/webp")
+
+    @property
+    def size_label(self):
+        n = self.size
+        for unit in ("B", "KB", "MB", "GB"):
+            if n < 1024 or unit == "GB":
+                return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+            n /= 1024

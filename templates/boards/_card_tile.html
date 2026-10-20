@@ -1,14 +1,17 @@
 {% with counts=card.checklist_counts %}
-<article class="card-tile{% if card.is_complete %} is-complete{% endif %}" data-card-id="{{ card.pk }}" tabindex="0">
+<article class="card-tile{% if card.is_complete %} is-complete{% endif %}{% if card.is_template %} is-template{% endif %}" data-card-id="{{ card.pk }}" data-title="{{ card.title }}" tabindex="0">
+  {% if card.cover_id %}<img class="tile-cover" src="{% url 'attachment' card.cover_id %}" alt="" loading="lazy">{% endif %}
+  {% if card.is_template %}<span class="template-flag">Template</span>{% endif %}
   {% if card.labels.all %}
   <div class="tile-labels">{% for l in card.labels.all %}<span class="tile-label lc-{{ l.colour }}" title="{{ l }}">{% if l.name %}{{ l.name }}{% endif %}</span>{% endfor %}</div>
   {% endif %}
   <div class="tile-title">{% if card.is_complete %}<span class="done-dot" aria-label="Complete">✓</span>{% endif %}{{ card.title }}</div>
   {% with tf=card.tile_fields %}{% if tf %}<div class="tile-fields">{% for v in tf %}<span class="field-badge"><b>{{ v.field.name }}</b> {{ v.display }}</span>{% endfor %}</div>{% endif %}{% endwith %}
-  {% if card.due_at or card.description or card.comments.all or counts.1 or card.members.all %}
+  {% if card.due_at or card.description or card.comments.all or counts.1 or card.members.all or card.attachments.all %}
   <div class="tile-badges">
     {% if card.due_at %}<span class="badge due-{{ card.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ card.due_at|date:"j M" }}</span>{% endif %}
     {% if card.description %}<span class="badge" title="Has a description">{% include "boards/_icon.html" with i="desc" %}</span>{% endif %}
+    {% if card.attachments.all %}<span class="badge" title="Attachments">📎{{ card.attachments.all|length }}</span>{% endif %}
     {% if card.comments.all %}<span class="badge">{% include "boards/_icon.html" with i="comment" %}{{ card.comments.all|length }}</span>{% endif %}
     {% if counts.1 %}<span class="badge{% if counts.0 == counts.1 %} all-done{% endif %}">{% include "boards/_icon.html" with i="check" %}{{ counts.0 }}/{{ counts.1 }}</span>{% endif %}
     {% if card.members.all %}<span class="tile-members">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% endfor %}</span>{% endif %}

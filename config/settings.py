@@ -86,6 +86,35 @@ STORAGES = {
 if DEBUG:
     STORAGES["staticfiles"] = {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}
 
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+ATTACHMENT_MAX_MB = int(os.environ.get("ATTACHMENT_MAX_MB", "25"))
+
+# Attachments go to S3-compatible object storage (e.g. Cloudflare R2) when
+# configured. Without it they're saved on the server's disk, which Render
+# wipes on every deploy — fine for testing only.
+if os.environ.get("AWS_STORAGE_BUCKET_NAME"):
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": os.environ["AWS_STORAGE_BUCKET_NAME"],
+            "endpoint_url": os.environ.get("AWS_S3_ENDPOINT_URL") or None,
+            "region_name": os.environ.get("AWS_S3_REGION_NAME", "auto"),
+            "access_key": os.environ.get("AWS_ACCESS_KEY_ID"),
+            "secret_key": os.environ.get("AWS_SECRET_ACCESS_KEY"),
+            "default_acl": None,
+            "querystring_auth": True,      # private bucket; links are signed and expire
+            "querystring_expire": 3600,
+            "file_overwrite": False,
+        },
+    }
+    ATTACHMENTS_PERSISTENT = True
+else:
+    ATTACHMENTS_PERSISTENT = DEBUG
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 if not DEBUG:

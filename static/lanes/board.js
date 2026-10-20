@@ -341,6 +341,15 @@
     }
     const delItem = t.closest('[data-delete-item]');
     if (delItem) return post(`/api/items/${delItem.dataset.deleteItem}/`, { delete: true }).then(applyCard);
+    const tplBtn = t.closest('[data-template-toggle]');
+    if (tplBtn) return cardPost('update', { is_template: tplBtn.dataset.templateToggle === '1' });
+    const cover = t.closest('[data-cover]');
+    if (cover) return post(`/api/attachments/${cover.dataset.cover}/`, { cover: cover.dataset.on === '1' }).then(applyCard);
+    const delAtt = t.closest('[data-delete-attachment]');
+    if (delAtt) {
+      if (!confirm('Delete this attachment?')) return;
+      return post(`/api/attachments/${delAtt.dataset.deleteAttachment}/`, { delete: true }).then(applyCard);
+    }
     const delComment = t.closest('[data-delete-comment]');
     if (delComment) {
       if (!confirm('Delete this comment?')) return;
@@ -353,6 +362,7 @@
     if (t.matches('[data-label]')) return cardPost('labels', { label_id: +t.dataset.label });
     if (t.matches('[data-item]')) return post(`/api/items/${t.dataset.item}/`, { is_done: t.checked }).then(applyCard);
     if (t.matches('[data-move-list]')) return cardPost('move', { list_id: +t.value });
+    if (t.matches('[data-attach]') && t.files.length) return uploadFile(t.files[0]);
     if (t.matches('[data-field]')) {
       const value = t.type === 'checkbox' ? t.checked : t.value;
       return cardPost('fields', { field_id: +t.dataset.field, value });
@@ -382,6 +392,20 @@
       return post(`/api/checklists/${clId}/items/`, { text }).then(data => {
         applyCard(data);
         $(`[data-checklist="${clId}"] [data-item-new] input`, dialogBody)?.focus();
+      });
+    }
+    if (f.matches('[data-copy-card]')) {
+      e.preventDefault();
+      hidePops();
+      return post(`/api/cards/${openCardId}/copy/`, {
+        title: f.title.value, list_id: +f.list_id.value,
+        checklists: f.checklists.checked, labels: f.labels.checked, members: f.members.checked,
+      }).then(data => {
+        const target = $(`.list[data-list-id="${data.list_id}"] [data-list-cards]`, listsEl);
+        target?.appendChild(fromHTML(data.tile));
+        refreshCounts();
+        toast('Copy created.');
+        openCard(data.card_id);
       });
     }
     if (f.matches('[data-item-meta]')) {
@@ -492,6 +516,10 @@
     del.closest('[data-field-row]').remove();
   });
 
+  $('[data-board-template]', drawer)?.addEventListener('change', e =>
+    post(`/api/boards/${boardId}/update/`, { is_template: e.target.checked })
+      .then(() => toast(e.target.checked ? 'This board is now a template.' : 'No longer a template.')));
+
   $('[data-visibility]', drawer)?.addEventListener('change', async e => {
     await post(`/api/boards/${boardId}/update/`, { visibility: e.target.value });
     location.reload();
@@ -500,6 +528,48 @@
   // Close any open <details> menu when clicking elsewhere
   document.addEventListener('click', e => {
     $$('details.menu[open]').forEach(d => { if (!d.contains(e.target)) d.removeAttribute('open'); });
+  });
+
+  // ---------- attachments ----------
+  async function uploadFile(file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    toast(`Uploading ${file.name}…`);
+    try {
+      const res = await fetch(`/api/cards/${openCardId}/attachments/`, {
+        method: 'POST', body: fd, headers: { 'X-CSRFToken': csrf }, credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.error || 'Upload failed.'); return; }
+      applyCard(data);
+      toast('Attached.');
+    } catch { toast('Upload failed — check your connection.'); }
+  }
+  // Drop a file anywhere on an open card to attach it
+  dialog.addEventListener('dragover', e => { if (canEdit && e.dataTransfer?.types.includes('Files')) e.preventDefault(); });
+  dialog.addEventListener('drop', e => {
+    if (!canEdit || !e.dataTransfer?.files.length) return;
+    e.preventDefault();
+    uploadFile(e.dataTransfer.files[0]);
+  });
+
+  // ---------- card templates ----------
+  listsEl.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-from-template]');
+    if (!btn) return;
+    const templates = $$('.card-tile.is-template', listsEl);
+    if (!templates.length) {
+      toast('No templates yet. Open a card and click “Make template” to create one.');
+      return;
+    }
+    const choice = prompt('Create a card from which template?\n\n' +
+      templates.map((t, i) => `${i + 1}. ${t.dataset.title}`).join('\n') + '\n\nType a number:');
+    const tpl = templates[parseInt(choice, 10) - 1];
+    if (!tpl) return;
+    const listEl = btn.closest('.list');
+    const data = await post(`/api/lists/${listEl.dataset.listId}/from-template/`, { template_id: +tpl.dataset.cardId });
+    $('[data-list-cards]', listEl).appendChild(fromHTML(data.tile));
+    refreshCounts();
+    openCard(data.card_id);
   });
 
   // ---------- live updates ----------
