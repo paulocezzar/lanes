@@ -13,7 +13,8 @@
 
   {% for g in groups %}
   <section class="home-section">
-    <h2><span class="ws-badge">{{ g.workspace.initial }}</span>{{ g.workspace.name }}</h2>
+    <h2><span class="ws-badge">{{ g.workspace.initial }}</span>{{ g.workspace.name }}
+      <a class="btn ghost sm head-link" href="{% url 'workspace_members' g.workspace.pk %}">{% include "boards/_icon.html" with i="people" %}People</a></h2>
     <div class="tile-grid">
       {% for b in g.boards %}{% include "boards/_board_tile.html" %}{% endfor %}
       <button class="board-tile new" data-new-board="{{ g.workspace.pk }}">Create new board</button>
@@ -21,10 +22,25 @@
   </section>
   {% empty %}
   <section class="empty-state">
+    {% if user.is_superuser %}
+    <h2>Create your first department</h2>
+    <p class="muted">Departments hold boards and people — Bakery, Butchery, Kitchen and so on.</p>
+    {% else %}
     <h2>You're not in a department yet</h2>
-    <p class="muted">Ask an admin to add you to your department's workspace. Boards shared with you will still appear below.</p>
+    <p class="muted">Ask your manager to add you to your department. Boards shared with you will still appear below.</p>
+    {% endif %}
   </section>
   {% endfor %}
+
+  {% if user.is_superuser %}
+  <section class="home-section">
+    <form method="post" action="{% url 'workspace_create' %}" class="new-dept">
+      {% csrf_token %}
+      <input name="name" placeholder="New department name, e.g. Bakery" maxlength="80" required>
+      <button class="btn primary">{% include "boards/_icon.html" with i="plus" %}New department</button>
+    </form>
+  </section>
+  {% endif %}
 
   {% if guest_boards %}
   <section class="home-section">

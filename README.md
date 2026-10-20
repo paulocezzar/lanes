@@ -25,9 +25,12 @@ python manage.py runserver
 
 Log in as `paulo@example.com` / `lanesdemo` (superuser). Run tests with `python manage.py test`.
 
-## Adding real people
+## Departments and people
 
-Until Microsoft sign-in is added, create accounts in **Admin → Users**, then add them to their department in **Admin → Workspaces**. Board admins can then share boards with them by email.
+- Company admins (superusers) create departments with **New department** on the Boards page.
+- Each department has a **People** page. Department admins add people by email; anyone without an account gets one with a temporary password, shown once on screen. They can change it from their profile menu.
+- Department admins can change roles, remove people and issue a new temporary password.
+- Board admins share individual boards by email, including with people from other departments.
 
 ## Deploy to Render
 

@@ -323,3 +323,30 @@ body.board-page { overflow: hidden; }
   .list, .add-list { flex-basis: 85vw; }
   .share-form { grid-template-columns: 1fr; }
 }
+
+/* ---------- department & account pages ---------- */
+.home.narrow { max-width: 760px; }
+.back-link { color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 13px; }
+.back-link:hover { color: var(--text); }
+.page-title { display: flex; align-items: center; gap: 10px; font-size: 22px; margin: 12px 0 20px; }
+.panel { background: var(--surface); border-radius: 12px; padding: 18px 20px; margin-bottom: 18px; }
+.panel h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+.panel .count { background: var(--surface-3); border-radius: 4px; padding: 0 6px; font-size: 12px; }
+.add-person { display: grid; grid-template-columns: 2fr 1.2fr 1.2fr auto auto; gap: 10px; align-items: end; }
+.add-person select { width: auto; }
+.stack { display: grid; gap: 14px; max-width: 380px; }
+form.inline { display: inline; }
+.callout { background: #133527; border: 1px solid #1f6e4a; border-radius: 12px; padding: 16px 20px; margin-bottom: 18px; }
+.callout p { margin: 6px 0 12px; color: #bfe9d3; }
+.creds { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+.creds dt { color: #bfe9d3; }
+.creds dd { margin: 0; font-weight: 600; }
+.creds code { font-size: 16px; background: rgb(0 0 0 / .3); padding: 2px 8px; border-radius: 4px; letter-spacing: .04em; }
+.head-link { margin-left: 6px; }
+.new-dept { display: flex; gap: 10px; max-width: 520px; }
+.new-dept .btn { white-space: nowrap; }
+a.menu-item { text-decoration: none; }
+@media (max-width: 760px) {
+  .add-person { grid-template-columns: 1fr; }
+  .add-person select { width: 100%; }
+}

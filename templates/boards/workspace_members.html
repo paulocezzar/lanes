@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ workspace.name }} people · Lanes{% endblock %}
+{% block content %}
+<main class="home narrow">
+  <a class="back-link" href="{% url 'home' %}">← Boards</a>
+  <h1 class="page-title"><span class="ws-badge">{{ workspace.initial }}</span>{{ workspace.name }} <span class="muted">· people</span></h1>
+
+  {% if new_account %}
+  <div class="callout">
+    <strong>{% if new_account.reset %}New temporary password for {{ new_account.name }}{% else %}Account created for {{ new_account.name }}{% endif %}</strong>
+    <p>Give them these details. The password is only shown once — they can change it from their profile menu after logging in.</p>
+    <dl class="creds">
+      <dt>Web address</dt><dd>{{ request.scheme }}://{{ request.get_host }}</dd>
+      <dt>Email</dt><dd>{{ new_account.email }}</dd>
+      <dt>Password</dt><dd><code>{{ new_account.password }}</code></dd>
+    </dl>
+  </div>
+  {% endif %}
+
+  {% if can_manage %}
+  <section class="panel">
+    <h2>Add someone</h2>
+    <form method="post" action="{% url 'workspace_member_add' workspace.pk %}" class="add-person">
+      {% csrf_token %}
+      <label>Email<input type="email" name="email" required autocomplete="off" placeholder="name@thenewt.com"></label>
+      <label>First name<input name="first_name" autocomplete="off" placeholder="If new to Lanes"></label>
+      <label>Last name<input name="last_name" autocomplete="off"></label>
+      <label>Role
+        <select name="role">{% for key, name in roles %}<option value="{{ key }}" {% if key == 'member' %}selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+      </label>
+      <button class="btn primary">Add</button>
+    </form>
+    <p class="hint">If they already have a Lanes account they're just added to {{ workspace.name }}. If not, an account is created with a temporary password. Department admins can add and remove people and see every board in the department.</p>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>Members <span class="count">{{ memberships|length }}</span></h2>
+    {% for m in memberships %}
+    <div class="member-row">
+      {% include "boards/_avatar.html" with u=m.user size="lg" %}
+      <div class="member-name">{{ m.user.display_name }}{% if m.user == request.user %} (you){% endif %}<small>{{ m.user.email }}</small></div>
+      {% if can_manage %}
+      <form method="post" action="{% url 'workspace_member_update' workspace.pk m.user.pk %}" class="inline">
+        {% csrf_token %}
+        <select name="role" onchange="this.form.submit()" aria-label="Role for {{ m.user.display_name }}">
+          {% for key, name in roles %}<option value="{{ key }}" {% if key == m.role %}selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+      </form>
+      <details class="menu">
+        <summary class="icon-btn" title="More">{% include "boards/_icon.html" with i="dots" %}</summary>
+        <div class="menu-panel right">
+          {% if m.user != request.user %}
+          <form method="post" action="{% url 'workspace_member_reset_password' workspace.pk m.user.pk %}" onsubmit="return confirm('Give {{ m.user.display_name|escapejs }} a new temporary password? Their old one stops working.')">
+            {% csrf_token %}<button class="menu-item">Reset password</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{% url 'workspace_member_update' workspace.pk m.user.pk %}" onsubmit="return confirm('Remove {{ m.user.display_name|escapejs }} from {{ workspace.name|escapejs }}?')">
+            {% csrf_token %}<input type="hidden" name="action" value="remove">
+            <button class="menu-item danger">Remove from {{ workspace.name }}</button>
+          </form>
+        </div>
+      </details>
+      {% else %}
+      <span class="role-pill">{{ m.get_role_display }}</span>
+      {% endif %}
+    </div>
+    {% empty %}
+    <p class="muted">Nobody yet.</p>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.menu[open]').forEach(d => { if (!d.contains(e.target)) d.removeAttribute('open'); });
+});
+</script>
+{% endblock %}

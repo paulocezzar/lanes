@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import api, views
+from . import api, views, views_people
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -8,6 +8,13 @@ urlpatterns = [
     path("boards/new/", views.board_create, name="board_create"),
     path("b/<int:board_id>/", views.board_page, name="board"),
     path("cards/<int:card_id>/", views.card_modal, name="card_modal"),
+    path("departments/new/", views_people.workspace_create, name="workspace_create"),
+    path("departments/<int:workspace_id>/people/", views_people.workspace_members, name="workspace_members"),
+    path("departments/<int:workspace_id>/people/add/", views_people.workspace_member_add, name="workspace_member_add"),
+    path("departments/<int:workspace_id>/people/<int:user_id>/", views_people.workspace_member_update,
+         name="workspace_member_update"),
+    path("departments/<int:workspace_id>/people/<int:user_id>/reset-password/",
+         views_people.workspace_member_reset_password, name="workspace_member_reset_password"),
 
     path("api/boards/<int:board_id>/lists/", api.list_create),
     path("api/boards/<int:board_id>/labels/", api.label_save),

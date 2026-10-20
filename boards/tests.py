@@ -163,3 +163,65 @@ class BoardFlowTests(TestCase):
     def test_login_required(self):
         r = self.client.get(reverse("home"))
         self.assertEqual(r.status_code, 302)
+
+
+class DepartmentPeopleTests(TestCase):
+    def setUp(self):
+        self.boss = User.objects.create_superuser("boss@x.com", "pw", first_name="Boss")
+        self.lead = User.objects.create_user("lead@x.com", "pw", first_name="Lead")
+        self.staff = User.objects.create_user("staff@x.com", "pw", first_name="Staff")
+        self.ws = Workspace.objects.create(name="Bakery")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.lead, role="admin")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.staff, role="member")
+
+    def test_only_company_admin_creates_departments(self):
+        self.client.force_login(self.lead)
+        self.assertEqual(self.client.post(reverse("workspace_create"), {"name": "Butchery"}).status_code, 404)
+        self.client.force_login(self.boss)
+        r = self.client.post(reverse("workspace_create"), {"name": "Butchery"})
+        ws = Workspace.objects.get(name="Butchery")
+        self.assertRedirects(r, reverse("workspace_members", args=[ws.pk]))
+        self.assertEqual(WorkspaceMember.objects.get(workspace=ws, user=self.boss).role, "admin")
+
+    def test_add_new_person_creates_account_with_temp_password(self):
+        self.client.force_login(self.lead)
+        r = self.client.post(reverse("workspace_member_add", args=[self.ws.pk]),
+                             {"email": "New@X.com", "first_name": "Nia", "role": "member"}, follow=True)
+        person = User.objects.get(email="new@x.com")
+        self.assertTrue(WorkspaceMember.objects.filter(workspace=self.ws, user=person).exists())
+        password = r.context["new_account"]["password"]
+        self.assertTrue(person.check_password(password))
+        self.assertContains(r, password)
+        # shown once only
+        self.assertNotContains(self.client.get(reverse("workspace_members", args=[self.ws.pk])), password)
+
+    def test_new_person_needs_first_name(self):
+        self.client.force_login(self.lead)
+        self.client.post(reverse("workspace_member_add", args=[self.ws.pk]), {"email": "nobody@x.com"})
+        self.assertFalse(User.objects.filter(email="nobody@x.com").exists())
+
+    def test_member_cannot_manage(self):
+        self.client.force_login(self.staff)
+        r = self.client.post(reverse("workspace_member_add", args=[self.ws.pk]), {"email": "boss@x.com"})
+        self.assertEqual(r.status_code, 404)
+        self.assertContains(self.client.get(reverse("workspace_members", args=[self.ws.pk])), "Lead")
+
+    def test_last_admin_protected_and_role_change(self):
+        self.client.force_login(self.lead)
+        url = reverse("workspace_member_update", args=[self.ws.pk, self.lead.pk])
+        self.client.post(url, {"role": "member"})
+        self.assertEqual(WorkspaceMember.objects.get(workspace=self.ws, user=self.lead).role, "admin")
+        self.client.post(reverse("workspace_member_update", args=[self.ws.pk, self.staff.pk]), {"role": "admin"})
+        self.assertEqual(WorkspaceMember.objects.get(workspace=self.ws, user=self.staff).role, "admin")
+
+    def test_reset_password(self):
+        self.client.force_login(self.lead)
+        r = self.client.post(reverse("workspace_member_reset_password", args=[self.ws.pk, self.staff.pk]), follow=True)
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.check_password(r.context["new_account"]["password"]))
+        self.assertFalse(self.staff.check_password("pw"))
+
+    def test_outsider_cannot_see_department(self):
+        other = User.objects.create_user("o@x.com", "pw")
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(reverse("workspace_members", args=[self.ws.pk])).status_code, 404)
