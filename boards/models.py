@@ -44,7 +44,7 @@ class WorkspaceMember(models.Model):
 
 class Board(models.Model):
     PRIVATE, WORKSPACE = "private", "workspace"
-    VISIBILITY = [(PRIVATE, "Private — board members only"), (WORKSPACE, "Workspace — everyone in the department can see")]
+    VISIBILITY = [(PRIVATE, "Private — only people added to the board"), (WORKSPACE, "Department — everyone in it can see")]
 
     BACKGROUNDS = [
         ("dusk", "Dusk"),

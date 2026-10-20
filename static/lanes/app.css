@@ -301,8 +301,8 @@ body.board-page { overflow: hidden; }
   z-index: 40; display: flex; flex-direction: column; }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .drawer-head h3 { margin: 0; font-size: 15px; }
-.drawer-tabs { display: flex; gap: 4px; padding: 10px 14px 0; }
-.drawer-tabs button { border: 0; background: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-weight: 600; }
+.drawer-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 14px 0; }
+.drawer-tabs button { border: 0; background: none; padding: 6px 9px; font-size: 13px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-weight: 600; }
 .drawer-tabs button.on { background: var(--surface-3); color: var(--text); }
 .drawer-pane { padding: 14px; overflow-y: auto; display: grid; gap: 12px; align-content: start; }
 .drawer-pane .section-label { margin-top: 8px; }
