@@ -75,9 +75,10 @@ class Command(BaseCommand):
 
         now = timezone.now()
 
-        def card(list_title, title, *, labels_=(), members=(), due_days=None, desc="", complete=False, by="Sandra"):
+        def card(list_title, title, *, labels_=(), members=(), due_days=None, start_days=None, desc="", complete=False, by="Sandra"):
             lst = lists[list_title]
             c = Card.objects.create(list=lst, title=title, description=desc, is_complete=complete,
+                                    start_date=(now + timedelta(days=start_days)).date() if start_days is not None else None,
                                     created_by=users[by],
                                     position=positions.end_position(lst.cards.all()),
                                     due_at=(now + timedelta(days=due_days)).replace(hour=14, minute=0, second=0, microsecond=0)
@@ -87,7 +88,7 @@ class Command(BaseCommand):
             log(board, users[by], "card_created", card=c, list=lst.title)
             return c
 
-        prod = card("Christmas cakes", "Production", labels_=["green"], members=["Paulo", "Charlie"], due_days=10,
+        prod = card("Christmas cakes", "Production", labels_=["green"], members=["Paulo", "Charlie"], due_days=10, start_days=-2,
                     desc="Full run for retail and wholesale. Fruit needs 48 h soak before batter.")
         cl = Checklist.objects.create(card=prod, title="Xmas cake", position=positions.GAP)
         for i, (text, done) in enumerate([("Order ingredients", True), ("Fruit soak", False), ("Order cake tins", False),
@@ -98,11 +99,11 @@ class Command(BaseCommand):
         Comment.objects.create(card=prod, author=users["Charlie"], body="Tins arrive Thursday — boards still not confirmed.")
         card("Christmas cakes", "Confirm marzipan supplier", labels_=["yellow", "red"], members=["Sandra"], due_days=-1)
         card("Christmas cakes", "Label artwork sign-off", labels_=["blue"], due_days=1)
-        card("Mince pies", "Wholesale pre-orders", labels_=["purple"], members=["Pipa"], due_days=5,
+        card("Mince pies", "Wholesale pre-orders", labels_=["purple"], members=["Pipa"], due_days=5, start_days=0,
              desc="Pipa to collate pre-orders from wholesale customers by Friday.")
         card("Mince pies", "Trial crumble topping batch", labels_=["green"], members=["Charlie"])
-        card("Stollen", "Cost the new wreath size", labels_=["yellow"])
-        card("Done", "Book extra freezer space", labels_=["green"], complete=True, members=["Paulo"])
+        card("Stollen", "Cost the new wreath size", labels_=["yellow"], due_days=14, start_days=7)
+        card("Done", "Book extra freezer space", labels_=["green"], complete=True, members=["Paulo"], due_days=-3, start_days=-6)
 
         self.stdout.write(self.style.SUCCESS(
             f"Demo ready. Log in as paulo@example.com / {PASSWORD} (superuser) or sandra@example.com."))

@@ -1,0 +1,30 @@
+{% extends "boards/board_base.html" %}
+{% block board_body %}
+<div class="view-wrap dash-view">
+  <div class="stat-row">
+    <div class="stat"><span class="stat-num">{{ total }}</span><span class="stat-label">Cards on the board</span></div>
+    <div class="stat"><span class="stat-num ok">{{ complete }}</span><span class="stat-label">Marked complete</span></div>
+    <div class="stat"><span class="stat-num bad">{{ overdue }}</span><span class="stat-label">Overdue</span></div>
+    <div class="stat"><span class="stat-num warn">{{ due_week }}</span><span class="stat-label">Due in the next 7 days</span></div>
+    <div class="stat"><span class="stat-num">{% if items_pct is not None %}{{ items_pct }}%{% else %}—{% endif %}</span><span class="stat-label">Checklist items done{% if items_total %} ({{ items_done }}/{{ items_total }}){% endif %}</span></div>
+  </div>
+  <div class="dash-grid">
+    <section class="dash-card">
+      <h3>Cards per list</h3>
+      {% for b in by_list %}<div class="hbar"><span class="hbar-label">{{ b.label }}</span><span class="hbar-track"><i style="width:{{ b.pct }}%"></i></span><span class="hbar-n">{{ b.count }}</span></div>{% empty %}<p class="muted">No lists.</p>{% endfor %}
+    </section>
+    <section class="dash-card">
+      <h3>Due date status</h3>
+      {% for b in by_status %}<div class="hbar"><span class="hbar-label">{{ b.label }}</span><span class="hbar-track"><i class="st-{{ b.key }}" style="width:{{ b.pct }}%"></i></span><span class="hbar-n">{{ b.count }}</span></div>{% endfor %}
+    </section>
+    <section class="dash-card">
+      <h3>Cards per member</h3>
+      {% for b in by_member %}<div class="hbar"><span class="hbar-label">{{ b.label }}</span><span class="hbar-track"><i style="width:{{ b.pct }}%"></i></span><span class="hbar-n">{{ b.count }}</span></div>{% empty %}<p class="muted">No cards yet.</p>{% endfor %}
+    </section>
+    <section class="dash-card">
+      <h3>Cards per label</h3>
+      {% for b in by_label %}<div class="hbar"><span class="hbar-label">{{ b.label }}</span><span class="hbar-track"><i class="lc-{{ b.colour }}" style="width:{{ b.pct }}%"></i></span><span class="hbar-n">{{ b.count }}</span></div>{% empty %}<p class="muted">No labelled cards.</p>{% endfor %}
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,12 +1,16 @@
 from django.urls import path
 
-from . import api, views, views_people
+from . import api, views, views_board, views_people
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("my-cards/", views.my_cards, name="my_cards"),
     path("boards/new/", views.board_create, name="board_create"),
     path("b/<int:board_id>/", views.board_page, name="board"),
+    path("b/<int:board_id>/calendar/", views_board.board_calendar, name="board_calendar"),
+    path("b/<int:board_id>/table/", views_board.board_table, name="board_table"),
+    path("b/<int:board_id>/timeline/", views_board.board_timeline, name="board_timeline"),
+    path("b/<int:board_id>/dashboard/", views_board.board_dashboard, name="board_dashboard"),
     path("cards/<int:card_id>/", views.card_modal, name="card_modal"),
     path("departments/new/", views_people.workspace_create, name="workspace_create"),
     path("departments/<int:workspace_id>/people/", views_people.workspace_members, name="workspace_members"),

@@ -4,9 +4,10 @@
   const boardEl = document.getElementById('board');
   if (!boardEl) return;
   const boardId = boardEl.dataset.boardId;
+  const view = boardEl.dataset.view || 'board';
   const canEdit = boardEl.dataset.canEdit === '1';
   const csrf = document.querySelector('meta[name=csrf-token]').content;
-  const listsEl = document.getElementById('lists');
+  const listsEl = document.getElementById('lists') || document.createElement('div');  // other views have no lists
   const dialog = document.getElementById('card-dialog');
   const dialogBody = document.getElementById('card-dialog-body');
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -491,11 +492,17 @@
     if (polling || document.hidden) return;
     polling = true;
     try {
-      const res = await fetch(`/api/boards/${boardId}/state/?v=${version}`, { credentials: 'same-origin' });
+      const lite = view === 'board' ? '' : '&lite=1';
+      const res = await fetch(`/api/boards/${boardId}/state/?v=${version}${lite}`, { credentials: 'same-origin' });
       if (!res.ok) return;
       const data = await res.json();
       if (data.archived) { location.href = '/'; return; }
-      if (String(data.version) === String(version) || !data.lists_html) return;
+      if (String(data.version) === String(version)) return;
+      if (view !== 'board') {                 // other views: just re-render the page when idle
+        if (!dialog.open && !dragging && !document.querySelector('.view-busy')) location.reload();
+        return;
+      }
+      if (!data.lists_html) return;
       if (userIsBusy()) return;              // try again next tick
       const scroll = listsEl.scrollLeft;
       const cardScroll = new Map($$('.list', listsEl).map(l => [l.dataset.listId, $('[data-list-cards]', l).scrollTop]));
@@ -530,6 +537,13 @@
 
   setInterval(poll, 4000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+
+  // Any element with data-card-open="<id>" opens that card (used by the other views)
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-card-open]');
+    if (el && !e.defaultPrevented) { e.preventDefault(); openCard(el.dataset.cardOpen); }
+  });
+  window.LanesBoard = { openCard, post, toast, boardId, setDragging: v => (dragging = v) };
 
   // Deep link: /b/1/?card=5 opens that card
   if (boardEl.dataset.openCard) openCard(boardEl.dataset.openCard);

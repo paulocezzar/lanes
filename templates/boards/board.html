@@ -1,34 +1,5 @@
-{% extends "base.html" %}
-{% load static %}
-{% block title %}{{ board.title }} · Lanes{% endblock %}
-{% block body_class %}board-page{% endblock %}
-{% block content %}
-<main class="board bg-{{ board.background }}" id="board"
-      data-board-id="{{ board.pk }}" data-version="{{ board.version }}" data-can-edit="{{ can_edit|yesno:'1,0' }}" data-open-card="{{ open_card|default:'' }}">
-  <header class="board-head">
-    <h1 class="board-title" {% if can_manage %}contenteditable="plaintext-only" spellcheck="false" data-board-title{% endif %}>{{ board.title }}</h1>
-    <span class="board-vis" title="{{ board.get_visibility_display }}">
-      {% if board.visibility == 'private' %}{% include "boards/_icon.html" with i="lock" %}Private{% else %}{% include "boards/_icon.html" with i="people" %}{{ board.workspace.name }}{% endif %}
-    </span>
-    <div class="board-head-right">
-      <div class="avatar-stack" data-open-share>
-        {% for u in people|slice:":6" %}{% include "boards/_avatar.html" %}{% endfor %}
-        {% if people|length > 6 %}<span class="avatar more">+{{ people|length|add:"-6" }}</span>{% endif %}
-      </div>
-      {% if me %}
-      <button class="icon-btn light{% if me.starred %} on{% endif %}" data-star title="Star board">{% include "boards/_icon.html" with i="star" %}</button>
-      {% endif %}
-      {% if me %}
-      <button class="btn light" data-open-share>{% include "boards/_icon.html" with i="share" %}Share</button>
-      {% else %}
-      <button class="btn light" data-join>Join board</button>
-      {% endif %}
-      <button class="icon-btn light" data-open-drawer title="Menu">{% include "boards/_icon.html" with i="dots" %}</button>
-    </div>
-  </header>
-
-  {% if not can_edit %}<div class="readonly-note">{% if me %}You're an observer on this board — you can comment but not change cards.{% else %}You can see this board because it's visible to {{ board.workspace.name }}. Join it to make changes.{% endif %}</div>{% endif %}
-
+{% extends "boards/board_base.html" %}
+{% block board_body %}
   <div class="lists" id="lists">
     {% for list in lists %}{% include "boards/_list.html" %}{% endfor %}
     {% if can_edit %}
@@ -41,62 +12,4 @@
     </div>
     {% endif %}
   </div>
-</main>
-
-<dialog id="card-dialog" class="card-dialog" aria-label="Card"><div id="card-dialog-body"></div></dialog>
-
-<dialog id="share-dialog" class="dialog wide" aria-label="Share board">
-  <div class="dialog-head"><h3>Share board</h3><button class="icon-btn" data-close>{% include "boards/_icon.html" with i="close" %}</button></div>
-  {% if can_manage %}
-  <form class="share-form" id="share-form">
-    <input type="email" name="email" placeholder="Email address" required autocomplete="off">
-    <select name="role">{% for key, name in roles %}<option value="{{ key }}" {% if key == 'member' %}selected{% endif %}>{{ name }}</option>{% endfor %}</select>
-    <button class="btn primary">Share</button>
-  </form>
-  <p class="hint">Admins manage the board and its members. Members add and change cards. Observers can only view and comment.</p>
-  {% endif %}
-  <h4 class="section-label">Board members <span class="count" id="member-count">{{ people|length }}</span></h4>
-  <div id="share-members">{% include "boards/_share_members.html" with memberships=board.memberships.all %}</div>
-</dialog>
-
-<aside class="drawer" id="drawer" hidden>
-  <div class="drawer-head"><h3>Menu</h3><button class="icon-btn" data-close-drawer>{% include "boards/_icon.html" with i="close" %}</button></div>
-  <div class="drawer-tabs">
-    <button class="on" data-tab="activity">Activity</button>
-    <button data-tab="archived">Archived</button>
-    {% if can_manage %}<button data-tab="settings">Settings</button>{% endif %}
-  </div>
-  <div class="drawer-pane" data-pane="activity">
-    {% for a in activity %}
-    <div class="feed-item">
-      {% if a.actor %}{% include "boards/_avatar.html" with u=a.actor %}{% endif %}
-      <div><b>{{ a.actor.display_name|default:"Someone" }}</b> {{ a.text }}{% if a.card %} — <a href="?card={{ a.card.pk }}" data-card-link="{{ a.card.pk }}">{{ a.card.title }}</a>{% endif %}
-        <time>{{ a.created_at|timesince }} ago</time></div>
-    </div>
-    {% empty %}<p class="muted">Nothing yet.</p>{% endfor %}
-  </div>
-  <div class="drawer-pane" data-pane="archived" hidden>
-    {% for card in archived_cards %}
-    <div class="archived-row"><span>{{ card.title }}</span>{% if can_edit %}<button class="btn ghost sm" data-restore="{{ card.pk }}">Restore</button>{% endif %}</div>
-    {% empty %}<p class="muted">No archived cards.</p>{% endfor %}
-  </div>
-  {% if can_manage %}
-  <div class="drawer-pane" data-pane="settings" hidden>
-    <h4 class="section-label">Background</h4>
-    <div class="bg-picker">
-      {% for key, name in board.BACKGROUNDS %}<button class="bg-swatch bg-{{ key }}{% if key == board.background %} on{% endif %}" data-bg="{{ key }}" title="{{ name }}"></button>{% endfor %}
-    </div>
-    <h4 class="section-label">Visibility</h4>
-    <select data-visibility>
-      {% for key, name in board.VISIBILITY %}<option value="{{ key }}" {% if key == board.visibility %}selected{% endif %}>{{ name }}</option>{% endfor %}
-    </select>
-    <h4 class="section-label">Archive board</h4>
-    <button class="btn danger" data-archive-board>Archive this board</button>
-  </div>
-  {% endif %}
-</aside>
-{% endblock %}
-{% block scripts %}
-<script src="{% static 'lanes/vendor/Sortable.min.js' %}"></script>
-<script src="{% static 'lanes/board.js' %}"></script>
 {% endblock %}

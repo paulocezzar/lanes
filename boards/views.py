@@ -10,6 +10,7 @@ from django.views.decorators.http import require_POST
 from . import permissions, positions
 from .models import Board, BoardMember, Label, List, Workspace
 from .services import board_people, cards_qs, log, render_modal
+from .board_context import board_context
 
 DEFAULT_LABELS = ["green", "yellow", "orange", "red", "purple", "blue"]
 
@@ -66,25 +67,10 @@ def board_create(request):
 
 @login_required
 def board_page(request, board_id):
-    board = get_object_or_404(Board.objects.select_related("workspace"), pk=board_id, is_archived=False)
-    permissions.require(permissions.can_view, board, request.user)
-    lists = board.lists.filter(is_archived=False).prefetch_related(
+    board, ctx = board_context(request, board_id, "board")
+    ctx["lists"] = board.lists.filter(is_archived=False).prefetch_related(
         Prefetch("cards", queryset=cards_qs().filter(is_archived=False)))
-    me = BoardMember.objects.filter(board=board, user=request.user).first()
-    return render(request, "boards/board.html", {
-        "board": board,
-        "lists": lists,
-        "people": board_people(board),
-        "labels": board.labels.all(),
-        "me": me,
-        "can_edit": permissions.can_edit(board, request.user),
-        "can_manage": permissions.can_manage(board, request.user),
-        "roles": BoardMember.ROLES,
-        "label_colours": Label.COLOURS,
-        "archived_cards": cards_qs().filter(list__board=board, is_archived=True)[:50],
-        "activity": board.activity.select_related("actor", "card")[:40],
-        "open_card": request.GET.get("card"),
-    })
+    return render(request, "boards/board.html", ctx)
 
 
 @login_required
@@ -111,7 +97,7 @@ def board_state(request, board_id):
     board = get_object_or_404(Board, pk=board_id)
     permissions.require(permissions.can_view, board, request.user)
     data = {"version": board.version, "archived": board.is_archived}
-    if request.GET.get("v") != str(board.version):
+    if request.GET.get("v") != str(board.version) and not request.GET.get("lite"):
         lists = board.lists.filter(is_archived=False).prefetch_related(
             Prefetch("cards", queryset=cards_qs().filter(is_archived=False)))
         can_edit = permissions.can_edit(board, request.user)

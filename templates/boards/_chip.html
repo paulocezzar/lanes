@@ -1,0 +1,5 @@
+<a href="?card={{ c.pk }}" class="chip{% if c.is_complete %} done{% endif %} due-{{ c.due_state|default:'none' }}" data-card-open="{{ c.pk }}" data-card-id="{{ c.pk }}" data-time="{% if c.due_at %}{{ c.due_at|date:'H:i' }}{% endif %}"{% if can_edit %} draggable="true"{% endif %} title="{{ c.title }} · {{ c.list.title }}">
+  {% with l=c.labels.all|first %}{% if l %}<i class="chip-bar lc-{{ l.colour }}"></i>{% endif %}{% endwith %}
+  <span class="chip-text">{% if c.is_complete %}✓ {% endif %}{{ c.title }}</span>
+  {% if c.members.all %}<span class="chip-who">{% for u in c.members.all|slice:":2" %}{% include "boards/_avatar.html" with size="xs" %}{% endfor %}</span>{% endif %}
+</a>

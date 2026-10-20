@@ -1,0 +1,58 @@
+{% extends "boards/board_base.html" %}
+{% load static %}
+{% block board_body %}
+<div class="view-wrap table-view" data-table>
+  <div class="view-toolbar">
+    <input type="search" class="view-search" placeholder="Filter cards…" data-table-search aria-label="Filter cards">
+    <select data-table-list aria-label="List">
+      <option value="">All lists</option>
+      {% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}
+    </select>
+    <select data-table-person aria-label="Member">
+      <option value="">Everyone</option>
+      {% for u in people %}<option value="{{ u.pk }}">{{ u.display_name }}</option>{% endfor %}
+      <option value="none">Unassigned</option>
+    </select>
+    <label class="check-inline"><input type="checkbox" data-table-hide-done> Hide complete</label>
+    <span class="view-hint" data-table-count>{{ rows|length }} cards</span>
+  </div>
+  <div class="table-scroll">
+    <table class="cards-table">
+      <thead>
+        <tr>
+          <th data-sort="title">Card</th>
+          <th data-sort="list">List</th>
+          <th>Labels</th>
+          <th data-sort="people">Members</th>
+          <th data-sort="due">Due</th>
+          <th data-sort="items">Checklist</th>
+          <th data-sort="status">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}{% with c=r.card %}
+        <tr data-card-open="{{ c.pk }}" data-title="{{ c.title|lower }} {{ c.description|lower|truncatechars:200 }}"
+            data-list="{{ c.list_id }}" data-list-pos="{{ c.list.position }}"
+            data-people="{% for u in c.members.all %}{{ u.pk }} {% empty %}none{% endfor %}"
+            data-people-name="{% for u in c.members.all %}{{ u.display_name }} {% endfor %}"
+            data-due="{% if c.due_at %}{{ c.due_at|date:'U' }}{% else %}9999999999{% endif %}"
+            data-items="{% if r.pct is not None %}{{ r.pct }}{% else %}-1{% endif %}"
+            data-status="{% if c.is_complete %}3{% elif c.due_state == 'overdue' %}0{% elif c.due_state == 'soon' %}1{% else %}2{% endif %}"
+            data-done="{{ c.is_complete|yesno:'1,0' }}">
+          <td class="t-title">{{ c.title }}</td>
+          <td><span class="pill">{{ c.list.title }}</span></td>
+          <td>{% for l in c.labels.all %}<span class="tag lc-{{ l.colour }}">{{ l.name|default:"&nbsp;" }}</span>{% endfor %}</td>
+          <td><span class="avatar-row">{% for u in c.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% endfor %}</span></td>
+          <td>{% if c.due_at %}<span class="badge due-{{ c.due_state|default:'none' }}">{{ c.due_at|date:"j M, H:i" }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>{% if r.total %}<div class="mini-bar"><i style="width:{{ r.pct }}%"{% if r.pct == 100 %} class="full"{% endif %}></i></div><small>{{ r.done }}/{{ r.total }}</small>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>{% if c.is_complete %}<span class="status s-complete">Complete</span>{% elif c.due_state == 'overdue' %}<span class="status s-overdue">Overdue</span>{% elif c.due_state == 'soon' %}<span class="status s-soon">Due soon</span>{% else %}<span class="status">Open</span>{% endif %}</td>
+        </tr>
+        {% endwith %}{% empty %}
+        <tr><td colspan="7" class="muted">No cards on this board yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'lanes/views.js' %}"></script>{% endblock %}

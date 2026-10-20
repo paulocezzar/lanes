@@ -267,3 +267,38 @@ class LiveUpdateTests(TestCase):
         other = User.objects.create_user("o@x.com", "pw")
         self.client.force_login(other)
         self.assertEqual(self.client.get(reverse("board_state", args=[self.board.pk])).status_code, 404)
+
+
+class BoardViewsTests(TestCase):
+    def setUp(self):
+        from django.utils import timezone
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.user = User.objects.create_user("u@x.com", "pw", first_name="U")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.user)
+        self.board = Board.objects.create(workspace=self.ws, title="B", visibility=Board.PRIVATE)
+        BoardMember.objects.create(board=self.board, user=self.user, role="admin")
+        lst = List.objects.create(board=self.board, title="L")
+        self.card = Card.objects.create(list=lst, title="Dated card", due_at=timezone.now())
+        Card.objects.create(list=lst, title="Undated card")
+
+    def test_views_render(self):
+        self.client.force_login(self.user)
+        for name in ("board_calendar", "board_table", "board_timeline", "board_dashboard"):
+            r = self.client.get(reverse(name, args=[self.board.pk]))
+            self.assertEqual(r.status_code, 200, name)
+        self.assertContains(self.client.get(reverse("board_calendar", args=[self.board.pk])), "Dated card")
+        self.assertContains(self.client.get(reverse("board_table", args=[self.board.pk])), "Undated card")
+        self.assertContains(self.client.get(reverse("board_timeline", args=[self.board.pk])), "Dated card")
+        self.assertContains(self.client.get(reverse("board_dashboard", args=[self.board.pk])), "Cards on the board")
+
+    def test_calendar_month_param_and_bad_input(self):
+        self.client.force_login(self.user)
+        for m in ("2026-12", "nonsense", "2026-13"):
+            self.assertEqual(self.client.get(reverse("board_calendar", args=[self.board.pk]), {"m": m}).status_code, 200)
+        self.assertEqual(self.client.get(reverse("board_timeline", args=[self.board.pk]), {"start": "bad"}).status_code, 200)
+
+    def test_views_private(self):
+        other = User.objects.create_user("o@x.com", "pw")
+        self.client.force_login(other)
+        for name in ("board_calendar", "board_table", "board_timeline", "board_dashboard"):
+            self.assertEqual(self.client.get(reverse(name, args=[self.board.pk])).status_code, 404)
