@@ -302,3 +302,68 @@ class BoardViewsTests(TestCase):
         self.client.force_login(other)
         for name in ("board_calendar", "board_table", "board_timeline", "board_dashboard"):
             self.assertEqual(self.client.get(reverse(name, args=[self.board.pk])).status_code, 404)
+
+
+class AdvancedFeaturesTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.user = User.objects.create_user("u@x.com", "pw", first_name="Una")
+        self.helper = User.objects.create_user("h@x.com", "pw", first_name="Hal")
+        self.stranger = User.objects.create_user("s@x.com", "pw", first_name="Sid")
+        self.board = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=self.board, user=self.user, role="admin")
+        BoardMember.objects.create(board=self.board, user=self.helper, role="member")
+        self.card = Card.objects.create(list=List.objects.create(board=self.board, title="L"), title="Mince pies")
+
+    def api(self, url, data):
+        self.client.force_login(self.user)
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_custom_fields_create_set_and_validate(self):
+        r = self.api(f"/api/boards/{self.board.pk}/fields/", {"name": "Quantity (kg)", "kind": "number"})
+        qty = r.json()["field_id"]
+        r = self.api(f"/api/cards/{self.card.pk}/fields/", {"field_id": qty, "value": "200"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Quantity (kg)", r.json()["tile"])
+        self.assertEqual(self.card.field_values.get().value, 200)
+        r = self.api(f"/api/cards/{self.card.pk}/fields/", {"field_id": qty, "value": "lots"})
+        self.assertEqual(r.status_code, 400)
+        self.api(f"/api/cards/{self.card.pk}/fields/", {"field_id": qty, "value": ""})
+        self.assertFalse(self.card.field_values.exists())
+
+    def test_dropdown_needs_options_and_rejects_others(self):
+        r = self.api(f"/api/boards/{self.board.pk}/fields/", {"name": "Site", "kind": "dropdown"})
+        self.assertEqual(r.status_code, 400)
+        site = self.api(f"/api/boards/{self.board.pk}/fields/",
+                        {"name": "Site", "kind": "dropdown", "options": "Pilton, Bruton"}).json()["field_id"]
+        self.assertEqual(self.api(f"/api/cards/{self.card.pk}/fields/", {"field_id": site, "value": "Bruton"}).status_code, 200)
+        self.assertEqual(self.api(f"/api/cards/{self.card.pk}/fields/", {"field_id": site, "value": "Mars"}).status_code, 400)
+
+    def test_field_from_other_board_rejected(self):
+        other = Board.objects.create(workspace=self.ws, title="Other")
+        from .models import CustomField
+        f = CustomField.objects.create(board=other, name="X")
+        self.assertEqual(self.api(f"/api/cards/{self.card.pk}/fields/", {"field_id": f.pk, "value": "y"}).status_code, 404)
+
+    def test_checklist_item_assignee_and_due(self):
+        from .models import Checklist, ChecklistItem
+        cl = Checklist.objects.create(card=self.card)
+        item = ChecklistItem.objects.create(checklist=cl, text="Order foils")
+        r = self.api(f"/api/items/{item.pk}/", {"assignee_id": self.helper.pk, "due_at": "2026-11-02T09:00"})
+        self.assertEqual(r.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.assignee, self.helper)
+        self.assertIsNotNone(item.due_at)
+        r = self.api(f"/api/items/{item.pk}/", {"assignee_id": self.stranger.pk})
+        self.assertEqual(r.status_code, 400)
+        self.client.force_login(self.helper)
+        self.assertContains(self.client.get(reverse("my_cards")), "Order foils")
+
+    def test_table_shows_field_columns(self):
+        from .models import CardFieldValue, CustomField
+        f = CustomField.objects.create(board=self.board, name="Supplier")
+        CardFieldValue.objects.create(card=self.card, field=f, value="Essential Trading")
+        self.client.force_login(self.user)
+        r = self.client.get(reverse("board_table", args=[self.board.pk]))
+        self.assertContains(r, "Supplier")
+        self.assertContains(r, "Essential Trading")

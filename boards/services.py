@@ -3,7 +3,7 @@ from django.db.models import Prefetch
 from django.template.loader import render_to_string
 
 from . import permissions
-from .models import Activity, BoardMember, Card, Checklist, ChecklistItem, Label
+from .models import Activity, BoardMember, Card, CardFieldValue, Checklist, ChecklistItem, CustomField, Label
 
 
 def log(board, actor, verb, card=None, **data):
@@ -16,7 +16,8 @@ def cards_qs():
         "labels",
         "members",
         Prefetch("checklists", queryset=Checklist.objects.prefetch_related(
-            Prefetch("items", queryset=ChecklistItem.objects.all()))),
+            Prefetch("items", queryset=ChecklistItem.objects.select_related("assignee")))),
+        Prefetch("field_values", queryset=CardFieldValue.objects.select_related("field")),
         "comments",
     )
 
@@ -41,8 +42,15 @@ def render_modal(card, request):
         "can_comment": permissions.can_comment(board, user),
         "feed": _feed(card),
         "label_colours": Label.COLOURS,
+        "fields": _field_rows(card, board),
+        "field_kinds": CustomField.KINDS,
     }
     return render_to_string("boards/_card_modal.html", ctx, request=request)
+
+
+def _field_rows(card, board):
+    values = {v.field_id: v.value for v in card.field_values.all()}
+    return [{"field": f, "value": values.get(f.pk)} for f in board.custom_fields.all()]
 
 
 def _feed(card):

@@ -353,6 +353,10 @@
     if (t.matches('[data-label]')) return cardPost('labels', { label_id: +t.dataset.label });
     if (t.matches('[data-item]')) return post(`/api/items/${t.dataset.item}/`, { is_done: t.checked }).then(applyCard);
     if (t.matches('[data-move-list]')) return cardPost('move', { list_id: +t.value });
+    if (t.matches('[data-field]')) {
+      const value = t.type === 'checkbox' ? t.checked : t.value;
+      return cardPost('fields', { field_id: +t.dataset.field, value });
+    }
   });
 
   dialogBody.addEventListener('submit', e => {
@@ -379,6 +383,11 @@
         applyCard(data);
         $(`[data-checklist="${clId}"] [data-item-new] input`, dialogBody)?.focus();
       });
+    }
+    if (f.matches('[data-item-meta]')) {
+      e.preventDefault();
+      return post(`/api/items/${f.dataset.itemMeta}/`,
+        { assignee_id: f.assignee_id.value ? +f.assignee_id.value : null, due_at: f.due_at.value }).then(applyCard);
     }
     if (f.matches('[data-label-new]')) {
       e.preventDefault();
@@ -459,6 +468,30 @@
       location.href = '/';
     }
   });
+  // Custom fields (menu → Fields)
+  const fieldNew = $('[data-field-new]', drawer);
+  if (fieldNew) {
+    const kindSel = fieldNew.kind, opts = fieldNew.options;
+    kindSel.addEventListener('change', () => { opts.hidden = kindSel.value !== 'dropdown'; });
+    fieldNew.addEventListener('submit', async e => {
+      e.preventDefault();
+      await post(`/api/boards/${boardId}/fields/`,
+        { name: fieldNew.name.value, kind: kindSel.value, options: opts.value });
+      location.reload();
+    });
+  }
+  drawer.addEventListener('change', e => {
+    const show = e.target.closest('[data-field-show]');
+    if (show) post(`/api/boards/${boardId}/fields/`,
+      { field_id: +show.closest('[data-field-row]').dataset.fieldRow, show_on_card: show.checked });
+  });
+  drawer.addEventListener('click', async e => {
+    const del = e.target.closest('[data-field-delete]');
+    if (!del || !confirm('Delete this field and every value stored in it?')) return;
+    await post(`/api/boards/${boardId}/fields/`, { field_id: +del.closest('[data-field-row]').dataset.fieldRow, delete: true });
+    del.closest('[data-field-row]').remove();
+  });
+
   $('[data-visibility]', drawer)?.addEventListener('change', async e => {
     await post(`/api/boards/${boardId}/update/`, { visibility: e.target.value });
     location.reload();
@@ -485,7 +518,7 @@
   function modalIsBusy() {
     const a = document.activeElement;
     return !!(a && dialogBody.contains(a) && (a.isContentEditable || a.matches('input, textarea')))
-      || openPop !== null;
+      || openPop !== null || !!dialogBody.querySelector('details.item-more[open]');
   }
 
   async function poll() {

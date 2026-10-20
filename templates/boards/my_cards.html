@@ -2,6 +2,20 @@
 {% block title %}My cards · Lanes{% endblock %}
 {% block content %}
 <main class="home">
+  {% if items %}
+  <section class="home-section">
+    <h2>Checklist items assigned to you</h2>
+    <div class="mine-items">
+      {% for it in items %}{% with c=it.checklist.card %}
+      <a class="mine-item" href="{% url 'board' c.list.board_id %}?card={{ c.pk }}">
+        <span>☐ {{ it.text }}</span>
+        {% if it.due_at %}<span class="badge due-{{ it.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ it.due_at|date:"j M, H:i" }}</span>{% endif %}
+        <span class="mine-where">{{ c.title }}<br>{{ c.list.board.title }}</span>
+      </a>
+      {% endwith %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
   <section class="home-section">
     <h2>Cards assigned to you</h2>
     {% regroup cards by list.board as by_board %}
@@ -18,7 +32,7 @@
       </div>
     </div>
     {% empty %}
-    <p class="muted">Nothing assigned to you. When someone adds you to a card it shows up here.</p>
+    <p class="muted">No cards assigned to you. When someone adds you to a card it shows up here.</p>
     {% endfor %}
   </section>
 </main>

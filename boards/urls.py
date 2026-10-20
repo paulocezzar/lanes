@@ -23,6 +23,8 @@ urlpatterns = [
     path("api/boards/<int:board_id>/state/", views.board_state, name="board_state"),
     path("api/boards/<int:board_id>/lists/", api.list_create),
     path("api/boards/<int:board_id>/labels/", api.label_save),
+    path("api/boards/<int:board_id>/fields/", api.field_save),
+    path("api/cards/<int:card_id>/fields/", api.card_field_set),
     path("api/boards/<int:board_id>/share/", api.board_share),
     path("api/boards/<int:board_id>/members/<int:user_id>/", api.board_member_update),
     path("api/boards/<int:board_id>/join/", api.board_join),

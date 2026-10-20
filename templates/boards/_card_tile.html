@@ -4,6 +4,7 @@
   <div class="tile-labels">{% for l in card.labels.all %}<span class="tile-label lc-{{ l.colour }}" title="{{ l }}">{% if l.name %}{{ l.name }}{% endif %}</span>{% endfor %}</div>
   {% endif %}
   <div class="tile-title">{% if card.is_complete %}<span class="done-dot" aria-label="Complete">✓</span>{% endif %}{{ card.title }}</div>
+  {% with tf=card.tile_fields %}{% if tf %}<div class="tile-fields">{% for v in tf %}<span class="field-badge"><b>{{ v.field.name }}</b> {{ v.display }}</span>{% endfor %}</div>{% endif %}{% endwith %}
   {% if card.due_at or card.description or card.comments.all or counts.1 or card.members.all %}
   <div class="tile-badges">
     {% if card.due_at %}<span class="badge due-{{ card.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ card.due_at|date:"j M" }}</span>{% endif %}

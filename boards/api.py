@@ -15,7 +15,8 @@ from django.utils.dateparse import parse_date, parse_datetime
 from django.views.decorators.http import require_POST
 
 from . import permissions, positions
-from .models import (Board, BoardMember, Card, Checklist, ChecklistItem, Comment, Label, List)
+from .models import (Board, BoardMember, Card, CardFieldValue, Checklist, ChecklistItem, Comment, CustomField, Label,
+                     List)
 from .services import board_people, card_response, log
 
 User = get_user_model()
@@ -264,6 +265,22 @@ def item_update(request, item_id):
         return card_response(card.pk, request)
     if "text" in request.data:
         item.text = _text(request.data["text"], 250)
+    if "assignee_id" in request.data:
+        uid = request.data["assignee_id"]
+        if uid:
+            if not BoardMember.objects.filter(board=card.list.board, user_id=uid).exists():
+                raise ApiError("Share the board with them first.")
+            item.assignee_id = uid
+        else:
+            item.assignee = None
+    if "due_at" in request.data:
+        if request.data["due_at"]:
+            due = parse_datetime(request.data["due_at"])
+            if not due:
+                raise ApiError("Couldn't read that date.")
+            item.due_at = timezone.make_aware(due) if timezone.is_naive(due) else due
+        else:
+            item.due_at = None
     if "is_done" in request.data and bool(request.data["is_done"]) != item.is_done:
         item.is_done = bool(request.data["is_done"])
         item.done_by = request.user if item.is_done else None
@@ -387,3 +404,58 @@ def board_update(request, board_id):
     board.save()
     return {"ok": True}
 
+
+
+# ---------- custom fields ----------
+
+@api
+def field_save(request, board_id):
+    """Create, update or delete a board's custom field."""
+    board = get_object_or_404(Board, pk=board_id)
+    _edit(board, request.user)
+    d = request.data
+    if d.get("field_id"):
+        field = get_object_or_404(CustomField, pk=d["field_id"], board=board)
+        if d.get("delete"):
+            field.delete()
+            return {"ok": True}
+    else:
+        if board.custom_fields.count() >= 30:
+            raise ApiError("A board can have up to 30 custom fields.")
+        kind = d.get("kind") if d.get("kind") in dict(CustomField.KINDS) else CustomField.TEXT
+        field = CustomField(board=board, kind=kind,
+                            position=positions.end_position(board.custom_fields.all()))
+    if "name" in d or not field.pk:
+        field.name = _text(d.get("name"), 60, "name")
+    if "show_on_card" in d:
+        field.show_on_card = bool(d["show_on_card"])
+    if field.kind == CustomField.DROPDOWN and "options" in d:
+        opts = d["options"]
+        if isinstance(opts, str):
+            opts = opts.split(",")
+        cleaned = list(dict.fromkeys(o.strip()[:60] for o in opts if str(o).strip()))[:30]
+        if not cleaned:
+            raise ApiError("Give the dropdown at least one option.")
+        field.options = cleaned
+        if field.pk:  # drop values that are no longer valid options
+            stale = [v.pk for v in CardFieldValue.objects.filter(field=field) if v.value not in cleaned]
+            CardFieldValue.objects.filter(pk__in=stale).delete()
+    elif field.kind == CustomField.DROPDOWN and not field.options:
+        raise ApiError("Give the dropdown at least one option.")
+    field.save()
+    return {"ok": True, "field_id": field.pk}
+
+
+@api
+def card_field_set(request, card_id):
+    card = _card(request, card_id)
+    field = get_object_or_404(CustomField, pk=request.data.get("field_id"), board=card.list.board)
+    try:
+        value = field.clean_value(request.data.get("value"))
+    except (TypeError, ValueError):
+        raise ApiError(f"That isn't a valid {field.get_kind_display().lower()} for {field.name}.")
+    if value is None:
+        CardFieldValue.objects.filter(card=card, field=field).delete()
+    else:
+        CardFieldValue.objects.update_or_create(card=card, field=field, defaults={"value": value})
+    return card_response(card.pk, request)

@@ -71,6 +71,29 @@
       </div>
       {% endif %}
 
+      {% if fields %}
+      <section class="cm-section">
+        <h4 class="cm-h">{% include "boards/_icon.html" with i="label" %}Custom fields</h4>
+        <div class="field-grid">
+          {% for row in fields %}{% with f=row.field v=row.value %}
+          <label class="field-cell">{{ f.name }}
+            {% if f.kind == "checkbox" %}
+              <span class="check-inline dark"><input type="checkbox" data-field="{{ f.pk }}" {% if v %}checked{% endif %} {% if not can_edit %}disabled{% endif %}> Yes</span>
+            {% elif f.kind == "dropdown" %}
+              <select data-field="{{ f.pk }}" {% if not can_edit %}disabled{% endif %}><option value="">—</option>{% for o in f.options %}<option value="{{ o }}" {% if o == v %}selected{% endif %}>{{ o }}</option>{% endfor %}</select>
+            {% elif f.kind == "date" %}
+              <input type="date" data-field="{{ f.pk }}" value="{{ v|default:'' }}" {% if not can_edit %}disabled{% endif %}>
+            {% elif f.kind == "number" %}
+              <input type="number" step="any" data-field="{{ f.pk }}" value="{% if v is not None %}{{ v }}{% endif %}" placeholder="Add a number…" {% if not can_edit %}disabled{% endif %}>
+            {% else %}
+              <input type="text" data-field="{{ f.pk }}" value="{{ v|default:'' }}" placeholder="Add text…" maxlength="500" {% if not can_edit %}disabled{% endif %}>
+            {% endif %}
+          </label>
+          {% endwith %}{% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
       <section class="cm-section">
         <h4 class="cm-h">{% include "boards/_icon.html" with i="desc" %}Description</h4>
         {% if can_edit %}
@@ -98,7 +121,21 @@
           <li class="item{% if item.is_done %} done{% endif %}">
             <input type="checkbox" data-item="{{ item.pk }}" {% if item.is_done %}checked{% endif %} {% if not can_edit %}disabled{% endif %} aria-label="{{ item.text }}">
             <span class="item-text">{{ item.text }}</span>
-            {% if can_edit %}<button class="icon-btn xs" data-delete-item="{{ item.pk }}" title="Delete item">{% include "boards/_icon.html" with i="close" %}</button>{% endif %}
+            {% if item.due_at %}<span class="badge sm due-{{ item.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ item.due_at|date:"j M" }}</span>{% endif %}
+            {% if item.assignee %}{% include "boards/_avatar.html" with u=item.assignee size="sm" %}{% endif %}
+            {% if can_edit %}
+            <details class="item-more">
+              <summary class="icon-btn xs" title="Assign or set a due date">{% include "boards/_icon.html" with i="person" %}</summary>
+              <form class="item-pop" data-item-meta="{{ item.pk }}">
+                <label>Assigned to
+                  <select name="assignee_id"><option value="">Nobody</option>{% for u in people %}<option value="{{ u.pk }}" {% if u.pk == item.assignee_id %}selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select>
+                </label>
+                <label>Due<input type="datetime-local" name="due_at" value="{% if item.due_at %}{{ item.due_at|date:'Y-m-d\TH:i' }}{% endif %}"></label>
+                <div class="row"><button class="btn primary sm">Save</button></div>
+              </form>
+            </details>
+            <button class="icon-btn xs item-del" data-delete-item="{{ item.pk }}" title="Delete item">{% include "boards/_icon.html" with i="close" %}</button>
+            {% endif %}
           </li>
           {% endif %}{% endfor %}
         </ul>

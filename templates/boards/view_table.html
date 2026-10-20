@@ -27,6 +27,7 @@
           <th data-sort="due">Due</th>
           <th data-sort="items">Checklist</th>
           <th data-sort="status">Status</th>
+          {% for f in fields %}<th>{{ f.name }}</th>{% endfor %}
         </tr>
       </thead>
       <tbody>
@@ -46,6 +47,7 @@
           <td>{% if c.due_at %}<span class="badge due-{{ c.due_state|default:'none' }}">{{ c.due_at|date:"j M, H:i" }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
           <td>{% if r.total %}<div class="mini-bar"><i style="width:{{ r.pct }}%"{% if r.pct == 100 %} class="full"{% endif %}></i></div><small>{{ r.done }}/{{ r.total }}</small>{% else %}<span class="muted">—</span>{% endif %}</td>
           <td>{% if c.is_complete %}<span class="status s-complete">Complete</span>{% elif c.due_state == 'overdue' %}<span class="status s-overdue">Overdue</span>{% elif c.due_state == 'soon' %}<span class="status s-soon">Due soon</span>{% else %}<span class="status">Open</span>{% endif %}</td>
+          {% for v in r.fields %}<td>{% if v %}{{ v.display }}{% else %}<span class="muted">—</span>{% endif %}</td>{% endfor %}
         </tr>
         {% endwith %}{% empty %}
         <tr><td colspan="7" class="muted">No cards on this board yet.</td></tr>

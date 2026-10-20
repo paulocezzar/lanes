@@ -56,6 +56,7 @@
   <div class="drawer-tabs">
     <button class="on" data-tab="activity">Activity</button>
     <button data-tab="archived">Archived</button>
+    {% if can_edit %}<button data-tab="fields">Fields</button>{% endif %}
     {% if can_manage %}<button data-tab="settings">Settings</button>{% endif %}
   </div>
   <div class="drawer-pane" data-pane="activity">
@@ -73,6 +74,25 @@
     {% empty %}<p class="muted">No archived cards.</p>{% endfor %}
   </div>
   {% if can_manage %}
+  {% if can_edit %}
+  <div class="drawer-pane" data-pane="fields" hidden>
+    <p class="muted small">Custom fields appear on every card in this board — e.g. Quantity, Supplier, Site.</p>
+    {% for f in board.custom_fields.all %}
+    <div class="field-row" data-field-row="{{ f.pk }}">
+      <div class="field-row-main"><b>{{ f.name }}</b><small>{{ f.get_kind_display }}{% if f.options %}: {{ f.options|join:", " }}{% endif %}</small></div>
+      <label class="check-inline dark small" title="Show on the card front"><input type="checkbox" data-field-show {% if f.show_on_card %}checked{% endif %}> On card</label>
+      <button class="icon-btn xs" data-field-delete title="Delete field">{% include "boards/_icon.html" with i="close" %}</button>
+    </div>
+    {% empty %}<p class="muted small">No custom fields yet.</p>{% endfor %}
+    <form class="field-new" data-field-new>
+      <h4 class="section-label">New field</h4>
+      <input name="name" placeholder="Field name, e.g. Quantity (kg)" maxlength="60" required>
+      <select name="kind">{% for key, name in field_kinds %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select>
+      <input name="options" placeholder="Dropdown options, comma separated" hidden>
+      <button class="btn primary sm">Add field</button>
+    </form>
+  </div>
+  {% endif %}
   <div class="drawer-pane" data-pane="settings" hidden>
     <h4 class="section-label">Background</h4>
     <div class="bg-picker">

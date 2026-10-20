@@ -70,12 +70,15 @@ def board_calendar(request, board_id):
 def board_table(request, board_id):
     board, ctx = board_context(request, board_id, "table")
     cards = list(open_cards(board).order_by("list__position", "position"))
+    fields = list(board.custom_fields.all())
     rows = []
     for c in cards:
         done, total = c.checklist_counts()
+        values = {v.field_id: v for v in c.field_values.all()}
         rows.append({"card": c, "done": done, "total": total,
-                     "pct": round(100 * done / total) if total else None})
-    ctx.update({"rows": rows, "lists": board.lists.filter(is_archived=False)})
+                     "pct": round(100 * done / total) if total else None,
+                     "fields": [values.get(f.pk) for f in fields]})
+    ctx.update({"rows": rows, "lists": board.lists.filter(is_archived=False), "fields": fields})
     return render(request, "boards/view_table.html", ctx)
 
 

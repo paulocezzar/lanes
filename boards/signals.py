@@ -7,17 +7,18 @@ from django.db.models import F
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
-from .models import (Board, BoardMember, Card, Checklist, ChecklistItem, Comment, Label, List)
+from .models import (Board, BoardMember, Card, CardFieldValue, Checklist, ChecklistItem, Comment, CustomField,
+                     Label, List)
 
 
 def board_id_for(instance):
     if isinstance(instance, Board):
         return None  # board's own edits are rare and reload the page
-    if isinstance(instance, (List, Label, BoardMember)):
+    if isinstance(instance, (List, Label, BoardMember, CustomField)):
         return instance.board_id
     if isinstance(instance, Card):
         return List.objects.filter(pk=instance.list_id).values_list("board_id", flat=True).first()
-    if isinstance(instance, (Checklist, Comment)):
+    if isinstance(instance, (Checklist, Comment, CardFieldValue)):
         return Card.objects.filter(pk=instance.card_id).values_list("list__board_id", flat=True).first()
     if isinstance(instance, ChecklistItem):
         return Checklist.objects.filter(pk=instance.checklist_id).values_list(
@@ -30,7 +31,7 @@ def bump(board_id):
         Board.objects.filter(pk=board_id).update(version=F("version") + 1)
 
 
-TRACKED = (List, Card, Checklist, ChecklistItem, Comment, Label, BoardMember)
+TRACKED = (List, Card, Checklist, ChecklistItem, Comment, Label, BoardMember, CustomField, CardFieldValue)
 
 
 @receiver(post_save)

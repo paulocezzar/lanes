@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from . import permissions, positions
-from .models import Board, BoardMember, Label, List, Workspace
+from .models import Board, BoardMember, ChecklistItem, Label, List, Workspace
 from .services import board_people, cards_qs, log, render_modal
 from .board_context import board_context
 
@@ -87,7 +87,12 @@ def my_cards(request):
     cards = (cards_qs().filter(members=request.user, is_archived=False, list__board__in=boards,
                                list__is_archived=False)
              .order_by("list__board__title", "list__board_id", "is_complete", "due_at"))
-    return render(request, "boards/my_cards.html", {"cards": cards})
+    items = (ChecklistItem.objects.filter(assignee=request.user, is_done=False,
+                                          checklist__card__is_archived=False,
+                                          checklist__card__list__is_archived=False,
+                                          checklist__card__list__board__in=boards)
+             .select_related("checklist__card__list__board").order_by("due_at", "id"))
+    return render(request, "boards/my_cards.html", {"cards": cards, "items": items})
 
 
 @login_required

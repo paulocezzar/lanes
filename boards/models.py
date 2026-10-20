@@ -158,6 +158,11 @@ class Card(models.Model):
             return "soon"
         return ""
 
+    def tile_fields(self):
+        """Custom field values to show as badges on the card tile."""
+        vals = [v for v in self.field_values.all() if v.field.show_on_card and v.display()]
+        return sorted(vals, key=lambda v: (v.field.position, v.field_id))
+
     def checklist_counts(self):
         items = [i for cl in self.checklists.all() for i in cl.items.all()]
         return sum(1 for i in items if i.is_done), len(items)
@@ -186,9 +191,86 @@ class ChecklistItem(models.Model):
     position = models.FloatField(default=1000)
     done_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     done_at = models.DateTimeField(null=True, blank=True)
+    # Advanced checklists: an owner and a due date per item
+    assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name="assigned_items")
+    due_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def due_state(self):
+        if not self.due_at:
+            return ""
+        if self.is_done:
+            return "complete"
+        now = timezone.now()
+        if self.due_at < now:
+            return "overdue"
+        return "soon" if (self.due_at - now).total_seconds() < 86400 else ""
 
     class Meta:
         ordering = ["position", "id"]
+
+
+class CustomField(models.Model):
+    """A board-level field every card can fill in: Quantity, Supplier, Site…"""
+
+    TEXT, NUMBER, DATE, CHECKBOX, DROPDOWN = "text", "number", "date", "checkbox", "dropdown"
+    KINDS = [(TEXT, "Text"), (NUMBER, "Number"), (DATE, "Date"), (CHECKBOX, "Checkbox"), (DROPDOWN, "Dropdown")]
+
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="custom_fields")
+    name = models.CharField(max_length=60)
+    kind = models.CharField(max_length=10, choices=KINDS, default=TEXT)
+    options = models.JSONField(default=list, blank=True)     # dropdown choices
+    show_on_card = models.BooleanField(default=True)          # badge on the card tile
+    position = models.FloatField(default=1000)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def __str__(self):
+        return self.name
+
+    def clean_value(self, raw):
+        """Normalise an incoming value; returns None to clear. Raises ValueError if invalid."""
+        if raw in (None, "", []):
+            return None
+        if self.kind == self.NUMBER:
+            n = float(raw)
+            return int(n) if n.is_integer() else round(n, 4)
+        if self.kind == self.CHECKBOX:
+            return True if raw in (True, "true", "1", 1, "on") else None
+        if self.kind == self.DATE:
+            from django.utils.dateparse import parse_date
+            d = parse_date(str(raw))
+            if not d:
+                raise ValueError("Not a date")
+            return d.isoformat()
+        if self.kind == self.DROPDOWN:
+            if raw not in self.options:
+                raise ValueError("Not one of the options")
+            return raw
+        return str(raw).strip()[:500] or None
+
+
+class CardFieldValue(models.Model):
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="field_values")
+    field = models.ForeignKey(CustomField, on_delete=models.CASCADE, related_name="values")
+    value = models.JSONField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["card", "field"], name="uniq_card_field")]
+
+    def display(self):
+        f, v = self.field, self.value
+        if f.kind == CustomField.CHECKBOX:
+            return "✓" if v else ""
+        if f.kind == CustomField.DATE:
+            from datetime import date
+            try:
+                return date.fromisoformat(v).strftime("%-d %b %Y")
+            except (TypeError, ValueError):
+                return str(v)
+        return str(v)
 
 
 class Comment(models.Model):

@@ -3,7 +3,7 @@ Dashboard): header, share dialog, menu drawer and the card dialog."""
 from django.shortcuts import get_object_or_404
 
 from . import permissions
-from .models import Board, BoardMember, Label
+from .models import Board, BoardMember, CustomField, Label
 from .services import board_people, cards_qs
 
 VIEW_TABS = [
@@ -29,6 +29,7 @@ def board_context(request, board_id, view):
         "can_manage": permissions.can_manage(board, request.user),
         "roles": BoardMember.ROLES,
         "label_colours": Label.COLOURS,
+        "field_kinds": CustomField.KINDS,
         "archived_cards": cards_qs().filter(list__board=board, is_archived=True)[:50],
         "activity": board.activity.select_related("actor", "card")[:40],
         "open_card": request.GET.get("card"),

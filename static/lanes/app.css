@@ -476,3 +476,29 @@ a.menu-item { text-decoration: none; }
   .cal-day { min-height: 80px; }
   .view-tabs { order: 5; width: 100%; overflow-x: auto; }
 }
+
+/* ---------- custom fields & advanced checklists ---------- */
+.tile-fields { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.field-badge { font-size: 11px; background: var(--surface-3); color: var(--text); border-radius: 4px; padding: 1px 6px; }
+.field-badge b { color: var(--text-2); font-weight: 600; }
+.field-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-left: 26px; }
+.field-cell input, .field-cell select { background: var(--surface-2); border-color: transparent; }
+.check-inline.dark { color: var(--text); font-weight: 400; padding: 8px 0; }
+.badge.sm { font-size: 11px; color: var(--text-2); }
+.badge.sm .ic { width: 12px; height: 12px; }
+.item .item-text { flex: 1; min-width: 0; }
+.item-more { position: relative; }
+.item-more > summary { list-style: none; visibility: hidden; }
+.item-more > summary::-webkit-details-marker { display: none; }
+.item:hover .item-more > summary, .item-more[open] > summary { visibility: visible; }
+.item .icon-btn.item-del { margin-left: 0; }
+.item-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; width: 260px; background: var(--surface-2); border-radius: 10px;
+  box-shadow: var(--shadow); padding: 12px; display: grid; gap: 10px; }
+.field-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; }
+.field-row-main { flex: 1; min-width: 0; }
+.field-row-main small { display: block; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-new { display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; }
+.mine-items { display: grid; gap: 6px; margin-bottom: 26px; }
+.mine-item { display: flex; align-items: center; gap: 10px; background: var(--surface); border-radius: 8px; padding: 9px 12px; text-decoration: none; }
+.mine-item:hover { background: var(--surface-2); }
+.mine-item .mine-where { color: var(--text-2); font-size: 12px; margin-left: auto; text-align: right; }
