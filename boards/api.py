@@ -507,7 +507,14 @@ def attachment_update(request, attachment_id):
     card = att.card
     _edit(card.list.board, request.user)
     if request.data.get("delete"):
-        att.file.delete(save=False)
+        try:
+            att.file.delete(save=False)
+        except Exception:  # file already gone or storage unreachable — still remove the record
+            import logging
+            logging.getLogger(__name__).exception("Could not delete stored file for attachment %s", att.pk)
+        if card.cover_id == att.pk:
+            card.cover = None
+            card.save(update_fields=["cover", "updated_at"])
         att.delete()
     elif "cover" in request.data:
         card.cover = att if request.data["cover"] and att.is_image else None

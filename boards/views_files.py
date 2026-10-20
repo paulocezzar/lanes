@@ -1,4 +1,5 @@
 """Attachments (upload and permission-checked download) and board copying."""
+import logging
 import mimetypes
 
 from django.conf import settings
@@ -13,6 +14,7 @@ from .copying import copy_board
 from .models import Attachment, Board, Card, Workspace
 from .services import card_response, log
 
+log_error = logging.getLogger(__name__)
 BLOCKED_EXT = {"exe", "bat", "cmd", "com", "js", "msi", "scr", "ps1", "vbs", "sh", "html", "htm", "svg"}
 
 
@@ -35,7 +37,12 @@ def attachment_upload(request, card_id):
         return JsonResponse({"error": "That type of file can't be attached."}, status=400)
     ctype = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
     att = Attachment(card=card, name=f.name[:255], size=f.size, content_type=ctype, uploaded_by=request.user)
-    att.file.save(f.name, f, save=False)
+    try:
+        att.file.save(f.name, f, save=False)
+    except Exception:
+        log_error.exception("Attachment upload to storage failed (card %s)", card.pk)
+        return JsonResponse({"error": "Couldn't save the file to storage. An admin should check the "
+                                      "file-storage settings."}, status=502)
     att.save()
     if att.is_image and not card.cover_id:
         card.cover = att
@@ -53,6 +60,8 @@ def attachment_download(request, attachment_id):
         raise Http404
     inline = att.is_image or att.content_type == "application/pdf"
     if settings.ATTACHMENTS_PERSISTENT and "s3" in settings.STORAGES["default"]["BACKEND"]:
+        if not att.file.storage.exists(att.file.name):
+            raise Http404("This file is no longer stored.")
         return HttpResponseRedirect(att.file.url)          # short-lived signed link
     try:
         fh = att.file.open("rb")
