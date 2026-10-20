@@ -16,6 +16,7 @@ urlpatterns = [
     path("departments/<int:workspace_id>/people/<int:user_id>/reset-password/",
          views_people.workspace_member_reset_password, name="workspace_member_reset_password"),
 
+    path("api/boards/<int:board_id>/state/", views.board_state, name="board_state"),
     path("api/boards/<int:board_id>/lists/", api.list_create),
     path("api/boards/<int:board_id>/labels/", api.label_save),
     path("api/boards/<int:board_id>/share/", api.board_share),

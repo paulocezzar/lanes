@@ -63,6 +63,9 @@ class Board(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
     is_archived = models.BooleanField(default=False)
+    # Bumped on every change to anything on the board; browsers poll it to
+    # know when to refresh (see signals.py and api.board_state).
+    version = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         ordering = ["title"]

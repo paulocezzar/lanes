@@ -81,6 +81,7 @@
   }
 
   // ---------- drag and drop ----------
+  let dragging = false;           // live updates wait while a drag is in progress
   function makeCardsSortable(container) {
     if (!canEdit) return;
     Sortable.create(container, {
@@ -94,7 +95,9 @@
       ghostClass: 'sortable-ghost',
       dragClass: 'sortable-drag',
       emptyInsertThreshold: 40,   // lets you drop into an empty list
+      onStart: () => (dragging = true),
       onEnd: async evt => {
+        dragging = false;
         const tile = evt.item;
         const listEl = tile.closest('.list');
         if (evt.from === evt.to && evt.oldIndex === evt.newIndex) return;
@@ -131,7 +134,9 @@
       ghostClass: 'sortable-ghost',
       delay: 150,
       delayOnTouchOnly: true,
+      onStart: () => (dragging = true),
       onEnd: async evt => {
+        dragging = false;
         if (evt.oldIndex === evt.newIndex) return;
         const l = evt.item;
         try { await post(`/api/lists/${l.dataset.listId}/move/`, neighbours(l, '.list')); }
@@ -359,7 +364,10 @@
     if (f.matches('[data-checklist-new]')) {
       e.preventDefault();
       hidePops();
-      return cardPost('checklists', { title: f.title.value });
+      return cardPost('checklists', { title: f.title.value }).then(() => {
+        const inputs = $$('[data-item-new] input', dialogBody);
+        inputs[inputs.length - 1]?.focus();   // straight into "Add an item"
+      });
     }
     if (f.matches('[data-item-new]')) {
       e.preventDefault();
@@ -459,6 +467,69 @@
   document.addEventListener('click', e => {
     $$('details.menu[open]').forEach(d => { if (!d.contains(e.target)) d.removeAttribute('open'); });
   });
+
+  // ---------- live updates ----------
+  // Poll a tiny version stamp; only when it moves do we pull fresh HTML.
+  // Updates wait while you're dragging, typing in a list, or adding a card.
+  let version = boardEl.dataset.version;
+  let polling = false;
+
+  function userIsBusy() {
+    if (dragging) return true;
+    const a = document.activeElement;
+    if (a && listsEl.contains(a) && (a.isContentEditable || a.matches('input, textarea'))) return true;
+    return $$('[data-add-card-form]', listsEl).some(f => !f.hidden);
+  }
+
+  function modalIsBusy() {
+    const a = document.activeElement;
+    return !!(a && dialogBody.contains(a) && (a.isContentEditable || a.matches('input, textarea')))
+      || openPop !== null;
+  }
+
+  async function poll() {
+    if (polling || document.hidden) return;
+    polling = true;
+    try {
+      const res = await fetch(`/api/boards/${boardId}/state/?v=${version}`, { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.archived) { location.href = '/'; return; }
+      if (String(data.version) === String(version) || !data.lists_html) return;
+      if (userIsBusy()) return;              // try again next tick
+      const scroll = listsEl.scrollLeft;
+      const cardScroll = new Map($$('.list', listsEl).map(l => [l.dataset.listId, $('[data-list-cards]', l).scrollTop]));
+      $$('.list', listsEl).forEach(l => l.remove());
+      const tpl = document.createElement('template');
+      tpl.innerHTML = data.lists_html;
+      const anchor = document.getElementById('add-list');
+      [...tpl.content.children].forEach(el => {
+        listsEl.insertBefore(el, anchor);
+        wireList(el);
+        const top = cardScroll.get(el.dataset.listId);
+        if (top) $('[data-list-cards]', el).scrollTop = top;
+      });
+      listsEl.scrollLeft = scroll;
+      version = data.version;
+      if (dialog.open && openCardId && !modalIsBusy()) refreshOpenCard();
+    } catch { /* offline for a moment — next tick will retry */ }
+    finally { polling = false; }
+  }
+
+  async function refreshOpenCard() {
+    const id = openCardId;
+    const res = await fetch(`/cards/${id}/`, { credentials: 'same-origin' });
+    if (!res.ok || id !== openCardId || modalIsBusy()) return;
+    const scroller = $('.cm-main', dialogBody), side = $('.cm-side', dialogBody);
+    const scroll = [scroller?.scrollTop, side?.scrollTop];
+    dialogBody.innerHTML = await res.text();
+    wireModal();
+    if (scroll[0]) $('.cm-main', dialogBody).scrollTop = scroll[0];
+    if (scroll[1]) $('.cm-side', dialogBody).scrollTop = scroll[1];
+  }
+
+  setInterval(poll, 4000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
   // Deep link: /b/1/?card=5 opens that card
   if (boardEl.dataset.openCard) openCard(boardEl.dataset.openCard);

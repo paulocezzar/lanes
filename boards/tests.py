@@ -225,3 +225,45 @@ class DepartmentPeopleTests(TestCase):
         other = User.objects.create_user("o@x.com", "pw")
         self.client.force_login(other)
         self.assertEqual(self.client.get(reverse("workspace_members", args=[self.ws.pk])).status_code, 404)
+
+
+class LiveUpdateTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.user = User.objects.create_user("u@x.com", "pw", first_name="U")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.user)
+        self.board = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=self.board, user=self.user, role="admin")
+        self.lst = List.objects.create(board=self.board, title="L")
+
+    def v(self):
+        self.board.refresh_from_db()
+        return self.board.version
+
+    def test_version_moves_on_changes(self):
+        before = self.v()
+        card = Card.objects.create(list=self.lst, title="c")
+        after_create = self.v()
+        self.assertGreater(after_create, before)
+        card.members.add(self.user)
+        self.assertGreater(self.v(), after_create)
+        n = self.v()
+        card.delete()
+        self.assertGreater(self.v(), n)
+
+    def test_state_endpoint(self):
+        self.client.force_login(self.user)
+        url = reverse("board_state", args=[self.board.pk])
+        v = self.v()
+        r = self.client.get(url, {"v": v}).json()
+        self.assertNotIn("lists_html", r)
+        Card.objects.create(list=self.lst, title="New one")
+        r = self.client.get(url, {"v": v}).json()
+        self.assertIn("New one", r["lists_html"])
+
+    def test_state_hidden_from_outsiders(self):
+        self.board.visibility = Board.PRIVATE
+        self.board.save()
+        other = User.objects.create_user("o@x.com", "pw")
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(reverse("board_state", args=[self.board.pk])).status_code, 404)

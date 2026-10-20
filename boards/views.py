@@ -2,7 +2,8 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Prefetch
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
+from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -101,3 +102,20 @@ def my_cards(request):
                                list__is_archived=False)
              .order_by("list__board__title", "list__board_id", "is_complete", "due_at"))
     return render(request, "boards/my_cards.html", {"cards": cards})
+
+
+@login_required
+def board_state(request, board_id):
+    """Polled by board.js every few seconds. Returns just the version unless
+    it differs from the caller's, in which case fresh lists HTML comes too."""
+    board = get_object_or_404(Board, pk=board_id)
+    permissions.require(permissions.can_view, board, request.user)
+    data = {"version": board.version, "archived": board.is_archived}
+    if request.GET.get("v") != str(board.version):
+        lists = board.lists.filter(is_archived=False).prefetch_related(
+            Prefetch("cards", queryset=cards_qs().filter(is_archived=False)))
+        can_edit = permissions.can_edit(board, request.user)
+        data["lists_html"] = "".join(
+            render_to_string("boards/_list.html", {"list": lst, "can_edit": can_edit}, request=request)
+            for lst in lists)
+    return JsonResponse(data)
