@@ -160,7 +160,7 @@
           <div class="feed-item comment">
             {% if c.author %}{% include "boards/_avatar.html" with u=c.author %}{% endif %}
             <div class="feed-main">
-              <div><b>{{ c.author.display_name|default:"Former user" }}</b> <time>{{ c.created_at|timesince }} ago{% if c.edited_at %} (edited){% endif %}</time></div>
+              <div><b>{{ c.author.display_name|default:"⚡ Automation" }}</b> <time>{{ c.created_at|timesince }} ago{% if c.edited_at %} (edited){% endif %}</time></div>
               <div class="comment-body">{{ c.body|linebreaksbr }}</div>
               {% if c.author == request.user %}<button class="link-btn" data-delete-comment="{{ c.pk }}">Delete</button>{% endif %}
             </div>
@@ -168,7 +168,7 @@
           {% endwith %}{% else %}{% with a=f.obj %}
           <div class="feed-item">
             {% if a.actor %}{% include "boards/_avatar.html" with u=a.actor %}{% endif %}
-            <div class="feed-main"><b>{{ a.actor.display_name|default:"Someone" }}</b> {{ a.text }}<time>{{ a.created_at|timesince }} ago</time></div>
+            <div class="feed-main"><b>{{ a.actor.display_name|default:"⚡ Automation" }}</b> {{ a.text }}<time>{{ a.created_at|timesince }} ago</time></div>
           </div>
           {% endwith %}{% endif %}
         {% endfor %}

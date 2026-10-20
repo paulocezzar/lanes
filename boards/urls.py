@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import api, views, views_board, views_people
+from . import api, views, views_automation, views_board, views_people
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -11,6 +11,12 @@ urlpatterns = [
     path("b/<int:board_id>/table/", views_board.board_table, name="board_table"),
     path("b/<int:board_id>/timeline/", views_board.board_timeline, name="board_timeline"),
     path("b/<int:board_id>/dashboard/", views_board.board_dashboard, name="board_dashboard"),
+    path("b/<int:board_id>/automation/", views_automation.automation_page, name="board_automation"),
+    path("b/<int:board_id>/automation/rules/", views_automation.rule_create, name="rule_create"),
+    path("b/<int:board_id>/automation/rules/<int:rule_id>/", views_automation.rule_update, name="rule_update"),
+    path("b/<int:board_id>/automation/schedules/", views_automation.schedule_create, name="schedule_create"),
+    path("b/<int:board_id>/automation/schedules/<int:schedule_id>/", views_automation.schedule_update,
+         name="schedule_update"),
     path("cards/<int:card_id>/", views.card_modal, name="card_modal"),
     path("departments/new/", views_people.workspace_create, name="workspace_create"),
     path("departments/<int:workspace_id>/people/", views_people.workspace_members, name="workspace_members"),

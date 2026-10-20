@@ -321,4 +321,75 @@ class Activity(models.Model):
             "list_created": f"added list {d.get('title', '')}",
             "board_created": "created this board",
             "board_member_added": f"added {d.get('name', '')} to this board",
+            "automation": d.get("summary", "ran an automation"),
         }.get(self.verb, self.verb.replace("_", " "))
+
+
+class Rule(models.Model):
+    """Board automation: when <trigger> happens to a card, run <actions> on it."""
+
+    ADDED, MOVED, COMPLETED, CHECKLIST_DONE, LABEL_ADDED = (
+        "card_added", "card_moved", "card_completed", "checklist_done", "label_added")
+    TRIGGERS = [
+        (ADDED, "a card is added to list…"),
+        (MOVED, "a card is moved into list…"),
+        (COMPLETED, "a card is marked complete"),
+        (CHECKLIST_DONE, "all checklist items on a card are done"),
+        (LABEL_ADDED, "label … is added to a card"),
+    ]
+    ACTIONS = [
+        ("move", "move it to list…"),
+        ("complete", "mark it complete"),
+        ("incomplete", "mark it incomplete"),
+        ("check_all", "tick all its checklist items"),
+        ("add_label", "add label…"),
+        ("remove_label", "remove label…"),
+        ("add_member", "add member…"),
+        ("clear_members", "remove all members"),
+        ("set_due", "set due date to … days from now"),
+        ("clear_due", "remove the due date"),
+        ("comment", "post comment…"),
+        ("archive", "archive it"),
+    ]
+
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="rules")
+    trigger = models.CharField(max_length=20, choices=TRIGGERS)
+    trigger_list = models.ForeignKey(List, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
+    trigger_label = models.ForeignKey(Label, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
+    actions = models.JSONField(default=list)   # [{"type": "move", "list": 3}, {"type": "complete"}]
+    is_enabled = models.BooleanField(default=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    run_count = models.PositiveIntegerField(default=0)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+
+class Schedule(models.Model):
+    """Recurring card: on a schedule, create a card (with optional checklist)."""
+
+    DAILY, WEEKDAYS, WEEKLY, MONTHLY = "daily", "weekdays", "weekly", "monthly"
+    FREQUENCIES = [(DAILY, "Every day"), (WEEKDAYS, "Every weekday (Mon–Fri)"),
+                   (WEEKLY, "Every week on…"), (MONTHLY, "Every month on day…")]
+
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="schedules")
+    frequency = models.CharField(max_length=10, choices=FREQUENCIES, default=WEEKLY)
+    weekday = models.PositiveSmallIntegerField(default=0)      # 0 = Monday, for weekly
+    month_day = models.PositiveSmallIntegerField(default=1)    # 1–28, for monthly
+    hour = models.PositiveSmallIntegerField(default=7)         # local time
+    target_list = models.ForeignKey(List, on_delete=models.CASCADE, related_name="+")
+    title = models.CharField(max_length=250)
+    checklist = models.TextField(blank=True)                   # one item per line
+    member = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    due_in_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    label = models.ForeignKey(Label, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    is_enabled = models.BooleanField(default=True)
+    next_run_at = models.DateTimeField()
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    run_count = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+
+    class Meta:
+        ordering = ["next_run_at"]

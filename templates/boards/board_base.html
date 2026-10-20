@@ -26,6 +26,7 @@
       {% else %}
       <button class="btn light" data-join>Join board</button>
       {% endif %}
+      <a class="icon-btn light{% if view == 'automation' %} on{% endif %}" href="{% url 'board_automation' board.pk %}" title="Automation">{% include "boards/_icon.html" with i="bolt" %}</a>
       <button class="icon-btn light" data-open-drawer title="Menu">{% include "boards/_icon.html" with i="dots" %}</button>
     </div>
   </header>
@@ -63,7 +64,7 @@
     {% for a in activity %}
     <div class="feed-item">
       {% if a.actor %}{% include "boards/_avatar.html" with u=a.actor %}{% endif %}
-      <div><b>{{ a.actor.display_name|default:"Someone" }}</b> {{ a.text }}{% if a.card %} — <a href="?card={{ a.card.pk }}" data-card-link="{{ a.card.pk }}">{{ a.card.title }}</a>{% endif %}
+      <div><b>{{ a.actor.display_name|default:"⚡ Automation" }}</b> {{ a.text }}{% if a.card %} — <a href="?card={{ a.card.pk }}" data-card-link="{{ a.card.pk }}">{{ a.card.title }}</a>{% endif %}
         <time>{{ a.created_at|timesince }} ago</time></div>
     </div>
     {% empty %}<p class="muted">Nothing yet.</p>{% endfor %}

@@ -14,9 +14,9 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from django.views.decorators.http import require_POST
 
-from . import permissions, positions
+from . import automation, permissions, positions
 from .models import (Board, BoardMember, Card, CardFieldValue, Checklist, ChecklistItem, Comment, CustomField, Label,
-                     List)
+                     List, Rule)
 from .services import board_people, card_response, log
 
 User = get_user_model()
@@ -112,6 +112,7 @@ def card_create(request, list_id):
     card = Card.objects.create(list=lst, title=title, created_by=request.user,
                                position=positions.end_position(lst.cards.filter(is_archived=False)))
     log(lst.board, request.user, "card_created", card=card, list=lst.title)
+    automation.fire(card, Rule.ADDED, list_=lst)
     return card_response(card.pk, request)
 
 
@@ -127,6 +128,7 @@ def card_move(request, card_id):
     card.save(update_fields=["list", "position", "updated_at"])
     if new_list.pk != old_list.pk:
         log(card.list.board, request.user, "card_moved", card=card, **{"from": old_list.title, "to": new_list.title})
+        automation.fire(card, Rule.MOVED, list_=new_list)
     return card_response(card.pk, request)
 
 
@@ -159,7 +161,10 @@ def card_update(request, card_id):
     if "archive" in d:
         card.is_archived = bool(d["archive"])
         log(board, user, "card_archived" if card.is_archived else "card_restored", card=card)
+    just_completed = "is_complete" in d and card.is_complete and not Card.objects.get(pk=card.pk).is_complete
     card.save()
+    if just_completed:
+        automation.fire(card, Rule.COMPLETED)
     return card_response(card.pk, request)
 
 
@@ -171,6 +176,7 @@ def card_toggle_label(request, card_id):
         card.labels.remove(label)
     else:
         card.labels.add(label)
+        automation.fire(card, Rule.LABEL_ADDED, label=label)
     return card_response(card.pk, request)
 
 
@@ -287,6 +293,8 @@ def item_update(request, item_id):
         item.done_at = timezone.now() if item.is_done else None
         log(card.list.board, request.user, "item_done" if item.is_done else "item_undone", card=card, text=item.text)
     item.save()
+    if request.data.get("is_done") and automation.checklists_all_done(card):
+        automation.fire(card, Rule.CHECKLIST_DONE)
     return card_response(card.pk, request)
 
 

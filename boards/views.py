@@ -7,7 +7,7 @@ from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from . import permissions, positions
+from . import automation, permissions, positions
 from .models import Board, BoardMember, ChecklistItem, Label, List, Workspace
 from .services import board_people, cards_qs, log, render_modal
 from .board_context import board_context
@@ -17,6 +17,7 @@ DEFAULT_LABELS = ["green", "yellow", "orange", "red", "purple", "blue"]
 
 @login_required
 def home(request):
+    automation.maybe_run_schedules()
     user = request.user
     boards = permissions.visible_boards(user).select_related("workspace")
     starred = set(BoardMember.objects.filter(user=user, starred=True).values_list("board_id", flat=True))
@@ -99,6 +100,7 @@ def my_cards(request):
 def board_state(request, board_id):
     """Polled by board.js every few seconds. Returns just the version unless
     it differs from the caller's, in which case fresh lists HTML comes too."""
+    automation.maybe_run_schedules()
     board = get_object_or_404(Board, pk=board_id)
     permissions.require(permissions.can_view, board, request.user)
     data = {"version": board.version, "archived": board.is_archived}

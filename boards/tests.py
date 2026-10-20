@@ -367,3 +367,136 @@ class AdvancedFeaturesTests(TestCase):
         r = self.client.get(reverse("board_table", args=[self.board.pk]))
         self.assertContains(r, "Supplier")
         self.assertContains(r, "Essential Trading")
+
+
+class AutomationTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.user = User.objects.create_user("u@x.com", "pw", first_name="Una")
+        self.helper = User.objects.create_user("h@x.com", "pw", first_name="Hal")
+        self.board = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=self.board, user=self.user, role="admin")
+        BoardMember.objects.create(board=self.board, user=self.helper, role="member")
+        self.todo = List.objects.create(board=self.board, title="To do", position=1)
+        self.done = List.objects.create(board=self.board, title="Done", position=2)
+        self.label = Label.objects.create(board=self.board, colour="red", name="Urgent")
+        self.client.force_login(self.user)
+
+    def api(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def rule(self, trigger, actions, **kw):
+        from .models import Rule
+        return Rule.objects.create(board=self.board, trigger=trigger, actions=actions, **kw)
+
+    def test_move_to_done_completes_and_ticks(self):
+        from .models import Checklist, ChecklistItem
+        self.rule("card_moved", [{"type": "complete"}, {"type": "check_all"}], trigger_list=self.done)
+        card = Card.objects.create(list=self.todo, title="x")
+        cl = Checklist.objects.create(card=card)
+        ChecklistItem.objects.create(checklist=cl, text="a")
+        r = self.api(f"/api/cards/{card.pk}/move/", {"list_id": self.done.pk})
+        card.refresh_from_db()
+        self.assertTrue(card.is_complete)
+        self.assertFalse(ChecklistItem.objects.filter(is_done=False).exists())
+        self.assertIn("Automation", r.json()["modal"])
+
+    def test_added_to_list_assigns_and_sets_due(self):
+        self.rule("card_added", [{"type": "add_member", "user": self.helper.pk}, {"type": "set_due", "days": 2}],
+                  trigger_list=self.todo)
+        self.api(f"/api/lists/{self.todo.pk}/cards/", {"title": "New"})
+        card = Card.objects.get(title="New")
+        self.assertIn(self.helper, card.members.all())
+        self.assertIsNotNone(card.due_at)
+
+    def test_checklist_done_moves_card(self):
+        from .models import Checklist, ChecklistItem
+        self.rule("checklist_done", [{"type": "move", "list": self.done.pk}])
+        card = Card.objects.create(list=self.todo, title="x")
+        cl = Checklist.objects.create(card=card)
+        a = ChecklistItem.objects.create(checklist=cl, text="a")
+        b = ChecklistItem.objects.create(checklist=cl, text="b")
+        self.api(f"/api/items/{a.pk}/", {"is_done": True})
+        card.refresh_from_db()
+        self.assertEqual(card.list, self.todo)
+        self.api(f"/api/items/{b.pk}/", {"is_done": True})
+        card.refresh_from_db()
+        self.assertEqual(card.list, self.done)
+
+    def test_label_trigger_and_no_chaining(self):
+        # label → move to Done; a Done-move rule must NOT fire from an automation
+        self.rule("label_added", [{"type": "move", "list": self.done.pk}], trigger_label=self.label)
+        self.rule("card_moved", [{"type": "archive"}], trigger_list=self.done)
+        card = Card.objects.create(list=self.todo, title="x")
+        self.api(f"/api/cards/{card.pk}/labels/", {"label_id": self.label.pk})
+        card.refresh_from_db()
+        self.assertEqual(card.list, self.done)
+        self.assertFalse(card.is_archived)
+
+    def test_disabled_rule_does_nothing(self):
+        self.rule("card_completed", [{"type": "archive"}], is_enabled=False)
+        card = Card.objects.create(list=self.todo, title="x")
+        self.api(f"/api/cards/{card.pk}/update/", {"is_complete": True})
+        card.refresh_from_db()
+        self.assertFalse(card.is_archived)
+
+    def test_rule_form_validation(self):
+        url = reverse("rule_create", args=[self.board.pk])
+        self.client.post(url, {"trigger": "card_moved", "trigger_list": self.done.pk,
+                               "action_0": "move", "list_0": self.done.pk})
+        self.assertEqual(self.board.rules.count(), 0)   # can't move into its own trigger list
+        self.client.post(url, {"trigger": "card_moved", "trigger_list": self.done.pk, "action_0": "complete"})
+        self.assertEqual(self.board.rules.count(), 1)
+        self.assertEqual(self.client.get(reverse("board_automation", args=[self.board.pk])).status_code, 200)
+
+    def test_observer_cannot_add_rules(self):
+        obs = User.objects.create_user("o@x.com", "pw")
+        BoardMember.objects.create(board=self.board, user=obs, role="observer")
+        self.client.force_login(obs)
+        self.client.post(reverse("rule_create", args=[self.board.pk]), {"trigger": "card_completed", "action_0": "archive"})
+        self.assertEqual(self.board.rules.count(), 0)
+
+
+class ScheduleTests(TestCase):
+    def setUp(self):
+        from .models import Schedule
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.board = Board.objects.create(workspace=self.ws, title="B")
+        self.lst = List.objects.create(board=self.board, title="To do")
+        self.S = Schedule
+
+    def make(self, **kw):
+        from datetime import datetime, timezone as dtz
+        defaults = dict(board=self.board, target_list=self.lst, title="Deep clean", checklist="Ovens\nFloors\n",
+                        next_run_at=datetime(2026, 10, 19, 6, tzinfo=dtz.utc))
+        defaults.update(kw)
+        return self.S.objects.create(**defaults)
+
+    def test_next_run_weekly_monthly_and_dst(self):
+        from datetime import datetime, timezone as dtz
+        from django.utils import timezone
+        from .automation import next_run
+        after = datetime(2026, 10, 20, 12, tzinfo=dtz.utc)          # Tue 20 Oct
+        s = self.S(frequency="weekly", weekday=0, hour=7)
+        nxt = timezone.localtime(next_run(s, after))
+        self.assertEqual((nxt.date().isoformat(), nxt.hour), ("2026-10-26", 7))   # Monday after clocks change
+        s = self.S(frequency="monthly", month_day=28, hour=6)
+        self.assertEqual(timezone.localtime(next_run(s, datetime(2027, 2, 1, tzinfo=dtz.utc))).day, 28)
+        s = self.S(frequency="weekdays", hour=7)
+        sat = datetime(2026, 10, 24, 12, tzinfo=dtz.utc)
+        self.assertEqual(timezone.localtime(next_run(s, sat)).weekday(), 0)
+
+    def test_due_schedule_creates_card_once(self):
+        from .automation import run_due_schedules
+        s = self.make()
+        self.assertEqual(run_due_schedules(), 1)
+        self.assertEqual(run_due_schedules(), 0)      # already claimed, next run is in the future
+        card = Card.objects.get(title="Deep clean")
+        self.assertEqual(card.checklist_counts(), (0, 2))
+        s.refresh_from_db()
+        self.assertGreater(s.next_run_at, card.created_at)
+
+    def test_paused_schedule_skipped(self):
+        from .automation import run_due_schedules
+        self.make(is_enabled=False)
+        self.assertEqual(run_due_schedules(), 0)
