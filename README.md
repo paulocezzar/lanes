@@ -40,7 +40,16 @@ they only ever see boards they're added to and can't be board admins.
 quiet boards, never-signed-in) and Audit log (sign-ins and failed sign-ins, people and role changes, password
 resets, sharing, guests, public links, board visibility/archive; filter and CSV download).
 
-**AI (optional)** — set `ANTHROPIC_API_KEY` to enable ✨ inbox capture and ✨ Suggest steps (Claude Haiku;
+**Security** — two-step sign-in with an authenticator app (recovery codes; the Django admin sign-in goes through
+it too). Company → Settings can require it and decides who may turn on public links, invite guests, create
+boards and make boards private. Company → People lists every account, resets two-step and switches leavers off.
+
+**Due-date rules** — "a card is due within 1 hour…1 week" and "a card becomes overdue" triggers, plus a
+"notify its members" action. Checked about once a minute (or by the `run_automations` cron job), once per card
+per due date.
+
+**AI (optional)** — set `ANTHROPIC_API_KEY` to enable ✨ inbox capture, ✨ Suggest steps, ✨ Summarise (card +
+comments), ✨ Write it up (descriptions) and ✨ What should I do first? on My cards (Claude Haiku;
 `ANTHROPIC_MODEL` to override). Card/message text is sent to Anthropic only when someone uses these buttons.
 
 ## Run it locally
