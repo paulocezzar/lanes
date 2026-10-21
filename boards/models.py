@@ -663,3 +663,52 @@ class Vote(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["card", "user"], name="uniq_vote")]
+
+
+class AuditEvent(models.Model):
+    """Company-level log of sign-ins and admin changes (people, roles, sharing,
+    board settings). Board-level card activity lives in Activity."""
+
+    VERBS = {
+        "login": "signed in",
+        "login_failed": "failed to sign in as {email}",
+        "dept_created": "created the department {dept}",
+        "dept_member_added": "added {name} to {dept}",
+        "dept_account_created": "created an account for {name} in {dept}",
+        "dept_member_removed": "removed {name} from {dept}",
+        "dept_member_left": "left {dept}",
+        "dept_role_changed": "made {name} {role} of {dept}",
+        "password_reset": "reset the password for {name}",
+        "board_shared": "added {name} to the board {board} as {role}",
+        "guest_invited": "invited the guest {name} to the board {board}",
+        "board_member_removed": "removed {name} from the board {board}",
+        "board_role_changed": "made {name} {role} on the board {board}",
+        "board_visibility": "changed who can see {board} to “{value}”",
+        "board_public_on": "turned on the public link for {board}",
+        "board_public_off": "turned off the public link for {board}",
+        "board_archived": "archived the board {board}",
+        "board_created": "created the board {board}",
+    }
+
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    verb = models.CharField(max_length=40)
+    workspace = models.ForeignKey(Workspace, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    board = models.ForeignKey(Board, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    target = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    data = models.JSONField(default=dict, blank=True)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def text(self):
+        try:
+            return self.VERBS.get(self.verb, self.verb.replace("_", " ")).format_map(_Blank(self.data))
+        except (ValueError, IndexError):
+            return self.verb.replace("_", " ")
+
+
+class _Blank(dict):
+    def __missing__(self, key):
+        return "?"

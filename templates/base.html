@@ -33,6 +33,7 @@
           <a class="bell-foot" href="{% url 'notifications' %}">See all</a>
         </div>
       </div>
+      {% if user.is_superuser %}<a class="btn ghost sm" href="{% url 'company_usage' %}">Company</a>{% endif %}
       {% if user.is_staff %}<a class="btn ghost sm" href="{% url 'admin:index' %}">Admin</a>{% endif %}
       <details class="menu">
         <summary class="avatar lg" style="--h:{{ user.avatar_hue }}" title="{{ user.display_name }}">{{ user.initials }}</summary>

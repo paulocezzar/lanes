@@ -1,13 +1,15 @@
 from django.urls import path
 
 from . import (api, views, views_automation, views_board, views_files, views_notify, views_people, views_planner,
-               views_export, views_public, views_search)
+               views_company, views_export, views_public, views_search)
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("p/<str:token>/", views_public.public_board, name="public_board"),
     path("p/<str:token>/c/<int:card_id>/", views_public.public_card, name="public_card"),
     path("my-cards/", views.my_cards, name="my_cards"),
+    path("company/", views_company.usage, name="company_usage"),
+    path("company/audit/", views_company.audit_log, name="company_audit"),
     path("search/", views_search.search_page, name="search"),
     path("search/save/", views_search.search_save, name="search_save"),
     path("search/<int:pk>/delete/", views_search.search_delete, name="search_delete"),

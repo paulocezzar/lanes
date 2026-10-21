@@ -9,10 +9,12 @@ board and card templates, copy board/card, archive, export to CSV/JSON.
 
 **Cards** — drag-and-drop lists and cards (desktop and iPad), labels, start/due dates, checklists with per-item
 assignee and due date, members, description, custom fields (text, number, date, checkbox, dropdown, location),
-attachments on R2 with image covers, colour covers, stickers, comments with @mentions, activity, mirroring a card
-onto other lists/boards (cross-department work).
+attachments on R2 with image covers, colour covers, stickers, comments with @mentions and emoji reactions,
+light formatting (**bold**, *italic*, lists, links) in descriptions and comments, activity, mirroring a card
+onto other lists/boards (cross-department work), 👁 watching cards and boards.
 
-**Views** — Board, Calendar (drag to reschedule), Table (sort/filter), Timeline (Gantt), Dashboard — per board
+**Views** — Board, Calendar (drag to reschedule), Table (sort/filter), Timeline (Gantt), Dashboard, Map (cards
+with a location field; UK postcodes via postcodes.io, other places via OpenStreetMap Nominatim) — per board
 or across all boards (filter by department/collection). Board filter bar (people, due, labels, hide complete).
 
 **For each person** — Planner (week of your cards, checklist items and inbox; drag onto a day), private Inbox
@@ -20,12 +22,22 @@ or across all boards (filter by department/collection). Board filter bar (people
 notifications bell (assigned, mentioned, comments, due soon), light/dark/system theme.
 
 **Automation (⚡)** — rules (card added/moved/completed/checklist done/label added → move, move to top, complete,
-tick all, labels, members, due date, comment, sticker, archive) and recurring cards.
+tick all, labels, members, due date, comment, sticker, archive), recurring cards, and 🔘 buttons — card buttons
+(several actions in one click on any card) and board buttons (create a card, move every card between lists,
+archive complete cards, sort a list by due date).
+
+**Power-ups** (per board, Menu → Settings) — 👍 voting on cards, 🍂 card ageing (untouched cards fade after
+1, 2 and 4 weeks), and a read-only public link (no sign-in; comments, attachments and members are never shown).
 
 **Lists** — colours, card limits (red count when over), collapse.
 
 **People** — departments managed from the front end; temporary passwords; Admin/Member/Observer board roles;
-guests from other departments.
+people from other departments; external guests (suppliers, contractors) invited from a board's Share dialog —
+they only ever see boards they're added to and can't be board admins.
+
+**Company admins** — Company → Usage (sign-ins, active people per department, open/overdue cards, busiest and
+quiet boards, never-signed-in) and Audit log (sign-ins and failed sign-ins, people and role changes, password
+resets, sharing, guests, public links, board visibility/archive; filter and CSV download).
 
 **AI (optional)** — set `ANTHROPIC_API_KEY` to enable ✨ inbox capture and ✨ Suggest steps (Claude Haiku;
 `ANTHROPIC_MODEL` to override). Card/message text is sent to Anthropic only when someone uses these buttons.

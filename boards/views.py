@@ -74,6 +74,8 @@ def board_create(request):
     for i, t in enumerate(["To do", "Doing", "Done"], start=1):
         List.objects.create(board=board, title=t, position=i * positions.GAP)
     log(board, request.user, "board_created")
+    from . import audit
+    audit.record(request, "board_created", board=board)
     return redirect("board", board_id=board.pk)
 
 

@@ -15,7 +15,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from . import permissions
+from . import audit, permissions
 from .models import Workspace, WorkspaceMember
 
 User = get_user_model()
@@ -46,6 +46,7 @@ def workspace_create(request):
         return redirect("home")
     ws = Workspace.objects.create(name=name)
     WorkspaceMember.objects.create(workspace=ws, user=request.user, role=WorkspaceMember.ADMIN)
+    audit.record(request, "dept_created", workspace=ws)
     messages.success(request, f"{name} created. Add its people below.")
     return redirect("workspace_members", workspace_id=ws.pk)
 
@@ -90,6 +91,7 @@ def workspace_member_add(request, workspace_id):
         person = User.objects.create_user(email=email, password=password, first_name=first, last_name=last)
         request.session["new_account"] = {"workspace": ws.pk, "name": person.display_name,
                                           "email": email, "password": password}
+        audit.record(request, "dept_account_created", workspace=ws, target=person)
     elif not person.is_active:
         messages.error(request, f"{person.display_name}'s account is switched off. Ask a company admin to reactivate it.")
         return back
@@ -99,6 +101,7 @@ def workspace_member_add(request, workspace_id):
         person.is_guest = False
         person.save(update_fields=["is_guest"])
     if created:
+        audit.record(request, "dept_member_added", workspace=ws, target=person, role=role)
         messages.success(request, f"{person.display_name} added to {ws.name}.")
     else:
         messages.info(request, f"{person.display_name} is already in {ws.name}.")
@@ -121,6 +124,8 @@ def workspace_member_update(request, workspace_id, user_id):
             messages.error(request, "A department needs at least one admin. Make someone else admin first.")
             return back
         membership.delete()
+        audit.record(request, "dept_member_left" if leaving else "dept_member_removed", workspace=ws,
+                     target=membership.user)
         messages.success(request, f"{membership.user.display_name} removed from {ws.name}.")
         return redirect("home") if leaving else back
     role = request.POST.get("role")
@@ -130,6 +135,8 @@ def workspace_member_update(request, workspace_id, user_id):
             return back
         membership.role = role
         membership.save(update_fields=["role"])
+        audit.record(request, "dept_role_changed", workspace=ws, target=membership.user,
+                     role=membership.get_role_display().lower())
         messages.success(request, f"{membership.user.display_name} is now {membership.get_role_display().lower()}.")
     return back
 
@@ -149,6 +156,7 @@ def workspace_member_reset_password(request, workspace_id, user_id):
     password = temporary_password()
     person.set_password(password)
     person.save(update_fields=["password"])
+    audit.record(request, "password_reset", workspace=ws, target=person)
     request.session["new_account"] = {"workspace": ws.pk, "name": person.display_name, "email": person.email,
                                       "password": password, "reset": True}
     return redirect("workspace_members", workspace_id=ws.pk)

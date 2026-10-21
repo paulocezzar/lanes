@@ -6,4 +6,4 @@ class BoardsConfig(AppConfig):
     name = "boards"
 
     def ready(self):
-        from . import signals  # noqa: F401
+        from . import audit, signals  # noqa: F401

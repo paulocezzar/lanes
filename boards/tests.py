@@ -1244,3 +1244,34 @@ class GuestPublicTests(TestCase):
         self.j(f"/api/boards/{self.board.pk}/update/", {"public": False})
         self.assertEqual(anon.get(f"/p/{token}/").status_code, 404)
         self.assertEqual(anon.get("/p/short/").status_code, 404)
+
+
+class CompanyTests(TestCase):
+    def setUp(self):
+        self.boss = User.objects.create_superuser("boss@x.com", "pw", first_name="Boss")
+        self.staff = User.objects.create_user("staff@x.com", "pw", first_name="Sam")
+        self.c = Client()
+
+    def test_login_audit_and_pages(self):
+        from .models import AuditEvent
+        self.assertTrue(self.c.login(username="boss@x.com", password="pw"))
+        Client().post("/login/", {"username": "boss@x.com", "password": "wrong"})
+        self.assertTrue(AuditEvent.objects.filter(verb="login").exists())
+        self.assertTrue(AuditEvent.objects.filter(verb="login_failed", data__email="boss@x.com").exists())
+        self.c.post("/departments/new/", {"name": "Butchery"})
+        ws = Workspace.objects.get(name="Butchery")
+        self.c.post(f"/departments/{ws.pk}/people/add/", {"email": "staff@x.com", "role": "member"})
+        r = self.c.get("/company/audit/")
+        self.assertContains(r, "added Sam to Butchery")
+        self.assertContains(r, "failed to sign in as boss@x.com")
+        self.assertContains(self.c.get("/company/audit/?kind=people"), "created the department Butchery")
+        csv_resp = self.c.get("/company/audit/?csv=1")
+        self.assertIn("text/csv", csv_resp["Content-Type"])
+        u = self.c.get("/company/")
+        self.assertContains(u, "Butchery")
+        self.assertContains(u, "Never signed in")
+
+    def test_staff_cannot_see(self):
+        self.c.force_login(self.staff)
+        self.assertEqual(self.c.get("/company/").status_code, 404)
+        self.assertEqual(self.c.get("/company/audit/").status_code, 404)

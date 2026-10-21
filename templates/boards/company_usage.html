@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Usage · Company · Lanes{% endblock %}
+{% block content %}
+<main class="home company">
+  {% include "boards/_company_tabs.html" %}
+  <div class="stat-row">
+    <div class="stat"><span class="stat-num">{{ people_total }}</span><span class="stat-label">People with accounts{% if guests %} ({{ guests }} guest{{ guests|pluralize }}){% endif %}</span></div>
+    <div class="stat"><span class="stat-num ok">{{ seen7 }}</span><span class="stat-label">Signed in this week</span></div>
+    <div class="stat"><span class="stat-num">{{ active30 }}</span><span class="stat-label">Made changes in the last 30 days</span></div>
+    <div class="stat"><span class="stat-num">{{ boards_total }}</span><span class="stat-label">Boards</span></div>
+    <div class="stat"><span class="stat-num">{{ cards_open }}</span><span class="stat-label">Open cards</span></div>
+    <div class="stat"><span class="stat-num bad">{{ cards_overdue }}</span><span class="stat-label">Overdue</span></div>
+    <div class="stat"><span class="stat-num ok">{{ done30 }}</span><span class="stat-label">Cards completed in 30 days ({{ created30 }} created)</span></div>
+  </div>
+
+  <section class="dash-card company-chart">
+    <h3>Changes per day — last 30 days</h3>
+    <div class="day-bars">
+      {% for d in chart %}<div class="day-bar" title="{{ d.day|date:'D j M' }}: {{ d.n }} change{{ d.n|pluralize }}"><i style="height:{{ d.pct }}%"></i><span>{% if forloop.first or forloop.last or d.day.weekday == 0 %}{{ d.day|date:"j M" }}{% endif %}</span></div>{% endfor %}
+    </div>
+  </section>
+
+  <section class="dash-card">
+    <h3>By department</h3>
+    <div class="table-scroll">
+    <table class="company-table">
+      <thead><tr><th>Department</th><th>People</th><th>Active (30 days)</th><th>Boards</th><th>Open cards</th><th>Overdue</th><th>Completed (30 days)</th></tr></thead>
+      <tbody>
+      {% for d in depts %}
+      <tr>
+        <td><a href="{% url 'workspace_members' d.ws.pk %}">{{ d.ws.name }}</a></td>
+        <td>{{ d.people }}</td>
+        <td><span class="mini-bar"><i style="width:{{ d.pct_active }}%"></i></span> {{ d.active }} <small class="muted">({{ d.pct_active }}%)</small></td>
+        <td>{{ d.boards }}</td>
+        <td>{{ d.open }}</td>
+        <td class="{% if d.overdue %}bad{% endif %}">{{ d.overdue }}</td>
+        <td>{{ d.done30 }}</td>
+      </tr>
+      {% empty %}<tr><td colspan="7" class="muted">No departments yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <div class="dash-grid">
+    <section class="dash-card">
+      <h3>Busiest boards (30 days)</h3>
+      {% for b in busiest %}<div class="co-row"><a href="{% url 'board' b.pk %}">{{ b.title }} <small class="muted">· {{ b.workspace.name }}</small></a><b>{{ b.n }}</b></div>{% empty %}<p class="muted">Nothing yet.</p>{% endfor %}
+    </section>
+    <section class="dash-card">
+      <h3>Quiet boards — no changes in 30 days</h3>
+      {% for b in quiet %}<div class="co-row"><a href="{% url 'board' b.pk %}">{{ b.title }} <small class="muted">· {{ b.workspace.name }}</small></a></div>{% empty %}<p class="muted">Every board has been used this month.</p>{% endfor %}
+      {% if quiet|length == 15 %}<p class="muted small">Showing the first 15.</p>{% endif %}
+    </section>
+    <section class="dash-card">
+      <h3>Never signed in <span class="count">{{ never_count }}</span></h3>
+      {% for u in never %}<div class="co-row"><span>{{ u.display_name }} <small class="muted">{{ u.email }}</small></span></div>{% empty %}<p class="muted">Everyone has signed in at least once.</p>{% endfor %}
+    </section>
+    <section class="dash-card">
+      <h3>Boards with a public link <span class="count">{{ public_boards|length }}</span></h3>
+      {% for b in public_boards %}<div class="co-row"><a href="{% url 'board' b.pk %}">{{ b.title }} <small class="muted">· {{ b.workspace.name }}</small></a></div>{% empty %}<p class="muted">None — every board needs a sign-in.</p>{% endfor %}
+    </section>
+  </div>
+</main>
+{% endblock %}

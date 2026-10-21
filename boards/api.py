@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from django.views.decorators.http import require_POST
 
-from . import automation, notify, permissions, positions
+from . import audit, automation, notify, permissions, positions
 from .models import (Board, BoardMember, Card, CardFieldValue, Checklist, ChecklistItem, Comment, CustomField, Label,
                      List, Notification, Rule)
 from .services import board_people, card_response, cards_qs, log
@@ -424,6 +424,8 @@ def board_share(request, board_id):
     notify.send(person, Notification.ADDED_TO_BOARD, actor=request.user, board=board,
                 text=f"added you to the board {board.title}")
     log(board, request.user, "board_member_added", name=person.display_name)
+    audit.record(request, "guest_invited" if new_account else "board_shared", board=board, target=person,
+                 role=dict(BoardMember.ROLES)[role].lower())
     return {"html": _members_html(board, request), "count": board.memberships.count(), "new_account": new_account}
 
 
@@ -440,6 +442,7 @@ def board_member_update(request, board_id, user_id):
         if last_admin:
             raise ApiError("A board needs at least one admin. Make someone else admin first.")
         membership.delete()
+        audit.record(request, "board_member_removed", board=board, target=membership.user)
     elif request.data.get("role") in dict(BoardMember.ROLES):
         if last_admin and request.data["role"] != BoardMember.ADMIN:
             raise ApiError("A board needs at least one admin.")
@@ -447,6 +450,8 @@ def board_member_update(request, board_id, user_id):
             raise ApiError("Guests can be members or observers, not admins.")
         membership.role = request.data["role"]
         membership.save()
+        audit.record(request, "board_role_changed", board=board, target=membership.user,
+                     role=membership.get_role_display().lower())
     return {"html": _members_html(board, request), "count": board.memberships.count()}
 
 
@@ -480,8 +485,9 @@ def board_update(request, board_id):
         board.title = _text(d["title"], 120, "title")
     if d.get("background") in dict(Board.BACKGROUNDS):
         board.background = d["background"]
-    if d.get("visibility") in dict(Board.VISIBILITY):
+    if d.get("visibility") in dict(Board.VISIBILITY) and d["visibility"] != board.visibility:
         board.visibility = d["visibility"]
+        audit.record(request, "board_visibility", board=board, value=board.get_visibility_display())
     if "description" in d:
         board.description = (d["description"] or "")[:5000]
     if "is_template" in d:
@@ -493,6 +499,7 @@ def board_update(request, board_id):
     if "public" in d:
         import secrets
         board.public_token = secrets.token_urlsafe(18) if d["public"] else ""
+        audit.record(request, "board_public_on" if d["public"] else "board_public_off", board=board)
     if "collection" in d:
         from .models import Collection
         value = d["collection"]
@@ -505,6 +512,7 @@ def board_update(request, board_id):
             board.collection = get_object_or_404(Collection, pk=value, workspace=board.workspace)
     if d.get("archive"):
         board.is_archived = True
+        audit.record(request, "board_archived", board=board)
     board.save()
     return {"ok": True, "public_token": board.public_token}
 
