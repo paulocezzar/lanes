@@ -1,7 +1,7 @@
-"""The premium board views: Calendar, Table, Timeline and Dashboard.
+"""The premium views: Calendar, Table, Timeline and Dashboard.
 
-All read from the same cards as the Kanban board; clicking a card anywhere
-opens the same card dialog. Calendar supports drag-to-reschedule.
+Each works on one board (/b/<id>/calendar/) or on every board you can see
+(/all/calendar/). Clicking a card anywhere opens the same card dialog.
 """
 import calendar as pycal
 from collections import Counter, OrderedDict
@@ -11,7 +11,22 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.utils import timezone
 
-from .board_context import board_context, open_cards
+from . import permissions
+from .board_context import all_context, board_context, open_cards
+from .services import cards_qs
+
+
+def _scope(request, board_id, view):
+    """(board or None, ctx, cards queryset)."""
+    if board_id is None:
+        ctx = all_context(request, view)
+        boards = ctx["scope_boards"]
+        cards = cards_qs().filter(list__board__in=boards, list__is_archived=False, is_archived=False,
+                                  is_template=False)
+        return None, ctx, cards
+    board, ctx = board_context(request, board_id, view)
+    ctx["base_template"] = "boards/board_base.html"
+    return board, ctx, open_cards(board)
 
 
 def _local_date(dt):
@@ -32,17 +47,15 @@ def _shift_month(d, months):
 
 
 @login_required
-def board_calendar(request, board_id):
-    board, ctx = board_context(request, board_id, "calendar")
+def board_calendar(request, board_id=None):
+    board, ctx, qs = _scope(request, board_id, "calendar")
     today = timezone.localdate()
     month = _parse_month(request.GET.get("m"), today)
     weeks = pycal.Calendar(firstweekday=0).monthdatescalendar(month.year, month.month)
     first, last = weeks[0][0], weeks[-1][-1]
 
-    cards = list(open_cards(board))
-    by_day = {}
-    unscheduled = []
-    for c in cards:
+    by_day, unscheduled = {}, []
+    for c in qs:
         d = _local_date(c.due_at)
         if d is None:
             unscheduled.append(c)
@@ -60,17 +73,17 @@ def board_calendar(request, board_id):
         "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         "weeks": [[{"date": d, "cards": by_day.get(d, []), "in_month": d.month == month.month} for d in w]
                   for w in weeks],
-        "unscheduled": unscheduled,
-        "first_list": board.lists.filter(is_archived=False).first(),
+        "unscheduled": unscheduled[:200],
+        "first_list": board.lists.filter(is_archived=False).first() if board else None,
     })
     return render(request, "boards/view_calendar.html", ctx)
 
 
 @login_required
-def board_table(request, board_id):
-    board, ctx = board_context(request, board_id, "table")
-    cards = list(open_cards(board).order_by("list__position", "position"))
-    fields = list(board.custom_fields.all())
+def board_table(request, board_id=None):
+    board, ctx, qs = _scope(request, board_id, "table")
+    cards = list(qs.order_by("list__board__title", "list__position", "position")[:2000])
+    fields = list(board.custom_fields.all()) if board else []
     rows = []
     for c in cards:
         done, total = c.checklist_counts()
@@ -78,13 +91,18 @@ def board_table(request, board_id):
         rows.append({"card": c, "done": done, "total": total,
                      "pct": round(100 * done / total) if total else None,
                      "fields": [values.get(f.pk) for f in fields]})
-    ctx.update({"rows": rows, "lists": board.lists.filter(is_archived=False), "fields": fields})
+    ctx.update({
+        "rows": rows,
+        "lists": board.lists.filter(is_archived=False) if board else [],
+        "filter_boards": sorted({c.list.board for c in cards}, key=lambda b: b.title) if not board else [],
+        "fields": fields,
+    })
     return render(request, "boards/view_table.html", ctx)
 
 
 @login_required
-def board_timeline(request, board_id):
-    board, ctx = board_context(request, board_id, "timeline")
+def board_timeline(request, board_id=None):
+    board, ctx, qs = _scope(request, board_id, "timeline")
     today = timezone.localdate()
     try:
         start = date.fromisoformat(request.GET.get("start", ""))
@@ -94,26 +112,31 @@ def board_timeline(request, board_id):
     days = 42                                         # six weeks
     end = start + timedelta(days=days - 1)
 
-    groups = OrderedDict((lst.pk, {"list": lst, "rows": []}) for lst in board.lists.filter(is_archived=False))
+    # One board: group by its lists (+ a group for cards mirrored in). All boards: group by board.
+    groups = OrderedDict()
+    if board:
+        for lst in board.lists.filter(is_archived=False):
+            groups[("l", lst.pk)] = {"title": lst.title, "rows": []}
     undated = 0
-    for c in open_cards(board).order_by("list__position", "due_at"):
+    for c in qs.order_by("list__board__title", "list__position", "due_at"):
         due = _local_date(c.due_at)
         if not due:
             undated += 1
             continue
-        begin = c.start_date or due
-        if begin > due:
-            begin = due
+        begin = min(c.start_date or due, due)
         if due < start or begin > end:
             continue
+        if board is None:
+            key, title = ("b", c.list.board_id), c.list.board.title
+        elif c.list.board_id == board.pk:
+            key, title = ("l", c.list_id), c.list.title
+        else:
+            key, title = ("m", 0), "🔗 Mirrored from other boards"
         col_start = max((begin - start).days, 0)
         col_end = min((due - start).days, days - 1)
-        groups[c.list_id]["rows"].append({
-            "card": c,
-            "col": col_start + 1,                         # CSS grid lines are 1-based
-            "span": col_end - col_start + 1,
-            "clipped_left": begin < start,
-            "clipped_right": due > end,
+        groups.setdefault(key, {"title": title, "rows": []})["rows"].append({
+            "card": c, "col": col_start + 1, "span": col_end - col_start + 1,
+            "clipped_left": begin < start, "clipped_right": due > end,
         })
 
     ctx.update({
@@ -122,7 +145,7 @@ def board_timeline(request, board_id):
         "day_count": days,
         "today": today,
         "today_col": (today - start).days + 1 if start <= today <= end else None,
-        "groups": [g for g in groups.values()],
+        "groups": [g for g in groups.values() if g["rows"] or board],
         "undated": undated,
         "prev": (start - timedelta(days=28)).isoformat(),
         "next": (start + timedelta(days=28)).isoformat(),
@@ -130,25 +153,32 @@ def board_timeline(request, board_id):
     return render(request, "boards/view_timeline.html", ctx)
 
 
-def _bars(counter, total=None):
-    """[(label, count, pct_of_max)] sorted biggest first, for CSS bar charts."""
+def _bars(counter):
+    """[{label, count, pct_of_max}] biggest first, for CSS bar charts."""
     items = counter.most_common()
     top = max((n for _, n in items), default=0) or 1
     return [{"label": k, "count": n, "pct": round(100 * n / top)} for k, n in items]
 
 
 @login_required
-def board_dashboard(request, board_id):
-    board, ctx = board_context(request, board_id, "dashboard")
-    cards = list(open_cards(board))
+def board_dashboard(request, board_id=None):
+    board, ctx, qs = _scope(request, board_id, "dashboard")
+    cards = list(qs)
     today = timezone.localdate()
     week_end = today + timedelta(days=7)
 
-    per_list = OrderedDict((lst.title, 0) for lst in board.lists.filter(is_archived=False))
+    per_group = (OrderedDict((lst.title, 0) for lst in board.lists.filter(is_archived=False)) if board
+                 else OrderedDict())
     per_member, per_label, status = Counter(), Counter(), Counter()
     items_done = items_total = 0
     for c in cards:
-        per_list[c.list.title] = per_list.get(c.list.title, 0) + 1
+        if board is None:
+            key = c.list.board.title
+        elif c.list.board_id == board.pk:
+            key = c.list.title
+        else:
+            key = "🔗 Mirrored in"
+        per_group[key] = per_group.get(key, 0) + 1
         members = list(c.members.all())
         for u in members:
             per_member[u.display_name] += 1
@@ -171,7 +201,9 @@ def board_dashboard(request, board_id):
         items_done += d
         items_total += t
 
-    top_list = max(per_list.values(), default=0) or 1
+    if board is None:
+        per_group = OrderedDict(sorted(per_group.items(), key=lambda kv: -kv[1]))
+    top_group = max(per_group.values(), default=0) or 1
     status_order = ["Overdue", "Due this week", "Later", "No due date", "Complete"]
     top_status = max(status.values(), default=0) or 1
     top_label = max(per_label.values(), default=0) or 1
@@ -182,11 +214,16 @@ def board_dashboard(request, board_id):
         "due_week": status["Due this week"],
         "items_pct": round(100 * items_done / items_total) if items_total else None,
         "items_done": items_done, "items_total": items_total,
-        "by_list": [{"label": k, "count": n, "pct": round(100 * n / top_list)} for k, n in per_list.items()],
-        "by_member": _bars(per_member),
+        "group_title": "Cards per list" if board else "Cards per board",
+        "by_list": [{"label": k, "count": n, "pct": round(100 * n / top_group)} for k, n in per_group.items()],
+        "by_member": _bars(per_member)[:15],
         "by_label": [{"label": k[0], "colour": k[1], "count": n, "pct": round(100 * n / top_label)}
-                     for k, n in per_label.most_common()],
+                     for k, n in per_label.most_common(15)],
         "by_status": [{"label": k, "count": status[k], "pct": round(100 * status[k] / top_status),
                        "key": k.lower().replace(" ", "-")} for k in status_order],
     })
     return render(request, "boards/view_dashboard.html", ctx)
+
+
+def visible_scope_boards(user):
+    return permissions.visible_boards(user).filter(is_template=False)

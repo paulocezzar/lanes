@@ -28,10 +28,22 @@
   </section>
   {% endif %}
 
+  <div class="home-tools">
+    <input type="search" class="board-filter" placeholder="Find a board…" data-board-filter aria-label="Find a board">
+    <a class="btn ghost sm" href="{% url 'all_calendar' %}">All boards: Calendar</a>
+    <a class="btn ghost sm" href="{% url 'all_table' %}">Table</a>
+    <a class="btn ghost sm" href="{% url 'all_dashboard' %}">Dashboard</a>
+  </div>
+
   {% for g in groups %}
   <section class="home-section">
     <h2><span class="ws-badge">{{ g.workspace.initial }}</span>{{ g.workspace.name }}
       <a class="btn ghost sm head-link" href="{% url 'workspace_members' g.workspace.pk %}">{% include "boards/_icon.html" with i="people" %}People</a></h2>
+    {% for c in g.collections %}
+    <h3 class="collection-h">{{ c.collection.name }} <span class="count">{{ c.boards|length }}</span></h3>
+    <div class="tile-grid">{% for b in c.boards %}{% include "boards/_board_tile.html" %}{% endfor %}</div>
+    {% endfor %}
+    {% if g.collections and g.boards %}<h3 class="collection-h">Other boards</h3>{% endif %}
     <div class="tile-grid">
       {% for b in g.boards %}{% include "boards/_board_tile.html" %}{% endfor %}
       <button class="board-tile new" data-new-board="{{ g.workspace.pk }}">Create new board</button>
@@ -123,5 +135,12 @@
     tdlg.showModal();
   }));
   tdlg.querySelector('[data-close]').addEventListener('click', () => tdlg.close());
+  const bf = document.querySelector('[data-board-filter]');
+  bf?.addEventListener('input', () => {
+    const q = bf.value.trim().toLowerCase();
+    document.querySelectorAll('a.board-tile').forEach(t => {
+      t.hidden = q && !t.querySelector('.board-tile-title').textContent.toLowerCase().includes(q);
+    });
+  });
 </script>
 {% endblock %}

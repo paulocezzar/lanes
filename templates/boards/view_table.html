@@ -1,16 +1,17 @@
-{% extends "boards/board_base.html" %}
+{% extends base_template %}
 {% load static %}
 {% block board_body %}
 <div class="view-wrap table-view" data-table>
   <div class="view-toolbar">
     <input type="search" class="view-search" placeholder="Filter cards…" data-table-search aria-label="Filter cards">
-    <select data-table-list aria-label="List">
-      <option value="">All lists</option>
-      {% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}
+    <select data-table-list aria-label="{% if board %}List{% else %}Board{% endif %}">
+      {% if board %}<option value="">All lists</option>{% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}
+      {% else %}<option value="">All boards</option>{% for b in filter_boards %}<option value="b{{ b.pk }}">{{ b.title }}</option>{% endfor %}{% endif %}
     </select>
     <select data-table-person aria-label="Member">
       <option value="">Everyone</option>
-      {% for u in people %}<option value="{{ u.pk }}">{{ u.display_name }}</option>{% endfor %}
+      <option value="{{ user.pk }}">Me</option>
+      {% for u in people %}{% if u != user %}<option value="{{ u.pk }}">{{ u.display_name }}</option>{% endif %}{% endfor %}
       <option value="none">Unassigned</option>
     </select>
     <label class="check-inline"><input type="checkbox" data-table-hide-done> Hide complete</label>
@@ -21,7 +22,7 @@
       <thead>
         <tr>
           <th data-sort="title">Card</th>
-          <th data-sort="list">List</th>
+          <th data-sort="list">{% if board %}List{% else %}Board › List{% endif %}</th>
           <th>Labels</th>
           <th data-sort="people">Members</th>
           <th data-sort="due">Due</th>
@@ -33,7 +34,7 @@
       <tbody>
         {% for r in rows %}{% with c=r.card %}
         <tr data-card-open="{{ c.pk }}" data-title="{{ c.title|lower }} {{ c.description|lower|truncatechars:200 }}"
-            data-list="{{ c.list_id }}" data-list-pos="{{ c.list.position }}"
+            data-list="{% if board %}{{ c.list_id }}{% else %}b{{ c.list.board_id }}{% endif %}" data-list-pos="{% if board %}{{ c.list.position }}{% else %}{{ c.list.board.title }}{% endif %}"
             data-people="{% for u in c.members.all %}{{ u.pk }} {% empty %}none{% endfor %}"
             data-people-name="{% for u in c.members.all %}{{ u.display_name }} {% endfor %}"
             data-due="{% if c.due_at %}{{ c.due_at|date:'U' }}{% else %}9999999999{% endif %}"
@@ -41,7 +42,7 @@
             data-status="{% if c.is_complete %}3{% elif c.due_state == 'overdue' %}0{% elif c.due_state == 'soon' %}1{% else %}2{% endif %}"
             data-done="{{ c.is_complete|yesno:'1,0' }}">
           <td class="t-title">{{ c.title }}</td>
-          <td><span class="pill">{{ c.list.title }}</span></td>
+          <td><span class="pill">{% if not board or c.list.board_id != board.pk %}{{ c.list.board.title }} › {% endif %}{{ c.list.title }}</span></td>
           <td>{% for l in c.labels.all %}<span class="tag lc-{{ l.colour }}">{{ l.name|default:"&nbsp;" }}</span>{% endfor %}</td>
           <td><span class="avatar-row">{% for u in c.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% endfor %}</span></td>
           <td>{% if c.due_at %}<span class="badge due-{{ c.due_state|default:'none' }}">{{ c.due_at|date:"j M, H:i" }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>

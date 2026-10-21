@@ -1,11 +1,11 @@
-{% extends "boards/board_base.html" %}
+{% extends base_template %}
 {% load static %}
 {% block board_body %}
 <div class="view-wrap calendar-view" data-calendar>
   <div class="view-toolbar">
-    <a class="btn light sm" href="?m={{ prev_month }}" aria-label="Previous month">‹</a>
-    <a class="btn light sm" href="?m={{ this_month }}">Today</a>
-    <a class="btn light sm" href="?m={{ next_month }}" aria-label="Next month">›</a>
+    <a class="btn light sm" href="?m={{ prev_month }}&{{ query_suffix }}" aria-label="Previous month">‹</a>
+    <a class="btn light sm" href="?m={{ this_month }}&{{ query_suffix }}">Today</a>
+    <a class="btn light sm" href="?m={{ next_month }}&{{ query_suffix }}" aria-label="Next month">›</a>
     <h2 class="view-heading">{{ month|date:"F Y" }}</h2>
     {% if can_edit %}<span class="view-hint">Drag a card to another day to change its due date.</span>{% endif %}
   </div>

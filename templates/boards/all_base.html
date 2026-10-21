@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}All boards · {{ view|capfirst }} · Lanes{% endblock %}
+{% block body_class %}board-page{% endblock %}
+{% block content %}
+<main class="board bg-slate" id="board" data-board-id="" data-view="{{ view }}" data-version="" data-can-edit="1" data-open-card="">
+  <header class="board-head">
+    <h1 class="board-title">All boards</h1>
+    <nav class="view-tabs" aria-label="Views">
+      {% for key, label, url_name in all_tabs %}<a href="{% url url_name %}{% if query_suffix %}?{{ query_suffix }}{% endif %}" class="{% if key == view %}on{% endif %}">{{ label }}</a>{% endfor %}
+    </nav>
+    <form class="scope-form" method="get">
+      {% for k, v in request.GET.items %}{% if k != "dept" and k != "collection" %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+      <select name="dept" onchange="this.form.submit()" aria-label="Department">
+        <option value="">All departments</option>
+        {% for ws in dept_options %}<option value="{{ ws.pk }}" {% if dept == ws.pk|stringformat:"s" %}selected{% endif %}>{{ ws.name }}</option>{% endfor %}
+      </select>
+      {% if collection_options %}
+      <select name="collection" onchange="this.form.submit()" aria-label="Collection">
+        <option value="">All collections</option>
+        {% for c in collection_options %}<option value="{{ c.pk }}" {% if collection == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.workspace.name }} · {{ c.name }}</option>{% endfor %}
+      </select>
+      {% endif %}
+    </form>
+  </header>
+  {% block board_body %}{% endblock %}
+</main>
+<dialog id="card-dialog" class="card-dialog" aria-label="Card"><div id="card-dialog-body"></div></dialog>
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'lanes/vendor/Sortable.min.js' %}"></script>
+<script src="{% static 'lanes/board.js' %}"></script>
+{% endblock %}

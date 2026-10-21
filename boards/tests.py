@@ -837,3 +837,68 @@ class MirrorTests(TestCase):
         self.mirror()
         self.client.force_login(self.driver)
         self.assertContains(self.client.get(reverse("board_table", args=[self.deliveries.pk])), "Hampers to Bath")
+
+
+class CrossBoardTests(TestCase):
+    def setUp(self):
+        from django.utils import timezone
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.other_ws = Workspace.objects.create(name="HR")
+        self.user = User.objects.create_user("u@x.com", "pw", first_name="Una")
+        self.charlie = User.objects.create_user("c@x.com", "pw", first_name="Charlie")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.user, role="admin")
+        self.b1 = Board.objects.create(workspace=self.ws, title="Christmas")
+        self.b2 = Board.objects.create(workspace=self.ws, title="Daily bread")
+        self.secret = Board.objects.create(workspace=self.other_ws, title="Leavers", visibility=Board.PRIVATE)
+        for b in (self.b1, self.b2):
+            BoardMember.objects.create(board=b, user=self.user, role="admin")
+        BoardMember.objects.create(board=self.b1, user=self.charlie)
+        l1 = List.objects.create(board=self.b1, title="Doing")
+        l2 = List.objects.create(board=self.b2, title="To do")
+        self.urgent = Label.objects.create(board=self.b1, name="Urgent", colour="red")
+        self.c1 = Card.objects.create(list=l1, title="Stollen wreaths", due_at=timezone.now() - timezone.timedelta(days=1))
+        self.c1.labels.add(self.urgent)
+        self.c1.members.add(self.user)
+        self.c2 = Card.objects.create(list=l2, title="Sourdough starter", description="feed twice")
+        self.c2.members.add(self.charlie)
+        Card.objects.create(list=List.objects.create(board=self.secret, title="L"), title="Confidential leaver")
+        self.client.force_login(self.user)
+
+    def test_all_views_cover_every_visible_board_only(self):
+        for name in ("all_calendar", "all_table", "all_timeline", "all_dashboard"):
+            r = self.client.get(reverse(name))
+            self.assertEqual(r.status_code, 200, name)
+            self.assertNotContains(r, "Confidential leaver")
+        r = self.client.get(reverse("all_table"))
+        self.assertContains(r, "Stollen wreaths")
+        self.assertContains(r, "Sourdough starter")
+        r = self.client.get(reverse("all_table"), {"dept": self.other_ws.pk})
+        self.assertNotContains(r, "Stollen wreaths")
+
+    def test_search_operators(self):
+        from .search import run
+        titles = lambda q: {c.title for c in run(self.user, q)[0]}
+        self.assertEqual(titles("@me"), {"Stollen wreaths"})
+        self.assertEqual(titles("@charlie"), {"Sourdough starter"})
+        self.assertEqual(titles("label:urgent is:overdue"), {"Stollen wreaths"})
+        self.assertEqual(titles("feed"), {"Sourdough starter"})
+        self.assertEqual(titles("board:daily"), {"Sourdough starter"})
+        self.assertEqual(titles("leaver"), set())          # private board stays hidden
+        self.assertEqual(titles('"unbalanced quote'), set())
+
+    def test_saved_search(self):
+        self.client.post(reverse("search_save"), {"q": "@me is:open", "name": "Mine"})
+        self.assertContains(self.client.get(reverse("search")), "Mine")
+
+    def test_collections(self):
+        r = self.client.post(f"/api/boards/{self.b1.pk}/update/", json.dumps({"collection": "new:Christmas 2026"}),
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.b1.refresh_from_db()
+        self.assertEqual(self.b1.collection.name, "Christmas 2026")
+        self.assertContains(self.client.get(reverse("home")), "Christmas 2026")
+        from .models import Collection
+        foreign = Collection.objects.create(workspace=self.other_ws, name="Nope")
+        r = self.client.post(f"/api/boards/{self.b2.pk}/update/", json.dumps({"collection": foreign.pk}),
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 404)

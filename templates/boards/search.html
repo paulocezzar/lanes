@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{% if q %}{{ q }} · {% endif %}Search · Lanes{% endblock %}
+{% block content %}
+<main class="home search-page">
+  <aside class="search-side">
+    <h3 class="side-h sm">Saved searches</h3>
+    {% for s in saved %}
+    <div class="saved-row">
+      <a href="?q={{ s.query|urlencode }}" class="{% if s.query == q %}on{% endif %}">{{ s.name }}</a>
+      <form method="post" action="{% url 'search_delete' s.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="icon-btn xs" title="Remove">{% include "boards/_icon.html" with i="close" %}</button></form>
+    </div>
+    {% empty %}<p class="muted small">Search, then save it here to come back to it.</p>{% endfor %}
+    <h3 class="side-h sm">Try</h3>
+    {% for ex, label in examples %}<a class="example" href="?q={{ ex|urlencode }}"><code>{{ ex }}</code><small>{{ label }}</small></a>{% endfor %}
+  </aside>
+  <section class="search-main">
+    <form method="get" class="search-form">
+      <input type="search" name="q" value="{{ q }}" placeholder="Search cards… try @me is:overdue label:urgent board:christmas" autofocus>
+      <button class="btn primary">Search</button>
+    </form>
+    {% if searched %}
+    <div class="row search-meta">
+      <span class="muted">{{ results|length }}{% if results|length == 200 %}+{% endif %} card{{ results|length|pluralize }}</span>
+      <form method="post" action="{% url 'search_save' %}" class="row">
+        {% csrf_token %}<input type="hidden" name="q" value="{{ q }}">
+        <input name="name" placeholder="Name this search" maxlength="60" class="save-name">
+        <button class="btn sm">Save search</button>
+      </form>
+    </div>
+    <div class="mine-cards">
+      {% for card in results %}
+      <a class="mine-link" href="{% url 'board' card.list.board_id %}?card={{ card.pk }}">
+        <span class="mine-list">{{ card.list.board.title }} › {{ card.list.title }}</span>
+        {% include "boards/_card_tile.html" %}
+      </a>
+      {% empty %}<p class="muted">No cards match.</p>{% endfor %}
+    </div>
+    {% else %}
+    <div class="panel search-help">
+      <h3>Search tips</h3>
+      <ul>
+        <li>Plain words search titles, descriptions, checklist items and comments.</li>
+        <li><code>@me</code> or <code>@charlie</code>: cards assigned to someone.</li>
+        <li><code>label:urgent</code>, <code>board:christmas</code>, <code>list:doing</code>.</li>
+        <li><code>is:overdue</code>, <code>is:due-week</code>, <code>is:no-date</code>, <code>is:open</code>, <code>is:complete</code>.</li>
+        <li>Use quotes for an exact phrase: <code>"cake boards"</code>.</li>
+      </ul>
+    </div>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

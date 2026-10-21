@@ -648,3 +648,37 @@ a.icon-btn { text-decoration: none; }
 .mirror-row { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border-radius: 6px; padding: 7px 10px; font-size: 13px; }
 .mirror-row a { text-decoration: none; flex: 1; }
 .mirror-row .link-btn { margin-left: auto; }
+
+/* ---------- all boards ---------- */
+.all-toggle { margin-left: 4px; }
+.scope-form { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.scope-form select { width: auto; background: rgb(255 255 255 / .9); color: #172b4d; border: 0; font-weight: 600; font-size: 13px; padding: 6px 8px; }
+.home-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 22px; }
+.board-filter { max-width: 280px; }
+.collection-h { font-size: 13px; color: var(--text-2); text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 8px;
+  display: flex; align-items: center; gap: 6px; }
+
+/* ---------- search ---------- */
+.top-search { flex: 1; max-width: 420px; margin-left: 12px; }
+.top-search input { background: var(--surface-2); border-color: transparent; padding: 6px 10px; }
+.search-page { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px; max-width: 1200px; }
+.search-side { display: grid; gap: 6px; align-content: start; }
+.saved-row { display: flex; align-items: center; gap: 6px; }
+.saved-row a { flex: 1; text-decoration: none; padding: 6px 8px; border-radius: 6px; font-weight: 600; font-size: 13px; }
+.saved-row a:hover, .saved-row a.on { background: var(--surface-2); }
+.example { display: grid; text-decoration: none; padding: 6px 8px; border-radius: 6px; }
+.example:hover { background: var(--surface-2); }
+.example small { color: var(--text-2); }
+code { background: var(--surface-3); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.search-form { display: flex; gap: 8px; margin-bottom: 14px; }
+.search-meta { justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; }
+.save-name { width: 180px !important; }
+.search-help ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--text-2); }
+@media (max-width: 760px) { .search-page { grid-template-columns: 1fr; } .top-search { display: none; } }
+
+/* ---------- board filter ---------- */
+.filter-wrap .filter-pop { left: auto; right: 0; width: 280px; max-height: 70vh; overflow-y: auto; }
+.filter-pop .check-inline { padding: 3px 0; }
+.label-swatch.sm { min-height: 20px; min-width: 36px; font-size: 11px; padding: 0 6px; }
+.filter-count { font-weight: 700; }
+.card-tile[hidden] { display: none !important; }

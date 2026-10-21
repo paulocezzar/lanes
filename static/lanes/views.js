@@ -90,7 +90,7 @@
     let sortKey = null, asc = true;
     const keyFns = {
       title: r => r.dataset.title,
-      list: r => +r.dataset.listPos,
+      list: r => (isNaN(+r.dataset.listPos) ? r.dataset.listPos.toLowerCase() : +r.dataset.listPos),
       people: r => r.dataset.peopleName || '~',
       due: r => +r.dataset.due,
       items: r => +r.dataset.items,

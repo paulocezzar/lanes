@@ -1,11 +1,11 @@
-{% extends "boards/board_base.html" %}
+{% extends base_template %}
 {% load static %}
 {% block board_body %}
 <div class="view-wrap timeline-view">
   <div class="view-toolbar">
-    <a class="btn light sm" href="?start={{ prev }}" aria-label="Earlier">‹</a>
-    <a class="btn light sm" href="?">Today</a>
-    <a class="btn light sm" href="?start={{ next }}" aria-label="Later">›</a>
+    <a class="btn light sm" href="?start={{ prev }}&{{ query_suffix }}" aria-label="Earlier">‹</a>
+    <a class="btn light sm" href="?{{ query_suffix }}">Today</a>
+    <a class="btn light sm" href="?start={{ next }}&{{ query_suffix }}" aria-label="Later">›</a>
     <h2 class="view-heading">{{ days.0|date:"j M" }} – {{ days|last|date:"j M Y" }}</h2>
     <span class="view-hint">Bars run from a card's start date to its due date.{% if undated %} {{ undated }} card{{ undated|pluralize }} without a due date not shown.{% endif %}</span>
   </div>
@@ -19,7 +19,7 @@
       </div>
       {% for g in groups %}
       <div class="tl-group">
-        <div class="tl-group-name">{{ g.list.title }} <span class="count">{{ g.rows|length }}</span></div>
+        <div class="tl-group-name">{{ g.title }} <span class="count">{{ g.rows|length }}</span></div>
         {% for r in g.rows %}
         <div class="tl-row">
           <div class="tl-label" title="{{ r.card.title }}">{{ r.card.title }}</div>

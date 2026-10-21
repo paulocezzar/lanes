@@ -1,10 +1,14 @@
 from django.urls import path
 
-from . import api, views, views_automation, views_board, views_files, views_notify, views_people, views_planner
+from . import (api, views, views_automation, views_board, views_files, views_notify, views_people, views_planner,
+               views_search)
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("my-cards/", views.my_cards, name="my_cards"),
+    path("search/", views_search.search_page, name="search"),
+    path("search/save/", views_search.search_save, name="search_save"),
+    path("search/<int:pk>/delete/", views_search.search_delete, name="search_delete"),
     path("planner/", views_planner.planner, name="planner"),
     path("api/inbox/", views_planner.inbox_panel, name="inbox_panel"),
     path("api/inbox/add/", views_planner.inbox_add),
@@ -17,6 +21,10 @@ urlpatterns = [
     path("api/notifications/read/", views_notify.notifications_read, name="notifications_read"),
     path("boards/new/", views.board_create, name="board_create"),
     path("b/<int:board_id>/", views.board_page, name="board"),
+    path("all/calendar/", views_board.board_calendar, name="all_calendar"),
+    path("all/table/", views_board.board_table, name="all_table"),
+    path("all/timeline/", views_board.board_timeline, name="all_timeline"),
+    path("all/dashboard/", views_board.board_dashboard, name="all_dashboard"),
     path("b/<int:board_id>/calendar/", views_board.board_calendar, name="board_calendar"),
     path("b/<int:board_id>/table/", views_board.board_table, name="board_table"),
     path("b/<int:board_id>/timeline/", views_board.board_timeline, name="board_timeline"),

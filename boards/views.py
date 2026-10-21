@@ -19,7 +19,8 @@ DEFAULT_LABELS = ["green", "yellow", "orange", "red", "purple", "blue"]
 def home(request):
     automation.maybe_run_schedules()
     user = request.user
-    boards = permissions.visible_boards(user).select_related("workspace")
+    boards = permissions.visible_boards(user).select_related("workspace", "collection").order_by(
+        "collection__name", "title")
     starred = set(BoardMember.objects.filter(user=user, starred=True).values_list("board_id", flat=True))
     if user.is_superuser:
         workspaces = Workspace.objects.all()
@@ -29,7 +30,14 @@ def home(request):
     templates = [b for b in boards if b.is_template]
     boards = [b for b in boards if not b.is_template]
     for ws in workspaces:
-        groups.append({"workspace": ws, "boards": [b for b in boards if b.workspace_id == ws.pk]})
+        ws_boards = [b for b in boards if b.workspace_id == ws.pk]
+        loose = [b for b in ws_boards if not b.collection_id]
+        cols = {}
+        for b in ws_boards:
+            if b.collection_id:
+                cols.setdefault(b.collection, []).append(b)
+        groups.append({"workspace": ws, "boards": loose,
+                       "collections": [{"collection": c, "boards": bs} for c, bs in cols.items()]})
     # Boards the user was invited to as a guest from another department
     ws_ids = {ws.pk for ws in workspaces}
     guest = [b for b in boards if b.workspace_id not in ws_ids]

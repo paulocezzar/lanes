@@ -1,4 +1,4 @@
-{% extends "boards/board_base.html" %}
+{% extends base_template %}
 {% block board_body %}
 <div class="view-wrap dash-view">
   <div class="stat-row">
@@ -10,7 +10,7 @@
   </div>
   <div class="dash-grid">
     <section class="dash-card">
-      <h3>Cards per list</h3>
+      <h3>{{ group_title }}</h3>
       {% for b in by_list %}<div class="hbar"><span class="hbar-label">{{ b.label }}</span><span class="hbar-track"><i style="width:{{ b.pct }}%"></i></span><span class="hbar-n">{{ b.count }}</span></div>{% empty %}<p class="muted">No lists.</p>{% endfor %}
     </section>
     <section class="dash-card">

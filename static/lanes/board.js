@@ -270,6 +270,7 @@
       else { old?.remove(); target?.appendChild(tile); }
     }
     refreshCounts();
+    window.LanesBoard?.applyFilter?.();
     if (dialog.open && openCardId === String(data.card_id)) {
       const scroller = $('.cm-main', dialogBody), side = $('.cm-side', dialogBody);
       const scroll = [scroller?.scrollTop, side?.scrollTop];
@@ -465,11 +466,11 @@
   });
 
   // Share dialog
-  const share = document.getElementById('share-dialog');
+  const share = document.getElementById('share-dialog') || document.createElement('dialog');
   $$('[data-open-share]').forEach(b => b.addEventListener('click', () => share.showModal()));
-  $('[data-close]', share).addEventListener('click', () => share.close());
+  $('[data-close]', share)?.addEventListener('click', () => share.close());
   share.addEventListener('click', e => { if (e.target === share) share.close(); });
-  const shareMembers = document.getElementById('share-members');
+  const shareMembers = document.getElementById('share-members') || document.createElement('div');
   const updateMembers = data => {
     shareMembers.innerHTML = data.html;
     document.getElementById('member-count').textContent = data.count;
@@ -495,9 +496,9 @@
   });
 
   // Drawer (menu): activity, archived, settings
-  const drawer = document.getElementById('drawer');
-  $('[data-open-drawer]').addEventListener('click', () => (drawer.hidden = !drawer.hidden));
-  $('[data-close-drawer]').addEventListener('click', () => (drawer.hidden = true));
+  const drawer = document.getElementById('drawer') || document.createElement('aside');
+  $('[data-open-drawer]')?.addEventListener('click', () => (drawer.hidden = !drawer.hidden));
+  $('[data-close-drawer]')?.addEventListener('click', () => (drawer.hidden = true));
   $$('[data-tab]', drawer).forEach(tab => tab.addEventListener('click', () => {
     $$('[data-tab]', drawer).forEach(t => t.classList.toggle('on', t === tab));
     $$('[data-pane]', drawer).forEach(p => (p.hidden = p.dataset.pane !== tab.dataset.tab));
@@ -547,6 +548,16 @@
     del.closest('[data-field-row]').remove();
   });
 
+  $('[data-board-collection]', drawer)?.addEventListener('change', async e => {
+    let value = e.target.value;
+    if (value === '__new') {
+      const name = prompt('Name the new collection (e.g. Christmas 2026):');
+      if (!name || !name.trim()) { location.reload(); return; }
+      value = `new:${name.trim()}`;
+    }
+    await post(`/api/boards/${boardId}/update/`, { collection: value });
+    location.reload();
+  });
   $('[data-board-template]', drawer)?.addEventListener('change', e =>
     post(`/api/boards/${boardId}/update/`, { is_template: e.target.checked })
       .then(() => toast(e.target.checked ? 'This board is now a template.' : 'No longer a template.')));
@@ -652,6 +663,7 @@
       });
       listsEl.scrollLeft = scroll;
       version = data.version;
+      window.LanesBoard.applyFilter?.();
       if (dialog.open && openCardId && !modalIsBusy()) refreshOpenCard();
     } catch { /* offline for a moment — next tick will retry */ }
     finally { polling = false; }
@@ -669,7 +681,7 @@
     if (scroll[1]) $('.cm-side', dialogBody).scrollTop = scroll[1];
   }
 
-  setInterval(poll, 4000);
+  if (boardId) setInterval(poll, 4000);   // the All-boards pages don't poll a single board
   document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
   // ---------- inbox panel (drag inbox items onto a list) ----------
@@ -725,6 +737,67 @@
     if (el && !e.defaultPrevented) { e.preventDefault(); openCard(el.dataset.cardOpen); }
   });
   window.LanesBoard = { openCard, post, toast, boardId, setDragging: v => (dragging = v) };
+
+  // ---------- filter bar ----------
+  const filterForm = $('[data-filter-form]');
+  const filterKey = `lanes-filter-${boardId}`;
+  function readFilter() {
+    if (!filterForm) return null;
+    const fd = new FormData(filterForm);
+    return { q: (fd.get('q') || '').trim().toLowerCase(), m: fd.getAll('m'), d: fd.getAll('d'),
+             l: fd.getAll('l'), hide_done: !!fd.get('hide_done') };
+  }
+  function applyFilter() {
+    const f = readFilter();
+    if (!f) return;
+    const me = boardEl.dataset.userId;
+    const now = Date.now() / 1000;
+    const active = f.q || f.m.length || f.d.length || f.l.length || f.hide_done;
+    let shown = 0;
+    $$('.card-tile', listsEl).forEach(t => {
+      const members = (t.dataset.members || '').trim().split(/\s+/).filter(Boolean);
+      const labels = (t.dataset.labels || '').trim().split(/\s+/).filter(Boolean);
+      const due = t.dataset.dueTs ? +t.dataset.dueTs : null;
+      const done = t.dataset.complete === '1';
+      const ok = (!f.q || t.textContent.toLowerCase().includes(f.q))
+        && (!f.m.length || f.m.some(v => v === 'me' ? members.includes(me) : v === 'none' ? !members.length : members.includes(v)))
+        && (!f.l.length || f.l.some(v => labels.includes(v)))
+        && (!f.d.length || f.d.some(v => v === 'none' ? due === null
+              : v === 'overdue' ? (due !== null && due < now && !done)
+              : v === 'day' ? (due !== null && due >= now && due <= now + 86400)
+              : (due !== null && due >= now && due <= now + 7 * 86400)))
+        && !(f.hide_done && done);
+      t.hidden = !ok;
+      if (ok) shown++;
+    });
+    const count = $('[data-filter-count]');
+    if (count) { count.hidden = !active; count.textContent = active ? ` · ${shown}` : ''; }
+    try { localStorage.setItem(filterKey, JSON.stringify(f)); } catch { /* private mode */ }
+  }
+  if (filterForm) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(filterKey) || 'null');
+      if (saved) {
+        filterForm.q.value = saved.q || '';
+        $$('input[type=checkbox]', filterForm).forEach(cb => {
+          cb.checked = cb.name === 'hide_done' ? !!saved.hide_done : (saved[cb.name] || []).includes(cb.value);
+        });
+      }
+    } catch { /* ignore */ }
+    filterForm.addEventListener('input', applyFilter);
+    filterForm.addEventListener('submit', e => e.preventDefault());
+    $('[data-toggle-filter]').addEventListener('click', e => {
+      e.stopPropagation();
+      filterForm.hidden = !filterForm.hidden;
+      if (!filterForm.hidden) filterForm.q.focus();
+    });
+    document.addEventListener('click', e => {
+      if (!filterForm.hidden && !e.target.closest('.filter-wrap')) filterForm.hidden = true;
+    });
+    $('[data-filter-clear]', filterForm).addEventListener('click', () => { filterForm.reset(); applyFilter(); });
+    applyFilter();
+  }
+  window.LanesBoard.applyFilter = applyFilter;
 
   // Deep link: /b/1/?card=5 opens that card
   if (boardEl.dataset.openCard) openCard(boardEl.dataset.openCard);

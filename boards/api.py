@@ -431,6 +431,16 @@ def board_update(request, board_id):
         board.description = (d["description"] or "")[:5000]
     if "is_template" in d:
         board.is_template = bool(d["is_template"])
+    if "collection" in d:
+        from .models import Collection
+        value = d["collection"]
+        if not value:
+            board.collection = None
+        elif isinstance(value, str) and value.startswith("new:"):
+            name = _text(value[4:], 60, "collection name")
+            board.collection, _ = Collection.objects.get_or_create(workspace=board.workspace, name=name)
+        else:
+            board.collection = get_object_or_404(Collection, pk=value, workspace=board.workspace)
     if d.get("archive"):
         board.is_archived = True
     board.save()

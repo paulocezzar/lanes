@@ -53,3 +53,40 @@ def open_cards(board):
         | Q(mirrors__list__board=board, mirrors__list__is_archived=False),
         is_archived=False,
     ).distinct()
+
+
+ALL_TABS = [
+    ("calendar", "Calendar", "all_calendar"),
+    ("table", "Table", "all_table"),
+    ("timeline", "Timeline", "all_timeline"),
+    ("dashboard", "Dashboard", "all_dashboard"),
+]
+
+
+def all_context(request, view):
+    """Context for a view across every board the user can see."""
+    from .models import Collection
+    user = request.user
+    boards = permissions.visible_boards(user).filter(is_template=False).select_related("workspace")
+    ws = request.GET.get("dept")
+    col = request.GET.get("collection")
+    if ws:
+        boards = boards.filter(workspace_id=ws)
+    if col:
+        boards = boards.filter(collection_id=col)
+    return {
+        "board": None,
+        "view": view,
+        "all_tabs": ALL_TABS,
+        "base_template": "boards/all_base.html",
+        "scope_boards": boards,
+        "can_edit": True,          # per-card permissions are checked on every change
+        "people": [],
+        "labels": [],
+        "dept_options": _my_workspaces(user),
+        "collection_options": Collection.objects.filter(workspace__in=_my_workspaces(user)).select_related("workspace"),
+        "dept": ws or "",
+        "collection": col or "",
+        "query_suffix": "&".join(f"{k}={v}" for k, v in (("dept", ws), ("collection", col)) if v),
+        "ai_enabled": ai.enabled(),
+    }

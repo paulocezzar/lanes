@@ -42,6 +42,20 @@ class WorkspaceMember(models.Model):
         constraints = [models.UniqueConstraint(fields=["workspace", "user"], name="uniq_workspace_member")]
 
 
+class Collection(models.Model):
+    """A named group of boards inside a department, e.g. "Christmas 2026"."""
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="collections")
+    name = models.CharField(max_length=60)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [models.UniqueConstraint(fields=["workspace", "name"], name="uniq_collection_name")]
+
+    def __str__(self):
+        return self.name
+
+
 class Board(models.Model):
     PRIVATE, WORKSPACE = "private", "workspace"
     VISIBILITY = [(PRIVATE, "Private — only people added to the board"), (WORKSPACE, "Department — everyone in it can see")]
@@ -67,6 +81,7 @@ class Board(models.Model):
     # know when to refresh (see signals.py and api.board_state).
     version = models.PositiveBigIntegerField(default=0)
     is_template = models.BooleanField(default=False)
+    collection = models.ForeignKey(Collection, on_delete=models.SET_NULL, null=True, blank=True, related_name="boards")
 
     class Meta:
         ordering = ["title"]
@@ -515,3 +530,13 @@ class CardMirror(models.Model):
     @property
     def token(self):
         return f"m{self.pk}"
+
+
+class SavedSearch(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="saved_searches")
+    name = models.CharField(max_length=60)
+    query = models.CharField(max_length=300)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
