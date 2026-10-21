@@ -46,6 +46,7 @@
       {% if me %}
       <button class="icon-btn light{% if me.starred %} on{% endif %}" data-star title="Star board">{% include "boards/_icon.html" with i="star" %}</button>
       {% endif %}
+      <button class="icon-btn light{% if watching_board %} on{% endif %}" data-watch-board title="{% if watching_board %}Watching — you hear about every change on this board{% else %}Watch this board{% endif %}">👁</button>
       {% if me %}
       <button class="btn light" data-open-share>{% include "boards/_icon.html" with i="share" %}Share</button>
       {% else %}

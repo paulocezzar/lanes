@@ -44,8 +44,10 @@ def fire(card, trigger, *, list_=None, label=None):
                 rule.last_run_at = timezone.now()
                 rule.save(update_fields=["run_count", "last_run_at"])
                 if done:
-                    Activity.objects.create(board=board, card=card, actor=None, verb="automation",
-                                            data={"summary": "; ".join(done)})
+                    act = Activity.objects.create(board=board, card=card, actor=None, verb="automation",
+                                                  data={"summary": "; ".join(done)})
+                    from . import notify
+                    notify.on_activity(act)
         except Exception:  # a broken rule must never break the user's own action
             log.exception("Automation rule %s failed on card %s", rule.pk, card.pk)
 

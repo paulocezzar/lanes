@@ -13,7 +13,10 @@ User = get_user_model()
 
 
 def log(board, actor, verb, card=None, **data):
-    return Activity.objects.create(board=board, card=card, actor=actor, verb=verb, data=data)
+    activity = Activity.objects.create(board=board, card=card, actor=actor, verb=verb, data=data)
+    from . import notify
+    notify.on_activity(activity)
+    return activity
 
 
 def cards_qs():
@@ -76,6 +79,8 @@ def render_modal(card, request):
         "colours": COLOURS,
         "ai_enabled": ai.enabled(),
         "sticker_choices": STICKERS,
+        "watching": card.watches.filter(user=user).exists(),
+        "watching_board": board.watches.filter(user=user, card__isnull=True).exists(),
     }
     return render_to_string("boards/_card_modal.html", ctx, request=request)
 

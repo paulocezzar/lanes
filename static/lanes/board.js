@@ -356,6 +356,7 @@
     }
     if (!t.closest('.pop')) hidePops();
 
+    if (t.closest('[data-watch-card]')) return cardPost('watch');
     if (t.closest('[data-toggle-complete]')) {
       return cardPost('update', { is_complete: !t.closest('[data-toggle-complete]').classList.contains('on') });
     }
@@ -485,6 +486,13 @@
   $('[data-star]')?.addEventListener('click', async e => {
     const data = await post(`/api/boards/${boardId}/star/`);
     e.currentTarget.classList.toggle('on', data.starred);
+  });
+  $('[data-watch-board]')?.addEventListener('click', async e => {
+    const btn = e.currentTarget;
+    const data = await post(`/api/boards/${boardId}/watch/`);
+    btn.classList.toggle('on', data.watching);
+    btn.title = data.watching ? 'Watching — you hear about every change on this board' : 'Watch this board';
+    toast(data.watching ? 'Watching this board. Changes will show in your 🔔.' : 'Stopped watching this board.');
   });
   $('[data-join]')?.addEventListener('click', async () => {
     await post(`/api/boards/${boardId}/join/`);

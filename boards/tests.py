@@ -1,11 +1,11 @@
 import json
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 
 from . import positions
-from .models import Activity, Board, BoardMember, Card, Label, List, Workspace, WorkspaceMember
+from .models import Activity, Board, BoardMember, Card, Label, List, Notification, Watch, Workspace, WorkspaceMember
 
 User = get_user_model()
 
@@ -1007,3 +1007,52 @@ class SuggestStepsThemeTests(TestCase):
         self.client.post(reverse("set_theme"), {"theme": "neon"})
         self.user.refresh_from_db()
         self.assertEqual(self.user.theme, "light")
+
+
+class WatchTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery W")
+        self.owner = User.objects.create_user("own@x.com", "pw", first_name="Own")
+        self.watcher = User.objects.create_user("watch@x.com", "pw", first_name="Wat")
+        for u in (self.owner, self.watcher):
+            WorkspaceMember.objects.create(workspace=self.ws, user=u)
+        self.board = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=self.board, user=self.owner, role="admin")
+        self.l1 = List.objects.create(board=self.board, title="To do", position=1)
+        self.l2 = List.objects.create(board=self.board, title="Done", position=2)
+        self.card = Card.objects.create(list=self.l1, title="Tins")
+        self.c = Client()
+        self.c.force_login(self.owner)
+
+    def post(self, client, url, data=None):
+        return client.post(url, json.dumps(data or {}), content_type="application/json")
+
+    def test_card_watcher_hears_moves_and_rolls_up(self):
+        w = Client(); w.force_login(self.watcher)
+        self.assertEqual(self.post(w, f"/api/cards/{self.card.pk}/watch/").status_code, 200)
+        self.post(self.c, f"/api/cards/{self.card.pk}/move/", {"list_id": self.l2.pk})
+        n = Notification.objects.get(recipient=self.watcher)
+        self.assertEqual(n.kind, "watched")
+        self.assertIn("Tins", n.text)
+        self.post(self.c, f"/api/cards/{self.card.pk}/update/", {"is_complete": True})
+        self.assertEqual(Notification.objects.filter(recipient=self.watcher).count(), 1)
+        n.refresh_from_db()
+        self.assertIn("1 other change", n.excerpt)
+        # comments too
+        self.post(self.c, f"/api/cards/{self.card.pk}/comments/", {"body": "done"})
+        self.assertTrue(Notification.objects.filter(recipient=self.watcher, text__startswith="commented").exists())
+        # unwatch
+        self.post(w, f"/api/cards/{self.card.pk}/watch/")
+        self.assertFalse(Watch.objects.filter(user=self.watcher).exists())
+
+    def test_board_watcher_and_no_self_notify(self):
+        w = Client(); w.force_login(self.watcher)
+        r = self.post(w, f"/api/boards/{self.board.pk}/watch/")
+        self.assertTrue(r.json()["watching"])
+        self.post(w, f"/api/boards/{self.board.pk}/watch/")  # off
+        self.post(w, f"/api/boards/{self.board.pk}/watch/")  # on again
+        self.post(self.c, f"/api/lists/{self.l1.pk}/cards/", {"title": "New one"})
+        self.assertTrue(Notification.objects.filter(recipient=self.watcher, kind="watched").exists())
+        self.post(self.c, f"/api/cards/{self.card.pk}/watch/")
+        self.post(self.c, f"/api/cards/{self.card.pk}/move/", {"list_id": self.l2.pk})
+        self.assertFalse(Notification.objects.filter(recipient=self.owner).exists())

@@ -653,3 +653,33 @@ def mirror_move(request, mirror_id):
     data["tile"] = render_to_string("boards/_card_tile.html", {"card": cards_qs().get(pk=m.card_id), "mirror": m},
                                     request=request)
     return data
+
+
+# ---------- watching ----------
+
+@api
+def card_watch(request, card_id):
+    from .models import Watch
+    card = get_object_or_404(Card.objects.select_related("list__board"), pk=card_id)
+    if not permissions.can_view_card(card, request.user):
+        raise Http404
+    w = Watch.objects.filter(user=request.user, card=card).first()
+    if w:
+        w.delete()
+    else:
+        Watch.objects.create(user=request.user, card=card)
+    return card_response(card.pk, request)
+
+
+@api
+def board_watch(request, board_id):
+    from .models import Watch
+    board = get_object_or_404(Board, pk=board_id)
+    if not permissions.can_view(board, request.user):
+        raise Http404
+    w = Watch.objects.filter(user=request.user, board=board, card__isnull=True).first()
+    if w:
+        w.delete()
+    else:
+        Watch.objects.create(user=request.user, board=board)
+    return {"watching": not w}

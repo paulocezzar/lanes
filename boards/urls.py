@@ -65,6 +65,8 @@ urlpatterns = [
     path("api/boards/<int:board_id>/members/<int:user_id>/", api.board_member_update),
     path("api/boards/<int:board_id>/join/", api.board_join),
     path("api/boards/<int:board_id>/star/", api.board_star),
+    path("api/boards/<int:board_id>/watch/", api.board_watch),
+    path("api/cards/<int:card_id>/watch/", api.card_watch),
     path("api/boards/<int:board_id>/update/", api.board_update),
     path("api/lists/<int:list_id>/", api.list_update),
     path("api/lists/<int:list_id>/move/", api.list_move),

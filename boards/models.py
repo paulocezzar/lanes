@@ -491,11 +491,13 @@ class Notification(models.Model):
     """Something a person should know about: assigned, mentioned, a comment on
     their card, or a due date coming up."""
 
-    ASSIGNED, ITEM_ASSIGNED, MENTIONED, COMMENTED, DUE_SOON, ITEM_DUE_SOON, ADDED_TO_BOARD = (
-        "assigned", "item_assigned", "mentioned", "commented", "due_soon", "item_due_soon", "added_to_board")
+    ASSIGNED, ITEM_ASSIGNED, MENTIONED, COMMENTED, DUE_SOON, ITEM_DUE_SOON, ADDED_TO_BOARD, WATCHED = (
+        "assigned", "item_assigned", "mentioned", "commented", "due_soon", "item_due_soon", "added_to_board",
+        "watched")
     KINDS = [(ASSIGNED, "Assigned to a card"), (ITEM_ASSIGNED, "Assigned a checklist item"),
              (MENTIONED, "Mentioned"), (COMMENTED, "Comment on your card"), (DUE_SOON, "Card due soon"),
-             (ITEM_DUE_SOON, "Checklist item due soon"), (ADDED_TO_BOARD, "Added to a board")]
+             (ITEM_DUE_SOON, "Checklist item due soon"), (ADDED_TO_BOARD, "Added to a board"),
+             (WATCHED, "Something you watch changed")]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
@@ -568,3 +570,20 @@ class SavedSearch(models.Model):
 
     class Meta:
         ordering = ["name"]
+
+
+class Watch(models.Model):
+    """Follow a card or a whole board you aren't assigned to and hear about changes."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="watches")
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, null=True, blank=True, related_name="watches")
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, null=True, blank=True, related_name="watches")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "board"], condition=models.Q(card__isnull=True),
+                                    name="uniq_watch_board"),
+            models.UniqueConstraint(fields=["user", "card"], condition=models.Q(card__isnull=False),
+                                    name="uniq_watch_card"),
+        ]

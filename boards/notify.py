@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from . import permissions
-from .models import BoardMember, Card, ChecklistItem, Notification
+from .models import BoardMember, Card, ChecklistItem, Notification, Watch
 
 
 def send(recipient, kind, *, actor=None, card=None, board=None, text, excerpt="", dedupe_key=""):
@@ -70,9 +70,71 @@ def on_comment(comment, people):
         mentioned += [u for u in group if u not in mentioned]
     for u in mentioned:
         send(u, Notification.MENTIONED, actor=author, card=card, text=f"mentioned you on {title}", excerpt=excerpt)
+    told = set(u.pk for u in mentioned)
     for u in card.members.all():
-        if u not in mentioned:
+        if u.pk not in told:
+            told.add(u.pk)
             send(u, Notification.COMMENTED, actor=author, card=card, text=f"commented on {title}", excerpt=excerpt)
+    for u in watchers(card=card):
+        if u.pk not in told:
+            told.add(u.pk)
+            send(u, Notification.WATCHED, actor=author, card=card, text=f"commented on {title}", excerpt=excerpt)
+
+
+# ---------- watching ----------
+
+def watchers(card=None, board=None):
+    """People watching this card, or the board it (or `board`) is on."""
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q
+    board = board or (card.list.board if card else None)
+    q = Q(watches__board=board, watches__card__isnull=True) if board else Q()
+    if card is not None:
+        q |= Q(watches__card=card)
+    return list(get_user_model().objects.filter(q, is_active=True).distinct())
+
+
+# Activity a watcher hears about. Noisy verbs (ticks, renames) roll up into
+# the same unread notification rather than one each.
+WATCH_VERBS = {"card_created", "card_moved", "card_completed", "card_reopened", "card_archived", "card_restored",
+               "card_renamed", "due_set", "due_removed", "member_added", "member_joined", "member_removed",
+               "member_left", "checklist_added", "item_done", "item_undone", "list_created", "attachment_added",
+               "mirrored", "automation", "button"}
+
+
+def on_activity(activity):
+    if activity.verb not in WATCH_VERBS:
+        return
+    card, board = activity.card, activity.board
+    people = watchers(card=card, board=board)
+    if not people:
+        return
+    text = activity.text()
+    if card is not None:
+        text = text.replace("this card", f"“{card.title}”")
+        if "“" not in text:
+            text = f"{text} on “{card.title}”"
+    else:
+        text = f"{text} on {board.title}"
+    since = timezone.now() - timedelta(hours=1)
+    for u in people:
+        if activity.actor_id and u.pk == activity.actor_id:
+            continue
+        recent = Notification.objects.filter(recipient=u, kind=Notification.WATCHED, read_at__isnull=True,
+                                             card=card, board=board, created_at__gte=since,
+                                             dedupe_key__startswith="watch:").first()
+        if recent:
+            n = int(recent.dedupe_key.rsplit(":", 1)[-1]) + 1
+            recent.actor, recent.text = activity.actor, text[:300]
+            recent.excerpt = f"…and {n - 1} other change{'s' if n > 2 else ''}"
+            recent.dedupe_key = f"watch:{n}"
+            recent.created_at = timezone.now()
+            recent.save(update_fields=["actor", "text", "excerpt", "dedupe_key", "created_at"])
+        else:
+            n = send(u, Notification.WATCHED, actor=activity.actor, card=card, board=board, text=text)
+            if n:
+                n.dedupe_key = "watch:1"
+                n.save(update_fields=["dedupe_key"])
 
 
 # ---------- due-date reminders ----------

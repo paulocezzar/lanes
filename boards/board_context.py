@@ -35,6 +35,7 @@ def board_context(request, board_id, view):
         "open_card": request.GET.get("card"),
         "my_workspaces": _my_workspaces(request.user),
         "ai_enabled": ai.enabled(),
+        "watching_board": board.watches.filter(user=request.user, card__isnull=True).exists(),
     }
 
 
