@@ -1529,3 +1529,43 @@ class DueRuleTests(TestCase):
         self.assertEqual(automation.run_due_rules(), 1)
         late.refresh_from_db()
         self.assertIn("⏰", late.stickers)
+
+
+class AIFeatureTests(TestCase):
+    def setUp(self):
+        from .models import Comment
+        self.ws = Workspace.objects.create(name="Bakery AI")
+        self.u = User.objects.create_user("ai@x.com", "pw", first_name="Ava")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.board = Board.objects.create(workspace=self.ws, title="Xmas")
+        BoardMember.objects.create(board=self.board, user=self.u, role="admin")
+        self.lst = List.objects.create(board=self.board, title="Doing")
+        self.card = Card.objects.create(list=self.lst, title="Order cake boards")
+        self.card.members.add(self.u)
+        Comment.objects.create(card=self.card, author=self.u, body="Supplier says Thursday")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def j(self, url, data=None):
+        return self.c.post(url, json.dumps(data or {}), content_type="application/json")
+
+    def test_endpoints(self):
+        from unittest import mock
+        from django.test import override_settings
+        from . import ai
+        with override_settings(ANTHROPIC_API_KEY="test"):
+            with mock.patch.object(ai, "_call", return_value='{"summary": "Boards ordered, arriving Thu.", "status": "on track", "next": "Confirm delivery", "open_questions": ["Which size?"]}') as m:
+                r = self.j(f"/api/cards/{self.card.pk}/summarise/")
+                self.assertEqual(r.json()["status"], "on track")
+                self.assertIn("Supplier says Thursday", m.call_args[0][1])     # comments go to the model
+            with mock.patch.object(ai, "_call", return_value="## Plan\n- **20** boards"):
+                r = self.j(f"/api/cards/{self.card.pk}/write-description/", {"notes": "20 boards"})
+                self.assertIn("**20**", r.json()["text"])
+            with mock.patch.object(ai, "_call", return_value=f'{{"picks": [{{"id": "c{self.card.pk}", "why": "Due soon"}}, {{"id": "c999", "why": "made up"}}], "note": "Start early"}}'):
+                r = self.j("/api/ai/priorities/")
+                self.assertContains(r, "Order cake boards")
+                self.assertNotIn("made up", r.json()["html"])                  # ids not given are ignored
+            self.assertContains(self.c.get(f"/cards/{self.card.pk}/"), "data-summarise")
+            self.assertContains(self.c.get("/my-cards/"), "What should I do first")
+        # without a key the buttons don't show and the API says so
+        self.assertNotContains(self.c.get(f"/cards/{self.card.pk}/"), "data-summarise")
+        self.assertEqual(self.j(f"/api/cards/{self.card.pk}/summarise/").status_code, 503)

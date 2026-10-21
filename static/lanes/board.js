@@ -315,6 +315,7 @@
   function wireModal() {
     const root = $('.cm', dialogBody);
     if (!root) return;
+    setTimeout(() => showSummary && showSummary());
     const title = $('[data-card-title]', root);
     if (title) inlineEdit(title, v => cardPost('update', { title: v }));
 
@@ -360,6 +361,8 @@
     }
     if (!t.closest('.pop')) hidePops();
 
+    if (t.closest('[data-summarise]')) return loadSummary();
+    if (t.closest('[data-write-desc]')) return writeDescription(t.closest('[data-write-desc]'));
     if (t.closest('[data-watch-card]')) return cardPost('watch');
     if (t.closest('[data-vote]')) return cardPost('vote');
     const react = t.closest('[data-react]');
@@ -722,6 +725,51 @@
   document.addEventListener('click', e => {
     $$('details.menu[open]').forEach(d => { if (!d.contains(e.target)) d.removeAttribute('open'); });
   });
+
+  // ---------- ✨ summary and writing help ----------
+  const summaries = {};          // card id → html, so a live refresh doesn't lose it
+  const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function showSummary() {
+    const box = $('[data-summary-box]', dialogBody);
+    if (!box || !summaries[openCardId]) return;
+    box.innerHTML = summaries[openCardId];
+    box.hidden = false;
+  }
+  async function loadSummary() {
+    const box = $('[data-summary-box]', dialogBody);
+    if (!box) return;
+    box.hidden = false;
+    box.innerHTML = '<p class="muted small">✨ Reading the card…</p>';
+    const id = openCardId;
+    try {
+      const d = await post(`/api/cards/${id}/summarise/`);
+      const status = d.status ? `<span class="ai-status s-${d.status.replace(' ', '-')}">${escHtml(d.status)}</span>` : '';
+      summaries[id] = `<div class="ai-summary-head"><b>✨ Summary</b>${status}<button class="icon-btn xs" data-close-summary title="Hide">×</button></div>
+        <p>${escHtml(d.summary)}</p>
+        ${d.next ? `<p><b>Next:</b> ${escHtml(d.next)}</p>` : ''}
+        ${d.questions.length ? `<p class="muted small">Open questions:</p><ul>${d.questions.map(q => `<li>${escHtml(q)}</li>`).join('')}</ul>` : ''}`;
+      if (id === openCardId) showSummary();
+    } catch { box.innerHTML = '<p class="muted small">Couldn\'t summarise right now.</p>'; }
+  }
+  dialogBody.addEventListener('click', e => {
+    if (!e.target.closest('[data-close-summary]')) return;
+    delete summaries[openCardId];
+    const box = $('[data-summary-box]', dialogBody); box.hidden = true; box.innerHTML = '';
+  });
+  async function writeDescription(btn) {
+    const ta = $('[data-description] textarea', dialogBody);
+    if (!ta) return;
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = '✨ Writing…';
+    try {
+      const d = await post(`/api/cards/${openCardId}/write-description/`, { notes: ta.value });
+      ta.value = d.text;
+      ta.focus();
+      toast('Draft written — check it, then Save. Cancel puts back what was there.');
+    } catch { /* toast already shown */ }
+    finally { btn.disabled = false; btn.textContent = label; }
+  }
 
   // ---------- ✨ suggest steps ----------
   async function loadSuggestions() {

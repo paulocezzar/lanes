@@ -828,3 +828,77 @@ def card_delete(request, card_id):
             pass
     card.delete()
     return {"ok": True, "deleted": card_id}
+
+
+# ---------- ✨ AI: summary, writing help, priorities ----------
+
+@api
+def card_summarise(request, card_id):
+    from . import ai
+    card = get_object_or_404(cards_qs(), pk=card_id)
+    if not permissions.can_view_card(card, request.user):
+        raise Http404
+    try:
+        return ai.summarise_card(card)
+    except ai.AIUnavailable as e:
+        raise ApiError(str(e), 503)
+
+
+@api
+def card_write_description(request, card_id):
+    from . import ai
+    card = _card(request, card_id)
+    try:
+        return {"text": ai.write_description(card.title, (request.data.get("notes") or "")[:6000])}
+    except ai.AIUnavailable as e:
+        raise ApiError(str(e), 503)
+
+
+@api
+def my_priorities(request):
+    """✨ What should I do first? — from the cards and checklist items assigned to me."""
+    from . import ai
+    user = request.user
+    now = timezone.now()
+    boards = permissions.visible_boards(user).filter(is_template=False)
+    cards = list(cards_qs().filter(members=user, is_archived=False, is_complete=False, list__board__in=boards,
+                                   list__is_archived=False).order_by("due_at")[:40])
+    items = list(ChecklistItem.objects.filter(assignee=user, is_done=False, checklist__card__is_archived=False,
+                                              checklist__card__list__board__in=boards)
+                 .select_related("checklist__card__list__board").order_by("due_at")[:20])
+    if not cards and not items:
+        raise ApiError("Nothing is assigned to you right now.")
+
+    def when(dt):
+        if not dt:
+            return "no due date"
+        local = timezone.localtime(dt)
+        days = (local.date() - timezone.localdate()).days
+        rel = "OVERDUE" if dt < now else ("today" if days == 0 else "tomorrow" if days == 1 else f"in {days} days")
+        return f"due {local:%a %-d %b %H:%M} ({rel})"
+
+    entries, lookup = [], {}
+    for c in cards:
+        done, total = c.checklist_counts()
+        labels = ", ".join(str(l) for l in c.labels.all())
+        text = (f"card “{c.title}” on {c.list.board.title} › {c.list.title}; {when(c.due_at)}"
+                + (f"; labels: {labels}" if labels else "") + (f"; checklist {done}/{total}" if total else "")
+                + f"; {len(c.comments.all())} comments; last changed {timezone.localtime(c.updated_at):%-d %b}")
+        entries.append({"id": f"c{c.pk}", "text": text})
+        lookup[f"c{c.pk}"] = {"title": c.title, "where": f"{c.list.board.title} › {c.list.title}",
+                              "url": f"/b/{c.list.board_id}/?card={c.pk}", "due_state": c.due_state,
+                              "due": timezone.localtime(c.due_at).strftime("%-d %b") if c.due_at else ""}
+    for it in items:
+        c = it.checklist.card
+        entries.append({"id": f"i{it.pk}", "text": f"checklist item “{it.text}” on card “{c.title}” "
+                                                  f"({c.list.board.title}); {when(it.due_at)}"})
+        lookup[f"i{it.pk}"] = {"title": it.text, "where": f"☐ on {c.title}", "url": f"/b/{c.list.board_id}/?card={c.pk}",
+                               "due_state": it.due_state,
+                               "due": timezone.localtime(it.due_at).strftime("%-d %b") if it.due_at else ""}
+    try:
+        picks, note = ai.priorities(entries, timezone.localdate())
+    except ai.AIUnavailable as e:
+        raise ApiError(str(e), 503)
+    html = render_to_string("boards/_priorities.html", {"picks": [{**lookup[p["id"]], "why": p["why"]} for p in picks],
+                                                        "note": note}, request=request)
+    return {"html": html}

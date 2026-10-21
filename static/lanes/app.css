@@ -940,3 +940,25 @@ a.hbar-label:hover { text-decoration: underline; }
 .setting select { max-width: 520px; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 .row-actions form { margin: 0; }
+
+/* ---------- ✨ AI extras ---------- */
+.chip-btn.sm { padding: 3px 8px; font-size: 12px; }
+.cm-side .cm-h-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai-summary { background: linear-gradient(135deg, rgb(87 157 255 / .10), rgb(159 143 239 / .10)); border: 1px solid rgb(159 143 239 / .35);
+  border-radius: 10px; padding: 10px 12px; margin: 6px 0 12px; font-size: 13px; line-height: 1.5; }
+.ai-summary p { margin: 4px 0; }
+.ai-summary ul { margin: 2px 0 0; padding-left: 18px; }
+.ai-summary-head { display: flex; align-items: center; gap: 8px; }
+.ai-summary-head .icon-btn { margin-left: auto; }
+.ai-status { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 7px; border-radius: 999px; background: var(--surface-3); }
+.ai-status.s-on-track, .ai-status.s-done { background: rgb(75 206 151 / .18); color: var(--ok); }
+.ai-status.s-at-risk { background: rgb(245 205 71 / .2); color: var(--warn); }
+.ai-status.s-blocked { background: rgb(248 113 104 / .18); color: var(--danger); }
+.prio-section { background: var(--surface); border-radius: 12px; padding: 16px 18px; }
+.prio-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.prio-head h2 { margin: 0; }
+.prio-list { margin: 10px 0 6px; padding-left: 22px; display: grid; gap: 8px; }
+.prio-list a { display: grid; gap: 2px; color: var(--text); text-decoration: none; padding: 6px 8px; border-radius: 8px; }
+.prio-list a:hover { background: var(--surface-2); }
+.prio-list .badge { display: inline-flex; margin-left: 6px; }
+.prio-why { font-size: 13px; color: var(--text-2); }

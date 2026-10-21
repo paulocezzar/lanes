@@ -115,3 +115,117 @@ def suggest_steps(title, description="", existing=()):
     if not steps:
         raise AIUnavailable("The AI didn't suggest any steps for this card.")
     return (str(data.get("title") or "Checklist").strip()[:120] or "Checklist"), steps
+
+
+# ---------- ✨ summarise a card ----------
+
+SUMMARY_SYSTEM = """You summarise a task card from a team board in a UK bakery and food business, for a manager catching up.
+
+Write in plain British English. Be concrete: names, numbers and dates from the card. Don't invent anything that isn't in the card.
+
+Reply with JSON only, no prose:
+{"summary": "2–4 sentences: what this is and where it stands now",
+ "status": "one of: on track, at risk, blocked, done, not started",
+ "next": "the single most useful next step, under 120 characters, or empty if done",
+ "open_questions": ["unresolved questions or decisions from the comments, max 3"]}"""
+
+
+def card_brief(card):
+    """Everything about a card, as plain text for the model."""
+    from django.utils import timezone
+    lines = [f"Title: {card.title}", f"Board: {card.list.board.title} › list “{card.list.title}”",
+             f"Complete: {'yes' if card.is_complete else 'no'}"]
+    if card.due_at:
+        lines.append(f"Due: {timezone.localtime(card.due_at):%a %-d %b %Y %H:%M}")
+    if card.start_date:
+        lines.append(f"Start: {card.start_date:%-d %b %Y}")
+    members = [u.display_name for u in card.members.all()]
+    lines.append(f"Members: {', '.join(members) or 'nobody'}")
+    labels = [str(l) for l in card.labels.all()]
+    if labels:
+        lines.append(f"Labels: {', '.join(labels)}")
+    for v in card.field_values.all():
+        if v.display():
+            lines.append(f"{v.field.name}: {v.display()}")
+    if card.description:
+        lines.append(f"\nDescription:\n{card.description[:3000]}")
+    for cl in card.checklists.all():
+        items = list(cl.items.all())
+        lines.append(f"\nChecklist “{cl.title}” ({sum(i.is_done for i in items)}/{len(items)} done):")
+        lines += [f"- [{'x' if i.is_done else ' '}] {i.text}" + (f" (assigned {i.assignee.display_name})" if i.assignee else "")
+                  for i in items[:40]]
+    comments = list(card.comments.select_related("author").order_by("-created_at")[:40])[::-1]
+    if comments:
+        lines.append("\nComments (oldest first):")
+        lines += [f"- {timezone.localtime(c.created_at):%-d %b %H:%M} {c.author.display_name if c.author else 'Automation'}: "
+                  f"{c.body[:600]}" for c in comments]
+    acts = list(card.activity.select_related("actor").order_by("-created_at")[:25])[::-1]
+    if acts:
+        lines.append("\nActivity (oldest first):")
+        lines += [f"- {timezone.localtime(a.created_at):%-d %b} {a.actor.display_name if a.actor else 'Automation'} {a.text()}"
+                  for a in acts]
+    return "\n".join(lines)
+
+
+def summarise_card(card):
+    from django.utils import timezone
+    data = _json(_call(SUMMARY_SYSTEM, f"Today is {timezone.localdate():%A %-d %B %Y}.\n\n{card_brief(card)}",
+                       max_tokens=700))
+    status = str(data.get("status") or "").strip().lower()
+    return {
+        "summary": str(data.get("summary") or "").strip()[:1200],
+        "status": status if status in ("on track", "at risk", "blocked", "done", "not started") else "",
+        "next": str(data.get("next") or "").strip()[:200],
+        "questions": [str(q).strip()[:200] for q in (data.get("open_questions") or []) if str(q).strip()][:3],
+    }
+
+
+# ---------- ✨ what should I do first? ----------
+
+PRIORITY_SYSTEM = """You help someone in a UK bakery and food business decide what to work on first today.
+You get their open cards and checklist items with due dates, lists, labels and progress.
+
+Pick the 5 (or fewer) most important to tackle first. Weigh: overdue and due-soon dates, labels like Urgent,
+things others are waiting on (lists like "Waiting"/"Doing", comments), and quick wins that unblock others.
+Use only the ids given. Each reason is under 110 characters and concrete (mention the date or the reason).
+
+Reply with JSON only, no prose:
+{"picks": [{"id": "c12", "why": "..."}], "note": "one short sentence of overall advice, or empty"}"""
+
+
+def priorities(entries, today):
+    """entries: [{"id": "c12" | "i5", "text": "..."}]. Returns (picks, note)."""
+    listing = "\n".join(f"{e['id']}: {e['text']}" for e in entries)
+    data = _json(_call(PRIORITY_SYSTEM, f"Today is {today:%A %-d %B %Y}.\n\nOpen work:\n{listing}", max_tokens=700))
+    ids = {e["id"] for e in entries}
+    picks, seen = [], set()
+    for p in data.get("picks") or []:
+        pid = str(p.get("id") or "").strip()
+        if pid in ids and pid not in seen:
+            seen.add(pid)
+            picks.append({"id": pid, "why": str(p.get("why") or "").strip()[:160]})
+    if not picks:
+        raise AIUnavailable("The AI couldn't pick priorities this time. Try again.")
+    return picks[:5], str(data.get("note") or "").strip()[:200]
+
+
+# ---------- ✨ write up a description ----------
+
+WRITE_SYSTEM = """You turn rough notes into a clear card description for a team board in a UK bakery and food business.
+
+Rules:
+- Keep every fact from the notes (names, quantities, dates, suppliers). Never invent facts.
+- British English, plain and friendly, no corporate fluff.
+- Use this light formatting only: **bold** for key facts, "- " bullet lists, and "## " for at most 2 short headings if helpful.
+- Usually 40–150 words. If the notes are already clear, just tidy them.
+- If the notes are empty, write a short useful description from the title alone and keep it general.
+
+Reply with the description text only — no preamble, no code fences."""
+
+
+def write_description(title, notes):
+    text = _call(WRITE_SYSTEM, f"Card title: {title}\n\nRough notes:\n{notes or '(none)'}", max_tokens=700).strip()
+    text = re.sub(r"^```\w*\n?|\n?```$", "", text).strip()
+    if not text:
+        raise AIUnavailable("The AI didn't write anything. Try again.")
+    return text[:6000]

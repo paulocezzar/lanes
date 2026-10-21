@@ -167,7 +167,7 @@
         {% if card.description %}<div class="desc-read md" data-desc-view title="Click to edit">{{ card.description|md }}</div>{% endif %}
         <form data-description {% if card.description %}hidden{% endif %}>
           <textarea name="description" rows="{% if card.description %}6{% else %}3{% endif %}" placeholder="Add a more detailed description…">{{ card.description }}</textarea>
-          <div class="row save-row" hidden><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-cancel-desc>Cancel</button><span class="md-hint">**bold** · *italic* · - list · [link](https://…)</span></div>
+          <div class="row save-row" hidden><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-cancel-desc>Cancel</button>{% if ai_enabled %}<button type="button" class="btn ghost sm ai-chip" data-write-desc title="AI turns your rough notes into a clear description">✨ Write it up</button>{% endif %}<span class="md-hint">**bold** · *italic* · - list · [link](https://…)</span></div>
         </form>
         {% else %}<div class="desc-read md">{% if card.description %}{{ card.description|md }}{% else %}No description.{% endif %}</div>{% endif %}
       </section>
@@ -252,7 +252,9 @@
     </div>
 
     <aside class="cm-side">
-      <h4 class="cm-h">{% include "boards/_icon.html" with i="comment" %}Comments and activity</h4>
+      <div class="cm-h-row"><h4 class="cm-h">{% include "boards/_icon.html" with i="comment" %}Comments and activity</h4>
+        {% if ai_enabled %}<button class="chip-btn ai-chip sm" data-summarise title="AI summary of this card and its comments">✨ Summarise</button>{% endif %}</div>
+      <div class="ai-summary" data-summary-box hidden></div>
       {% if can_comment %}
       <form class="comment-new" data-comment-new data-people='[{% for u in people %}{"name": "{{ u.display_name|escapejs }}", "initials": "{{ u.initials }}", "hue": {{ u.avatar_hue }}}{% if not forloop.last %},{% endif %}{% endfor %}]'>
         <textarea name="body" rows="2" placeholder="Write a comment… type @ to mention someone" maxlength="5000"></textarea>

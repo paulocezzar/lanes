@@ -118,7 +118,8 @@ def my_cards(request):
                                           checklist__card__list__is_archived=False,
                                           checklist__card__list__board__in=boards)
              .select_related("checklist__card__list__board").order_by("due_at", "id"))
-    return render(request, "boards/my_cards.html", {"cards": cards, "items": items})
+    from . import ai
+    return render(request, "boards/my_cards.html", {"ai_enabled": ai.enabled(), "cards": cards, "items": items})
 
 
 @login_required

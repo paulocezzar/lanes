@@ -1,0 +1,7 @@
+<ol class="prio-list">
+  {% for p in picks %}
+  <li><a href="{{ p.url }}"><span><b>{{ p.title }}</b>{% if p.due %} <span class="badge due-{{ p.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ p.due }}</span>{% endif %}</span><small class="muted">{{ p.where }}</small><span class="prio-why">{{ p.why }}</span></a></li>
+  {% endfor %}
+</ol>
+{% if note %}<p class="muted small">💡 {{ note }}</p>{% endif %}
+<p class="muted small">AI can get things wrong — use your judgement.</p>
