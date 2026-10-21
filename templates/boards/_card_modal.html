@@ -43,6 +43,14 @@
             </form>
           </div>
         </div>
+        {% if ai_enabled %}
+        <div class="pop-wrap"><button class="chip-btn ai-chip" data-pop="suggest" data-suggest-steps title="Let AI draft a checklist from this card's title and description">✨ Suggest steps</button>
+          <div class="pop wide-pop" data-pop-panel="suggest" hidden>
+            <div class="pop-head">Suggested steps</div>
+            <div data-suggest-body><p class="muted small">Thinking…</p></div>
+          </div>
+        </div>
+        {% endif %}
         <div class="pop-wrap"><button class="chip-btn" data-pop="checklist">{% include "boards/_icon.html" with i="check" %}Checklist</button>
           <div class="pop" data-pop-panel="checklist" hidden>
             <div class="pop-head">Add checklist</div>

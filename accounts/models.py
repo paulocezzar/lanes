@@ -30,6 +30,8 @@ class User(AbstractUser):
 
     username = None
     email = models.EmailField(unique=True)
+    THEMES = [("system", "Match my device"), ("light", "Light"), ("dark", "Dark")]
+    theme = models.CharField(max_length=10, choices=THEMES, default="system")
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]

@@ -1,5 +1,5 @@
 {% load static %}<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme }}{% else %}system{% endif %}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -37,6 +37,9 @@
         <summary class="avatar lg" style="--h:{{ user.avatar_hue }}" title="{{ user.display_name }}">{{ user.initials }}</summary>
         <div class="menu-panel right">
           <div class="menu-head">{{ user.display_name }}<small>{{ user.email }}</small></div>
+          <div class="theme-pick" role="group" aria-label="Theme">
+            {% for key, label in user.THEMES %}<button class="theme-opt{% if user.theme == key %} on{% endif %}" data-theme-set="{{ key }}">{% if key == "light" %}☀️{% elif key == "dark" %}🌙{% else %}💻{% endif %} {{ label }}</button>{% endfor %}
+          </div>
           <a class="menu-item" href="{% url 'password_change' %}">Change password</a>
           <a class="menu-item" href="{% url 'export_all' %}">Export all my boards (JSON)</a>
           <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="menu-item">Log out</button></form>
@@ -50,7 +53,17 @@
   {% endif %}
   {% block content %}{% endblock %}
   <div id="toast" class="toast floating" hidden></div>
-  <script>setTimeout(() => document.querySelectorAll('.toasts .toast').forEach(t => t.remove()), 5000);</script>
+  <script>
+    setTimeout(() => document.querySelectorAll('.toasts .toast').forEach(t => t.remove()), 5000);
+    document.querySelectorAll('[data-theme-set]').forEach(b => b.addEventListener('click', async () => {
+      const theme = b.dataset.themeSet;
+      document.documentElement.dataset.theme = theme;
+      document.querySelectorAll('[data-theme-set]').forEach(x => x.classList.toggle('on', x === b));
+      const fd = new FormData(); fd.append('theme', theme);
+      await fetch('{% url "set_theme" %}', { method: 'POST', body: fd, credentials: 'same-origin',
+        headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
+    }));
+  </script>
   {% if user.is_authenticated %}<script src="{% static 'lanes/notify.js' %}"></script>{% endif %}
   {% block scripts %}{% endblock %}
 </body>

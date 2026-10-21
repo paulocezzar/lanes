@@ -74,6 +74,7 @@ urlpatterns = [
     path("api/cards/<int:card_id>/labels/", api.card_toggle_label),
     path("api/cards/<int:card_id>/members/", api.card_toggle_member),
     path("api/cards/<int:card_id>/checklists/", api.checklist_create),
+    path("api/cards/<int:card_id>/suggest-steps/", api.suggest_steps),
     path("api/cards/<int:card_id>/comments/", api.comment_create),
     path("api/checklists/<int:checklist_id>/", api.checklist_update),
     path("api/checklists/<int:checklist_id>/items/", api.item_create),

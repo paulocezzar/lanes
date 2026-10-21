@@ -265,9 +265,25 @@ def card_toggle_member(request, card_id):
 def checklist_create(request, card_id):
     card = _card(request, card_id)
     title = _text(request.data.get("title") or "Checklist", 120, "title")
-    Checklist.objects.create(card=card, title=title, position=positions.end_position(card.checklists.all()))
+    cl = Checklist.objects.create(card=card, title=title, position=positions.end_position(card.checklists.all()))
+    items = [str(t).strip()[:250] for t in (request.data.get("items") or []) if str(t).strip()][:50]
+    for i, text in enumerate(items, start=1):
+        ChecklistItem.objects.create(checklist=cl, text=text, position=i * positions.GAP)
     log(card.list.board, request.user, "checklist_added", card=card, title=title)
     return card_response(card.pk, request)
+
+
+@api
+def suggest_steps(request, card_id):
+    """AI-drafted checklist for this card — returned for review, not saved."""
+    from . import ai
+    card = _card(request, card_id)
+    existing = [i.text for cl in card.checklists.all() for i in cl.items.all()]
+    try:
+        title, steps = ai.suggest_steps(card.title, card.description, existing)
+    except ai.AIUnavailable as e:
+        raise ApiError(str(e), 503)
+    return {"title": title, "steps": steps}
 
 
 def _checklist(request, checklist_id):

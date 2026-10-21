@@ -3,7 +3,7 @@ from django.conf import settings
 from django.db.models import Prefetch
 from django.template.loader import render_to_string
 
-from . import permissions
+from . import ai, permissions
 from django.contrib.auth import get_user_model
 
 from .models import (COLOURS, STICKERS, Activity, BoardMember, Card, CardFieldValue, CardMirror, Checklist,
@@ -74,6 +74,7 @@ def render_modal(card, request):
         "max_mb": settings.ATTACHMENT_MAX_MB,
         "field_kinds": CustomField.KINDS,
         "colours": COLOURS,
+        "ai_enabled": ai.enabled(),
         "sticker_choices": STICKERS,
     }
     return render_to_string("boards/_card_modal.html", ctx, request=request)

@@ -707,3 +707,80 @@ button.colour-dot { width: 24px; height: 24px; border-radius: 50%; cursor: point
 .expand-btn { border: 0; background: none; color: var(--text); cursor: pointer; writing-mode: vertical-rl; padding: 12px 0; width: 44px;
   display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; }
 .expand-btn b { color: var(--text-2); font-size: 12px; }
+.ai-chip { border-color: #6c4bd1; }
+.wide-pop { width: 340px; }
+.suggest-step { align-items: flex-start; padding: 3px 0; }
+.suggest-step input { margin-top: 2px; flex: none; }
+
+
+/* ---------- light theme (profile menu → Light / Match my device) ---------- */
+:root[data-theme="light"] {
+  --bg: #f7f8f9;
+  --surface: #ffffff;
+  --surface-2: #f1f2f4;
+  --surface-3: #dcdfe4;
+  --list: #f1f2f4;
+  --card: #ffffff;
+  --card-hover: #f7f8f9;
+  --text: #172b4d;
+  --text-2: #44546f;
+  --border: #dcdfe4;
+  --accent: #0c66e4;
+  --accent-ink: #ffffff;
+  --danger: #c9372c;
+  --shadow: 0 8px 24px rgb(9 30 66 / .18);
+  color-scheme: light;
+}
+:root[data-theme="light"] .icon-btn:not(.light):hover { background: rgb(9 30 66 / .08); }
+:root[data-theme="light"] .card-tile, :root[data-theme="light"] .inbox-item, :root[data-theme="light"] .plan-chip, :root[data-theme="light"] .chip { box-shadow: 0 1px 1px rgb(9 30 66 / .25); }
+:root[data-theme="light"] .callout { background: #e3f5ec; border-color: #9fd8bd; }
+:root[data-theme="light"] .callout p, :root[data-theme="light"] .creds dt { color: #216e4e; }
+:root[data-theme="light"] .warn-note, :root[data-theme="light"] .archived-flag { background: #fff4d6; color: #7f5f01; }
+:root[data-theme="light"] .btn.danger, :root[data-theme="light"] .toast.error { background: #ffeceb; color: #ae2e24; }
+:root[data-theme="light"] .mirror-flag { color: #5e4db2; }
+:root[data-theme="light"] .s-complete, :root[data-theme="light"] .stat-num.ok { color: #1f845a; }
+:root[data-theme="light"] .s-soon, :root[data-theme="light"] .stat-num.warn { color: #946f00; }
+:root[data-theme="light"] .tl-day.weekend { background: rgb(9 30 66 / .04); }
+:root[data-theme="light"] .cal-day.out { background: rgb(9 30 66 / .03); }
+:root[data-theme="light"] .notif.unread { background: rgb(12 102 228 / .07); }
+:root[data-theme="light"] .bell-panel, :root[data-theme="light"] .menu-panel, :root[data-theme="light"] .pop, :root[data-theme="light"] .item-pop, :root[data-theme="light"] .mention-pop { border: 1px solid var(--border); }
+:root[data-theme="light"] .topbar { background: #ffffff; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+  --bg: #f7f8f9;
+  --surface: #ffffff;
+  --surface-2: #f1f2f4;
+  --surface-3: #dcdfe4;
+  --list: #f1f2f4;
+  --card: #ffffff;
+  --card-hover: #f7f8f9;
+  --text: #172b4d;
+  --text-2: #44546f;
+  --border: #dcdfe4;
+  --accent: #0c66e4;
+  --accent-ink: #ffffff;
+  --danger: #c9372c;
+  --shadow: 0 8px 24px rgb(9 30 66 / .18);
+  color-scheme: light;
+  }
+:root[data-theme="system"] .icon-btn:not(.light):hover { background: rgb(9 30 66 / .08); }
+:root[data-theme="system"] .card-tile, :root[data-theme="system"] .inbox-item, :root[data-theme="system"] .plan-chip, :root[data-theme="system"] .chip { box-shadow: 0 1px 1px rgb(9 30 66 / .25); }
+:root[data-theme="system"] .callout { background: #e3f5ec; border-color: #9fd8bd; }
+:root[data-theme="system"] .callout p, :root[data-theme="system"] .creds dt { color: #216e4e; }
+:root[data-theme="system"] .warn-note, :root[data-theme="system"] .archived-flag { background: #fff4d6; color: #7f5f01; }
+:root[data-theme="system"] .btn.danger, :root[data-theme="system"] .toast.error { background: #ffeceb; color: #ae2e24; }
+:root[data-theme="system"] .mirror-flag { color: #5e4db2; }
+:root[data-theme="system"] .s-complete, :root[data-theme="system"] .stat-num.ok { color: #1f845a; }
+:root[data-theme="system"] .s-soon, :root[data-theme="system"] .stat-num.warn { color: #946f00; }
+:root[data-theme="system"] .tl-day.weekend { background: rgb(9 30 66 / .04); }
+:root[data-theme="system"] .cal-day.out { background: rgb(9 30 66 / .03); }
+:root[data-theme="system"] .notif.unread { background: rgb(12 102 228 / .07); }
+:root[data-theme="system"] .bell-panel, :root[data-theme="system"] .menu-panel, :root[data-theme="system"] .pop, :root[data-theme="system"] .item-pop, :root[data-theme="system"] .mention-pop { border: 1px solid var(--border); }
+:root[data-theme="system"] .topbar { background: #ffffff; }
+}
+
+/* theme picker */
+.theme-pick { display: grid; gap: 2px; padding: 4px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.theme-opt { border: 0; background: none; text-align: left; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+.theme-opt:hover { background: var(--surface-3); }
+.theme-opt.on { background: var(--surface-3); font-weight: 700; }

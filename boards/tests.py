@@ -968,3 +968,42 @@ class ListToolsLooksExportTests(TestCase):
         self.card.refresh_from_db()
         self.assertEqual(self.card.stickers, ["✅"])
         self.assertEqual([e["card"].title for e in List.objects.get(pk=done.pk).entries()][0], "=HYPERLINK(evil)")
+
+
+class SuggestStepsThemeTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.user = User.objects.create_user("u@x.com", "pw", first_name="Una")
+        self.board = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=self.board, user=self.user, role="admin")
+        self.card = Card.objects.create(list=List.objects.create(board=self.board, title="L"), title="Launch stollen bites")
+        self.client.force_login(self.user)
+
+    def api(self, url, data=None):
+        return self.client.post(url, json.dumps(data or {}), content_type="application/json")
+
+    def test_suggest_then_add(self):
+        from unittest import mock
+        with self.settings(ANTHROPIC_API_KEY=""):
+            self.assertEqual(self.api(f"/api/cards/{self.card.pk}/suggest-steps/").status_code, 503)
+        reply = '{"title": "Launch plan", "steps": ["Cost the recipe", "Order packaging", ""]}'
+        with self.settings(ANTHROPIC_API_KEY="k"), mock.patch("boards.ai._call", return_value=reply):
+            r = self.api(f"/api/cards/{self.card.pk}/suggest-steps/").json()
+        self.assertEqual(r, {"title": "Launch plan", "steps": ["Cost the recipe", "Order packaging"]})
+        self.api(f"/api/cards/{self.card.pk}/checklists/", {"title": r["title"], "items": r["steps"]})
+        self.assertEqual(self.card.checklist_counts(), (0, 2))
+
+    def test_ai_button_only_when_enabled(self):
+        with self.settings(ANTHROPIC_API_KEY=""):
+            self.assertNotContains(self.client.get(reverse("card_modal", args=[self.card.pk])), "Suggest steps")
+        with self.settings(ANTHROPIC_API_KEY="k"):
+            self.assertContains(self.client.get(reverse("card_modal", args=[self.card.pk])), "Suggest steps")
+
+    def test_theme(self):
+        self.client.post(reverse("set_theme"), {"theme": "light"})
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.theme, "light")
+        self.assertContains(self.client.get(reverse("home")), 'data-theme="light"')
+        self.client.post(reverse("set_theme"), {"theme": "neon"})
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.theme, "light")

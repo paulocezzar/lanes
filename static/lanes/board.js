@@ -349,7 +349,10 @@
     const popBtn = t.closest('[data-pop]');
     if (popBtn) {
       const name = popBtn.dataset.pop;
-      return openPop === name ? hidePops() : showPop(name);
+      if (openPop === name) return hidePops();
+      showPop(name);
+      if (popBtn.hasAttribute('data-suggest-steps')) loadSuggestions();
+      return;
     }
     if (!t.closest('.pop')) hidePops();
 
@@ -594,6 +597,36 @@
   document.addEventListener('click', e => {
     $$('details.menu[open]').forEach(d => { if (!d.contains(e.target)) d.removeAttribute('open'); });
   });
+
+  // ---------- ✨ suggest steps ----------
+  async function loadSuggestions() {
+    const box = $('[data-suggest-body]', dialogBody);
+    if (!box) return;
+    box.innerHTML = '<p class="muted small">Thinking… (a few seconds)</p>';
+    const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    try {
+      const data = await post(`/api/cards/${openCardId}/suggest-steps/`);
+      box.innerHTML = `<form data-suggest-form>
+        <label>Checklist title<input name="title" value="${esc(data.title)}" maxlength="120"></label>
+        ${data.steps.map(s => `<label class="check-inline dark suggest-step"><input type="checkbox" name="step" value="${esc(s)}" checked> ${esc(s)}</label>`).join('')}
+        <p class="muted small">Untick anything you don't want. AI can get things wrong, so check before adding.</p>
+        <div class="row"><button class="btn primary sm">Add checklist</button><button type="button" class="btn ghost sm" data-suggest-again>Try again</button></div>
+      </form>`;
+    } catch {
+      box.innerHTML = '<p class="muted small">Couldn\'t get suggestions right now.</p>';
+    }
+  }
+  dialogBody.addEventListener('submit', async e => {
+    const f = e.target.closest('[data-suggest-form]');
+    if (!f) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const items = [...f.querySelectorAll('input[name=step]:checked')].map(i => i.value);
+    if (!items.length) return toast('Tick at least one step.');
+    hidePops();
+    applyCard(await post(`/api/cards/${openCardId}/checklists/`, { title: f.title.value, items }));
+  }, true);
+  dialogBody.addEventListener('click', e => { if (e.target.closest('[data-suggest-again]')) loadSuggestions(); });
 
   // ---------- attachments ----------
   async function uploadFile(file) {
