@@ -996,3 +996,48 @@ kbd { display: inline-block; min-width: 20px; text-align: center; padding: 1px 6
 .ui-choices { display: grid; gap: 6px; margin: 8px 0 12px; max-height: 50vh; overflow-y: auto; }
 .ui-choice { text-align: left; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 8px; padding: 9px 12px; font: inherit; cursor: pointer; }
 .ui-choice:hover, .ui-choice:focus { border-color: var(--accent); outline: none; }
+.smart-due { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: -2px 0 6px; padding: 4px 8px; border-radius: 6px;
+  background: rgb(87 157 255 / .14); color: var(--text); font-size: 12px; }
+
+/* ---------- quick-edit menu on cards ---------- */
+.card-tile { position: relative; }
+.tile-edit { position: absolute; top: 4px; right: 4px; z-index: 2; width: 26px; height: 26px; border-radius: 6px; border: 0;
+  background: var(--surface-2); color: var(--text); cursor: pointer; opacity: 0; font-size: 13px; }
+.card-tile:hover .tile-edit, .card-tile.kb-current .tile-edit { opacity: .95; }
+.tile-edit:hover { background: var(--surface-3); }
+.quick-menu { position: fixed; z-index: 90; display: grid; gap: 4px; min-width: 190px; }
+.quick-menu button { display: flex; align-items: center; gap: 8px; text-align: left; border: 0; border-radius: 6px; padding: 7px 12px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 2px 8px rgb(0 0 0 / .35); width: max-content; }
+.quick-menu button:hover, .quick-menu button:focus { background: var(--surface-3); outline: none; }
+.quick-menu button span { width: 18px; text-align: center; }
+@media (hover: none) { .tile-edit { opacity: .8; } }
+
+/* ---------- list header + full list colours ---------- */
+.list-collapse { opacity: .55; font-size: 15px; }
+.list-head:hover .list-collapse { opacity: 1; }
+.list.list-c { border-top: 0; background: color-mix(in srgb, var(--lc) 38%, var(--list)); }
+.list.list-c .list-head { background: transparent; }
+.auto-form.flash { box-shadow: 0 0 0 2px var(--accent); border-radius: 10px; }
+a.menu-item { display: block; text-decoration: none; color: inherit; }
+
+/* ---------- visibility popover, labels tab ---------- */
+button.board-vis { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; border-radius: 6px; padding: 4px 6px; }
+button.board-vis[data-vis-toggle]:hover { background: rgb(255 255 255 / .15); }
+.vis-wrap { position: relative; }
+.vis-pop { left: 0; right: auto; top: calc(100% + 6px); width: 320px; display: grid; gap: 4px; }
+.vis-opt { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; text-align: left; border: 1px solid transparent; background: transparent;
+  color: var(--text); border-radius: 8px; padding: 8px 10px; font: inherit; cursor: pointer; }
+.vis-opt small { grid-column: 2; color: var(--text-2); font-size: 12px; line-height: 1.35; }
+.vis-opt:hover:not(:disabled) { background: var(--surface-2); }
+.vis-opt.on { border-color: var(--accent); }
+.vis-opt:disabled { opacity: .5; cursor: not-allowed; }
+.switch-btn { font-size: 16px; }
+.label-edit-row { display: grid; grid-template-columns: 22px 96px 1fr 36px 24px; gap: 6px; align-items: center; }
+.label-edit-row.new { grid-template-columns: 22px 96px 1fr auto; margin-top: 6px; }
+.label-edit-row input, .label-edit-row select { min-width: 0; padding: 5px 7px; font-size: 13px; }
+.label-edit-row .label-swatch { height: 22px; min-width: 0; padding: 0; }
+.row.wrap { flex-wrap: wrap; gap: 6px; }
+.board-head { position: relative; z-index: 20; }
+button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.vis-pop { z-index: 60; color: var(--text); }

@@ -175,6 +175,14 @@
     const showTrig = () => rf.querySelectorAll('[data-show-for]').forEach(el => {
       el.hidden = !el.dataset.showFor.split(' ').includes(trig.value);
     });
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('trigger')) {
+      trig.value = qs.get('trigger');
+      const tl = rf.querySelector('[name=trigger_list]');
+      if (qs.get('list') && tl) tl.value = qs.get('list');
+      rf.scrollIntoView({ block: 'center' });
+      rf.classList.add('flash');
+    }
     trig.addEventListener('change', showTrig); showTrig();
   }
   document.querySelectorAll('[data-actions-form]').forEach(f => {

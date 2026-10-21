@@ -181,3 +181,17 @@ def run_automations_hook(request):
     result["digests"] = mailer.daily_digests()
     result["sent"] = mailer.flush(limit=80, budget=40 - (time.monotonic() - started))
     return JsonResponse(result)
+
+
+@login_required
+def parse_date(request):
+    """Preview for typing a date into a card title."""
+    from django.utils import timezone
+
+    from .nl_dates import parse
+    due, words = parse(request.GET.get("q", "")[:250])
+    if not due:
+        return JsonResponse({"due": None})
+    local = timezone.localtime(due)
+    return JsonResponse({"due": local.isoformat(), "words": words,
+                         "label": local.strftime("%a %-d %b") + ("" if local.strftime("%H:%M") == "17:00" else local.strftime(", %H:%M"))})

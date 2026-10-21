@@ -2,12 +2,12 @@
   <header class="list-head">
     <h3 class="list-title" {% if can_edit %}contenteditable="plaintext-only" spellcheck="false" data-list-title{% endif %}>{{ list.title }}</h3>
     <span class="list-count{% if list.over_limit %} over{% endif %}" title="{% if list.card_limit %}Limit {{ list.card_limit }}{% endif %}">{{ list.entries|length }}{% if list.card_limit %}/{{ list.card_limit }}{% endif %}</span>
+    <button class="icon-btn list-collapse" data-collapse-list title="Collapse list">⇤</button>
     {% if can_edit %}
     <details class="menu">
       <summary class="icon-btn" title="List actions">{% include "boards/_icon.html" with i="dots" %}</summary>
       <div class="menu-panel right">
         <button class="menu-item" data-add-card-top>Add card</button>
-        <button class="menu-item" data-collapse-list>Collapse list</button>
         <div class="menu-sub">
           <span class="muted small">Colour</span>
           <div class="colour-row">
@@ -15,7 +15,13 @@
             {% for c in "green yellow orange red purple blue sky pink grey"|cut_split %}<button class="colour-dot lc-{{ c }}{% if c == list.colour %} on{% endif %}" data-list-colour="{{ c }}" title="{{ c|capfirst }}"></button>{% endfor %}
           </div>
         </div>
+        <button class="menu-item" data-list-copy>Copy list…</button>
+        <button class="menu-item" data-list-move-board>Move list to another board…</button>
+        <button class="menu-item" data-list-move-cards>Move all cards in this list…</button>
+        <button class="menu-item" data-list-sort>Sort list by…</button>
+        <a class="menu-item" href="/b/{{ list.board_id }}/automation/?trigger=card_added&amp;list={{ list.pk }}">⚡ When a card is added to this list…</a>
         <button class="menu-item" data-list-limit>{% if list.card_limit %}Change card limit ({{ list.card_limit }}){% else %}Set a card limit…{% endif %}</button>
+        <button class="menu-item" data-archive-cards>Archive all cards in this list</button>
         <button class="menu-item danger" data-archive-list>Archive this list</button>
       </div>
     </details>
@@ -31,7 +37,8 @@
       <button class="icon-btn" data-from-template title="Create from template">{% include "boards/_icon.html" with i="copy" %}</button>
     </div>
     <form class="add-card-form" data-add-card-form hidden>
-      <textarea name="title" rows="2" placeholder="Enter a title for this card…" maxlength="250"></textarea>
+      <textarea name="title" rows="2" placeholder="Enter a title — try “tomorrow” or “next Friday”" maxlength="250"></textarea>
+      <div class="smart-due" data-smart-due hidden><span>📅 Due <b data-smart-label></b></span><button type="button" class="link-btn" data-smart-off title="Don't set a date">✕</button></div>
       <div class="row"><button class="btn primary sm">Add card</button><button type="button" class="icon-btn" data-cancel>{% include "boards/_icon.html" with i="close" %}</button></div>
     </form>
   </footer>

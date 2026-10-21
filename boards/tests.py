@@ -1809,3 +1809,68 @@ class CronHookTests(TestCase):
             r = c.post("/internal/run-automations/", HTTP_AUTHORIZATION="Bearer t0ken")
             self.assertEqual(r.status_code, 200)
             self.assertIn("rules", r.json())
+
+
+class TrelloTouchesTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery T")
+        self.u = User.objects.create_user("t@x.com", "pw", first_name="Tom")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.b1 = Board.objects.create(workspace=self.ws, title="One")
+        self.b2 = Board.objects.create(workspace=self.ws, title="Two")
+        for b in (self.b1, self.b2):
+            BoardMember.objects.create(board=b, user=self.u, role="admin")
+        self.l1 = List.objects.create(board=self.b1, title="To do", position=1000)
+        self.l2 = List.objects.create(board=self.b1, title="Done", position=2000)
+        self.c = Client(); self.c.force_login(self.u)
+
+    def j(self, url, data=None):
+        return self.c.post(url, json.dumps(data or {}), content_type="application/json")
+
+    def test_smart_due_on_create(self):
+        r = self.j(f"/api/lists/{self.l1.pk}/cards/", {"title": "Gemma starts next Monday", "smart_due": True})
+        card = Card.objects.get(pk=r.json()["card_id"])
+        self.assertIsNotNone(card.due_at)
+        self.assertEqual(card.due_at.weekday(), 0)
+        r = self.j(f"/api/lists/{self.l1.pk}/cards/", {"title": "Order flour tomorrow"})      # chip dismissed
+        self.assertIsNone(Card.objects.get(pk=r.json()["card_id"]).due_at)
+        self.assertIn("label", self.c.get("/api/parse-date/?q=deep clean friday 3pm").json())
+        self.assertIsNone(self.c.get("/api/parse-date/?q=sun-dried tomato loaf").json()["due"])
+
+    def test_list_actions(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        a = Card.objects.create(list=self.l1, title="b-card", due_at=timezone.now() + timedelta(days=3), position=1)
+        b = Card.objects.create(list=self.l1, title="a-card", due_at=timezone.now() + timedelta(days=1), position=2)
+        self.j(f"/api/lists/{self.l1.pk}/sort/", {"by": "due"})
+        a.refresh_from_db(); b.refresh_from_db(); self.assertLess(b.position, a.position)
+        self.j(f"/api/lists/{self.l1.pk}/sort/", {"by": "name"})
+        a.refresh_from_db(); b.refresh_from_db(); self.assertLess(b.position, a.position)
+        self.j(f"/api/lists/{self.l1.pk}/copy/", {"title": "To do 2"})
+        copy = List.objects.get(title="To do 2")
+        self.assertEqual(copy.cards.count(), 2)
+        self.assertTrue(self.l1.position < copy.position < self.l2.position)
+        self.assertEqual(self.j(f"/api/lists/{self.l1.pk}/move-cards/", {"list_id": self.l2.pk}).json()["moved"], 2)
+        self.assertEqual(self.l2.cards.count(), 2)
+        r = self.j(f"/api/lists/{self.l2.pk}/move-board/", {"board_id": self.b2.pk})
+        self.assertEqual(r.json()["moved"], 2)
+        self.assertEqual(Card.objects.filter(list__board=self.b2).count(), 2)
+        self.l2.refresh_from_db(); self.assertTrue(self.l2.is_archived)
+        self.assertEqual(self.j(f"/api/lists/{copy.pk}/archive-cards/").json()["archived"], 2)
+        boards = self.c.get("/api/boards/mine/").json()["boards"]
+        self.assertEqual({b["title"] for b in boards}, {"One", "Two"})
+
+    def test_board_page_has_new_controls(self):
+        Card.objects.create(list=self.l1, title="x")
+        r = self.c.get(f"/b/{self.b1.pk}/")
+        for marker in ("data-vis-toggle", "data-switch-boards", 'data-pane="labels"', 'data-pane="about"',
+                       "data-list-move-board", "data-quick-edit", "data-collapse-list"):
+            self.assertContains(r, marker)
+        # a plain member (not admin) still gets the Copy/Export panes
+        m = User.objects.create_user("m2@x.com", "pw", first_name="Mem")
+        WorkspaceMember.objects.create(workspace=self.ws, user=m)
+        BoardMember.objects.create(board=self.b1, user=m, role="member")
+        mc = Client(); mc.force_login(m)
+        r = mc.get(f"/b/{self.b1.pk}/")
+        self.assertContains(r, 'data-pane="export"')
+        self.assertNotContains(r, 'data-pane="settings"')

@@ -7,9 +7,20 @@
       data-board-id="{{ board.pk }}" data-user-id="{{ user.pk }}" data-view="{{ view }}" data-version="{{ board.version }}" data-can-edit="{{ can_edit|yesno:'1,0' }}" data-open-card="{{ open_card|default:'' }}" data-label-ids="[{% for l in labels %}{{ l.pk }}{% if not forloop.last %},{% endif %}{% endfor %}]">
   <header class="board-head">
     <h1 class="board-title" {% if can_manage %}contenteditable="plaintext-only" spellcheck="false" data-board-title{% endif %}>{{ board.title }}</h1>
-    <span class="board-vis" title="{{ board.get_visibility_display }}">
-      {% if board.visibility == 'private' %}{% include "boards/_icon.html" with i="lock" %}Private{% else %}{% include "boards/_icon.html" with i="people" %}{{ board.workspace.name }}{% endif %}
-    </span>
+    <div class="pop-wrap vis-wrap">
+      <button class="board-vis" {% if can_manage %}data-vis-toggle{% endif %} title="Who can see this board{% if can_manage %} — click to change{% endif %}">
+        {% if board.visibility == 'private' %}{% include "boards/_icon.html" with i="lock" %}Private{% else %}{% include "boards/_icon.html" with i="people" %}{{ board.workspace.name }}{% endif %}{% if board.public_token and not public_off %} · 🌐{% endif %}
+      </button>
+      {% if can_manage %}
+      <div class="pop vis-pop" data-vis-pop hidden>
+        <div class="pop-head">Who can see this board</div>
+        <button class="vis-opt{% if board.visibility == 'private' %} on{% endif %}" data-vis="private" {% if not can_private and board.visibility != 'private' %}disabled{% endif %}>🔒 <b>Private</b><small>Only people added to the board{% if not can_private and board.visibility != 'private' %} — your company only lets {{ "private_boards"|who_can }} choose this{% endif %}.</small></button>
+        <button class="vis-opt{% if board.visibility == 'workspace' %} on{% endif %}" data-vis="workspace">👥 <b>{{ board.workspace.name }}</b><small>Everyone in the department can see it; members of the board can change it.</small></button>
+        <button class="vis-opt" data-vis-public>🌐 <b>Public link</b><small>{% if public_off %}Switched off for the company.{% elif board.public_token %}On — anyone with the link can view. Manage in Menu → Settings.{% else %}Off. Turn it on in Menu → Settings.{% endif %}</small></button>
+      </div>
+      {% endif %}
+    </div>
+    <button class="icon-btn light switch-btn" data-switch-boards title="Switch boards (s)">⇄</button>
     <nav class="view-tabs" aria-label="Views">
       {% for key, label, url_name in view_tabs %}<a href="{% url url_name board.pk %}" class="{% if key == view %}on{% endif %}">{{ label }}</a>{% endfor %}
     </nav>
@@ -103,14 +114,31 @@
 <aside class="drawer" id="drawer" hidden>
   <div class="drawer-head"><h3>Menu</h3><button class="icon-btn" data-close-drawer>{% include "boards/_icon.html" with i="close" %}</button></div>
   <div class="drawer-tabs">
-    <button class="on" data-tab="activity">Activity</button>
+    <button class="on" data-tab="about">About</button>
+    <button data-tab="activity">Activity</button>
     <button data-tab="archived">Archived</button>
-    {% if can_edit %}<button data-tab="fields">Fields</button>{% endif %}
+    {% if can_edit %}<button data-tab="labels">Labels</button><button data-tab="fields">Fields</button>{% endif %}
     <button data-tab="copy">Copy</button>
     <button data-tab="export">Export</button>
     {% if can_manage %}<button data-tab="settings">Settings</button>{% endif %}
   </div>
-  <div class="drawer-pane" data-pane="activity">
+  <div class="drawer-pane" data-pane="about">
+    <h4 class="section-label">About this board</h4>
+    {% if can_manage %}
+    <form data-board-about class="stack wide">
+      <textarea name="description" rows="5" placeholder="What's this board for? Who should use it? Any rules for the lists?">{{ board.description }}</textarea>
+      <div><button class="btn primary sm">Save</button></div>
+    </form>
+    {% else %}<div class="desc-read md">{% if board.description %}{{ board.description|md }}{% else %}<span class="muted">No description yet.</span>{% endif %}</div>{% endif %}
+    <h4 class="section-label">Board tools</h4>
+    <div class="row wrap">
+      <button class="btn sm" data-collapse-all>Collapse all lists</button>
+      <button class="btn sm ghost" data-expand-all>Expand all lists</button>
+      <button class="btn sm ghost" data-copy-board-link>🔗 Copy link to board</button>
+    </div>
+    <p class="muted small">Made by {{ board.created_by.display_name|default:"—" }} · {{ board.created_at|date:"j M Y" }} · {{ board.workspace.name }}</p>
+  </div>
+  <div class="drawer-pane" data-pane="activity" hidden>
     {% for a in activity %}
     <div class="feed-item">
       {% if a.actor %}{% include "boards/_avatar.html" with u=a.actor %}{% endif %}
@@ -128,8 +156,25 @@
     <div class="archived-row"><span>{{ card.title }}</span>{% if can_edit %}<button class="btn ghost sm" data-restore="{{ card.pk }}">Restore</button><button class="btn ghost sm danger-text" data-delete-card="{{ card.pk }}" title="Delete for good">Delete</button>{% endif %}</div>
     {% empty %}<p class="muted">No archived cards.</p>{% endfor %}
   </div>
-  {% if can_manage %}
   {% if can_edit %}
+  <div class="drawer-pane" data-pane="labels" hidden>
+    <p class="muted small">Rename or recolour a label and every card with it updates. Keys <kbd>1</kbd>–<kbd>9</kbd> toggle labels in this order.</p>
+    {% for l in labels %}
+    <form class="label-edit-row" data-label-edit="{{ l.pk }}">
+      <span class="kbd-n">{% if forloop.counter < 10 %}<kbd>{{ forloop.counter }}</kbd>{% endif %}</span>
+      <select name="colour" aria-label="Colour">{% for key, name in label_colours %}<option value="{{ key }}" {% if key == l.colour %}selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+      <input name="name" value="{{ l.name }}" placeholder="(no name)" maxlength="40">
+      <span class="label-swatch lc-{{ l.colour }}" data-swatch>&nbsp;</span>
+      <button class="icon-btn xs" type="button" data-label-delete title="Delete label">{% include "boards/_icon.html" with i="close" %}</button>
+    </form>
+    {% endfor %}
+    <form class="label-edit-row new" data-label-create>
+      <span class="kbd-n"></span>
+      <select name="colour" aria-label="Colour">{% for key, name in label_colours %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select>
+      <input name="name" placeholder="New label name" maxlength="40">
+      <button class="btn sm primary">Add</button>
+    </form>
+  </div>
   <div class="drawer-pane" data-pane="fields" hidden>
     <p class="muted small">Custom fields appear on every card in this board — e.g. Quantity, Supplier, Site.</p>
     {% for f in board.custom_fields.all %}
@@ -165,6 +210,7 @@
       <button class="btn primary sm">Create copy</button>
     </form>
   </div>
+  {% if can_manage %}
   <div class="drawer-pane" data-pane="settings" hidden>
     <h4 class="section-label">Collection</h4>
     <select data-board-collection aria-label="Collection">

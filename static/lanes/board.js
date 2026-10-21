@@ -137,7 +137,7 @@
       forceFallback: true,
       fallbackOnBody: true,
       fallbackTolerance: 4,
-      filter: '.list-title, .menu, input, textarea',
+      filter: '.list-title, .menu, .list-collapse, input, textarea',
       preventOnFilter: false,
       ghostClass: 'sortable-ghost',
       delay: 150,
@@ -197,6 +197,48 @@
       toggleCollapsed(listEl.dataset.listId, true);
     } else if (e.target.closest('[data-expand-list]')) {
       toggleCollapsed(listEl.dataset.listId, false);
+    } else if (e.target.closest('[data-list-copy]')) {
+      e.target.closest('details')?.removeAttribute('open');
+      const t = await LanesUI.ask('Copy list', { value: `${$('.list-title', listEl).textContent.trim()} (copy)`, ok: 'Copy', hint: 'All its cards are copied too.' });
+      if (t === null) return;
+      await post(`/api/lists/${listEl.dataset.listId}/copy/`, { title: t });
+      forceRefresh(); toast('List copied.');
+    } else if (e.target.closest('[data-list-move-board]')) {
+      e.target.closest('details')?.removeAttribute('open');
+      const res = await fetch('/api/boards/mine/', { credentials: 'same-origin' });
+      const boards = (await res.json()).boards.filter(b => b.can_edit && String(b.id) !== String(boardId));
+      if (!boards.length) return toast("There's no other board you can move it to.");
+      const to = await LanesUI.choose('Move this list to which board?',
+        boards.map(b => ({ label: `${b.starred ? '★ ' : ''}${b.title} · ${b.dept}`, value: b.id })),
+        { text: 'Its cards come too. Labels and fields are matched by name on the new board.' });
+      if (to === null) return;
+      const d = await post(`/api/lists/${listEl.dataset.listId}/move-board/`, { board_id: to });
+      listEl.remove(); refreshCounts();
+      toast(`Moved to ${d.board} with ${d.moved} card${d.moved === 1 ? '' : 's'}.`);
+    } else if (e.target.closest('[data-list-move-cards]')) {
+      e.target.closest('details')?.removeAttribute('open');
+      const others = $$('.list', listsEl).filter(l => l !== listEl)
+        .map(l => ({ label: $('.list-title', l).textContent.trim(), value: l.dataset.listId }));
+      if (!others.length) return toast('Add another list first.');
+      const to = await LanesUI.choose('Move every card in this list to…', others);
+      if (to === null) return;
+      const d = await post(`/api/lists/${listEl.dataset.listId}/move-cards/`, { list_id: +to });
+      forceRefresh(); toast(`Moved ${d.moved} card${d.moved === 1 ? '' : 's'}.`);
+    } else if (e.target.closest('[data-list-sort]')) {
+      e.target.closest('details')?.removeAttribute('open');
+      const by = await LanesUI.choose('Sort this list by…', [
+        { label: '🕒 Due date (soonest first)', value: 'due' }, { label: '🆕 Newest first', value: 'newest' },
+        { label: '📜 Oldest first', value: 'oldest' }, { label: '🔤 Card name (A–Z)', value: 'name' }]);
+      if (by === null) return;
+      await post(`/api/lists/${listEl.dataset.listId}/sort/`, { by });
+      forceRefresh();
+    } else if (e.target.closest('[data-archive-cards]')) {
+      e.target.closest('details')?.removeAttribute('open');
+      const n = $$('.card-tile:not([data-mirror-id])', listEl).length;
+      if (!n) return toast('There are no cards in this list.');
+      if (!await LanesUI.confirm(`Archive all ${n} card${n === 1 ? '' : 's'} in this list?`, { text: 'You can bring them back from Menu → Archived.', ok: 'Archive cards', danger: true })) return;
+      const d = await post(`/api/lists/${listEl.dataset.listId}/archive-cards/`);
+      forceRefresh(); toast(`Archived ${d.archived} card${d.archived === 1 ? '' : 's'}.`);
     } else if (e.target.closest('[data-archive-list]')) {
       if (!await LanesUI.confirm('Archive this list?', { text: 'Its cards are hidden too. You can bring it back from Menu → Archived.', ok: 'Archive', danger: true })) return;
       await post(`/api/lists/${listEl.dataset.listId}/`, { archive: true });
@@ -205,6 +247,36 @@
       const tile = e.target.closest('.card-tile');
       if (tile) openCard(tile.dataset.cardId);
     }
+  });
+
+  // Spot a date while typing a new card's title ("tomorrow", "next Friday 3pm", "12 June")
+  let smartTimer;
+  listsEl.addEventListener('input', e => {
+    const ta = e.target.closest('[data-add-card-form] textarea');
+    if (!ta) return;
+    const chip = $('[data-smart-due]', ta.form);
+    clearTimeout(smartTimer);
+    smartTimer = setTimeout(async () => {
+      const q = ta.value.trim();
+      if (q.length < 3) { chip.hidden = true; return; }
+      try {
+        const res = await fetch(`/api/parse-date/?q=${encodeURIComponent(q)}`, { credentials: 'same-origin' });
+        const d = await res.json();
+        if (!d.due) { chip.hidden = true; return; }
+        if (chip.dataset.off && chip.dataset.for === d.words) return;   // user dismissed this one
+        delete chip.dataset.off;
+        chip.dataset.for = d.words;
+        $('[data-smart-label]', chip).textContent = `${d.label} (“${d.words}”)`;
+        chip.hidden = false;
+      } catch { chip.hidden = true; }
+    }, 250);
+  });
+  listsEl.addEventListener('click', e => {
+    const off = e.target.closest('[data-smart-off]');
+    if (!off) return;
+    const chip = off.closest('[data-smart-due]');
+    chip.dataset.off = '1'; chip.hidden = true;
+    off.closest('form').querySelector('textarea').focus();
   });
 
   listsEl.addEventListener('keydown', e => {
@@ -223,7 +295,10 @@
     const ta = $('textarea', form);
     const title = ta.value.trim();
     if (!title) return;
-    const data = await post(`/api/lists/${listEl.dataset.listId}/cards/`, { title });
+    const chip = $('[data-smart-due]', form);
+    const smart = !chip.hidden && !chip.dataset.off;
+    const data = await post(`/api/lists/${listEl.dataset.listId}/cards/`, { title, smart_due: smart });
+    chip.hidden = true; delete chip.dataset.off; delete chip.dataset.for;
     const cards = $('[data-list-cards]', listEl);
     cards.appendChild(fromHTML(data.tile));
     cards.scrollTop = cards.scrollHeight;
@@ -1057,6 +1132,133 @@
   }
   window.LanesBoard.applyFilter = applyFilter;
 
+  // ---------- board header: visibility, switch boards ----------
+  const visPop = $('[data-vis-pop]');
+  $('[data-vis-toggle]')?.addEventListener('click', e => { e.stopPropagation(); visPop.hidden = !visPop.hidden; });
+  document.addEventListener('click', e => { if (visPop && !visPop.hidden && !e.target.closest('.vis-wrap')) visPop.hidden = true; });
+  visPop?.addEventListener('click', async e => {
+    const opt = e.target.closest('[data-vis]');
+    if (opt && !opt.disabled && !opt.classList.contains('on')) {
+      await post(`/api/boards/${boardId}/update/`, { visibility: opt.dataset.vis });
+      return location.reload();
+    }
+    if (e.target.closest('[data-vis-public]')) {
+      visPop.hidden = true;
+      drawer.hidden = false;
+      $('[data-tab="settings"]', drawer)?.click();
+    }
+  });
+
+  async function switchBoards() {
+    const res = await fetch('/api/boards/mine/', { credentials: 'same-origin' });
+    const boards = (await res.json()).boards;
+    const pick = await LanesUI.choose('Switch to…', boards.map(b => ({
+      label: `${b.starred ? '★ ' : ''}${b.title} · ${b.dept}${String(b.id) === String(boardId) ? ' (this board)' : ''}`, value: b.id })));
+    if (pick !== null && String(pick) !== String(boardId)) location.href = `/b/${pick}/`;
+  }
+  $('[data-switch-boards]')?.addEventListener('click', switchBoards);
+  window.LanesBoard_switch = switchBoards;
+
+  // ---------- menu: about, tools, labels ----------
+  $('[data-board-about]', drawer)?.addEventListener('submit', async e => {
+    e.preventDefault();
+    await post(`/api/boards/${boardId}/update/`, { description: e.target.description.value });
+    toast('Saved.');
+  });
+  drawer.addEventListener('click', async e => {
+    if (e.target.closest('[data-collapse-all]')) {
+      $$('.list', listsEl).forEach(l => toggleCollapsed(l.dataset.listId, true));
+    } else if (e.target.closest('[data-expand-all]')) {
+      $$('.list', listsEl).forEach(l => toggleCollapsed(l.dataset.listId, false));
+    } else if (e.target.closest('[data-copy-board-link]')) {
+      try { await navigator.clipboard.writeText(`${location.origin}/b/${boardId}/`); toast('Link copied.'); }
+      catch { toast(`${location.origin}/b/${boardId}/`); }
+    } else if (e.target.closest('[data-label-delete]')) {
+      const row = e.target.closest('[data-label-edit]');
+      if (!await LanesUI.confirm('Delete this label?', { text: 'It comes off every card that has it.', ok: 'Delete', danger: true })) return;
+      await post(`/api/boards/${boardId}/labels/`, { label_id: +row.dataset.labelEdit, delete: true });
+      row.remove(); forceRefresh();
+    }
+  });
+  drawer.addEventListener('change', async e => {
+    const row = e.target.closest('[data-label-edit]');
+    if (!row) return;
+    await post(`/api/boards/${boardId}/labels/`, { label_id: +row.dataset.labelEdit, name: row.name.value, colour: row.colour.value });
+    $('[data-swatch]', row).className = `label-swatch lc-${row.colour.value}`;
+    forceRefresh();
+  });
+  drawer.addEventListener('submit', async e => {
+    const f = e.target.closest('[data-label-create]');
+    if (f) {
+      e.preventDefault();
+      await post(`/api/boards/${boardId}/labels/`, { name: f.name.value, colour: f.colour.value });
+      location.reload();
+    }
+    const row = e.target.closest('[data-label-edit]');
+    if (row) { e.preventDefault(); row.querySelector('input').blur(); }
+  });
+
+  // ---------- quick-edit menu on a card (✎ on hover, or right-click) ----------
+  const quick = document.createElement('div');
+  quick.className = 'quick-menu';
+  quick.hidden = true;
+  document.body.appendChild(quick);
+  const QUICK = [
+    ['open', '🗂', 'Open card'], ['labels', '🏷', 'Edit labels', 1], ['members', '👤', 'Change members', 1],
+    ['look', '🎨', 'Change cover', 1], ['dates', '🕒', 'Edit dates', 1], ['move', '↗', 'Move', 1],
+    ['copy', '⧉', 'Copy card', 1], ['link', '🔗', 'Copy link'], ['mirror', '🪞', 'Mirror', 1], ['archive', '🗄', 'Archive', 1],
+  ];
+  function showQuick(tile, x, y) {
+    setCurrent(tile);
+    quick.dataset.cardId = tile.dataset.cardId;
+    quick.innerHTML = QUICK.filter(q => canEdit || !q[3])
+      .map(([k, icon, label]) => `<button data-q="${k}"><span>${icon}</span>${label}</button>`).join('');
+    quick.hidden = false;
+    const r = quick.getBoundingClientRect();
+    quick.style.left = `${Math.min(x, innerWidth - r.width - 8)}px`;
+    quick.style.top = `${Math.min(y, innerHeight - r.height - 8)}px`;
+    quick.querySelector('button')?.focus();
+  }
+  const hideQuick = () => (quick.hidden = true);
+  listsEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-quick-edit]');
+    if (!b) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    const r = b.closest('.card-tile').getBoundingClientRect();
+    showQuick(b.closest('.card-tile'), r.right + 6, r.top);
+  }, true);
+  listsEl.addEventListener('contextmenu', e => {
+    const tile = e.target.closest('.card-tile');
+    if (!tile || e.target.closest('input, textarea')) return;
+    e.preventDefault();
+    showQuick(tile, e.clientX, e.clientY);
+  });
+  document.addEventListener('click', e => { if (!quick.hidden && !quick.contains(e.target)) hideQuick(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !quick.hidden) { e.stopPropagation(); hideQuick(); } }, true);
+  quick.addEventListener('click', async e => {
+    const b = e.target.closest('[data-q]');
+    if (!b) return;
+    const id = quick.dataset.cardId, k = b.dataset.q;
+    hideQuick();
+    if (k === 'open') return openCard(id);
+    if (k === 'link') {
+      const url = `${location.origin}/b/${boardId}/?card=${id}`;
+      try { await navigator.clipboard.writeText(url); toast('Link copied.'); } catch { toast(url); }
+      return;
+    }
+    if (k === 'archive') {
+      try { await onCard(id, 'update', { archive: true }); toast('Card archived. Restore it from Menu → Archived.'); } catch {}
+      return;
+    }
+    if (k === 'move') {
+      await openCard(id);
+      if ($('[data-pop="moveboard"]', dialogBody)) { showPop('moveboard'); }
+      $('[data-move-list]', dialogBody)?.focus();
+      return;
+    }
+    return openWithPop(id, k);
+  });
+
   // ---------- keyboard shortcuts (press ? for the list) ----------
   let kbTile = null;                       // the card shortcuts act on when no card is open
   function setCurrent(tile) {
@@ -1112,6 +1314,7 @@
         me.checked = !me.checked; applyFilter();
         return toast(me.checked ? 'Showing only your cards (q to undo).' : 'Showing everyone\'s cards.');
       }
+      if (k === 's') { e.preventDefault(); return switchBoards(); }
       if (k === 'x' && filterForm) { e.preventDefault(); filterForm.reset(); applyFilter(); return toast('Filters cleared.'); }
     }
     const id = targetCardId();

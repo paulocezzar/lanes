@@ -133,6 +133,13 @@ def card_create(request, list_id):
     card = Card.objects.create(list=lst, title=title, created_by=request.user,
                                position=positions.end_position(lst.cards.filter(is_archived=False)))
     log(lst.board, request.user, "card_created", card=card, list=lst.title)
+    if request.data.get("smart_due"):            # "Gemma starts next Monday" → due Monday 17:00
+        from .nl_dates import parse
+        due, _ = parse(title)
+        if due:
+            card.due_at = due
+            card.save(update_fields=["due_at"])
+            log(lst.board, request.user, "due_set", card=card, due=timezone.localtime(due).strftime("%-d %b %Y, %H:%M"))
     automation.fire(card, Rule.ADDED, list_=lst)
     return card_response(card.pk, request)
 
@@ -905,3 +912,114 @@ def my_priorities(request):
     html = render_to_string("boards/_priorities.html", {"picks": [{**lookup[p["id"]], "why": p["why"]} for p in picks],
                                                         "note": note}, request=request)
     return {"html": html}
+
+
+# ---------- more list actions ----------
+
+def _list_for_edit(request, list_id):
+    lst = get_object_or_404(List.objects.select_related("board"), pk=list_id)
+    _edit(lst.board, request.user)
+    return lst
+
+
+@api
+def list_copy(request, list_id):
+    """Copy a list and its cards, right after the original."""
+    from .copying import copy_card
+    lst = _list_for_edit(request, list_id)
+    title = _text(request.data.get("title") or f"{lst.title} (copy)", 120, "title")
+    siblings = list(lst.board.lists.filter(is_archived=False).order_by("position", "id"))
+    idx = next(i for i, x in enumerate(siblings) if x.pk == lst.pk)
+    after = siblings[idx + 1] if idx + 1 < len(siblings) else None
+    new = List.objects.create(board=lst.board, title=title, colour=lst.colour, card_limit=lst.card_limit,
+                              position=positions.between(lst.position, after.position if after else None))
+    for c in cards_qs().filter(list=lst, is_archived=False).order_by("position"):
+        copy_card(c, new, user=request.user, position=c.position)
+    log(lst.board, request.user, "list_created", title=title)
+    return {"ok": True}
+
+
+@api
+def list_move_board(request, list_id):
+    """Move a whole list (with its cards) to another board."""
+    from .copying import transfer_card
+    lst = _list_for_edit(request, list_id)
+    target = get_object_or_404(Board, pk=request.data.get("board_id"), is_archived=False)
+    if target.pk == lst.board_id:
+        raise ApiError("It's already on this board.")
+    if not permissions.can_view(target, request.user):
+        raise Http404
+    if not permissions.can_edit(target, request.user):
+        raise ApiError("You can't add lists to that board.", 403)
+    new = List.objects.create(board=target, title=lst.title, colour=lst.colour, card_limit=lst.card_limit,
+                              position=positions.end_position(target.lists.filter(is_archived=False)))
+    moved = 0
+    for c in Card.objects.filter(list=lst).order_by("position"):
+        transfer_card(c, new, user=request.user)
+        moved += 1
+    lst.is_archived = True
+    lst.save(update_fields=["is_archived"])
+    log(target, request.user, "list_created", title=new.title)
+    return {"ok": True, "moved": moved, "board": target.title}
+
+
+@api
+def list_move_cards(request, list_id):
+    lst = _list_for_edit(request, list_id)
+    target = get_object_or_404(List, pk=request.data.get("list_id"), board=lst.board, is_archived=False)
+    if target.pk == lst.pk:
+        raise ApiError("Pick a different list.")
+    n = 0
+    for c in lst.cards.filter(is_archived=False).order_by("position"):
+        c.list = target
+        c.position = positions.end_position(target.cards.filter(is_archived=False))
+        c.save(update_fields=["list", "position", "updated_at"])
+        log(lst.board, request.user, "card_moved", card=c, **{"from": lst.title, "to": target.title})
+        automation.fire(c, Rule.MOVED, list_=target)
+        n += 1
+    return {"ok": True, "moved": n}
+
+
+@api
+def list_sort(request, list_id):
+    lst = _list_for_edit(request, list_id)
+    how = request.data.get("by")
+    cards = list(lst.cards.filter(is_archived=False))
+    from datetime import timedelta
+    far = timezone.now() + timedelta(days=36500)
+    keys = {
+        "due": lambda c: (c.due_at or far, c.position),
+        "newest": lambda c: -c.created_at.timestamp(),
+        "oldest": lambda c: c.created_at.timestamp(),
+        "name": lambda c: c.title.lower(),
+    }
+    if how not in keys:
+        raise ApiError("Pick how to sort.")
+    for i, c in enumerate(sorted(cards, key=keys[how]), start=1):
+        Card.objects.filter(pk=c.pk).update(position=i * positions.GAP)
+    from .signals import bump
+    bump(lst.board_id)
+    return {"ok": True}
+
+
+@api
+def list_archive_cards(request, list_id):
+    lst = _list_for_edit(request, list_id)
+    n = lst.cards.filter(is_archived=False).update(is_archived=True, updated_at=timezone.now())
+    from .signals import bump
+    bump(lst.board_id)
+    log(lst.board, request.user, "automation", summary=f"archived all {n} cards in {lst.title}")
+    return {"ok": True, "archived": n}
+
+
+@login_required
+def editable_boards(request):
+    """Boards the user can add to — for Move list / Switch boards."""
+    from django.http import JsonResponse as J
+    starred = set(BoardMember.objects.filter(user=request.user, starred=True).values_list("board_id", flat=True))
+    out = []
+    for b in permissions.visible_boards(request.user).filter(is_template=False).select_related("workspace"):
+        out.append({"id": b.pk, "title": b.title, "dept": b.workspace.name, "starred": b.pk in starred,
+                    "can_edit": permissions.can_edit(b, request.user), "bg": b.background})
+    out.sort(key=lambda b: (not b["starred"], b["dept"].lower(), b["title"].lower()))
+    return J({"boards": out})
