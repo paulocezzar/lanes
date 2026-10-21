@@ -89,4 +89,6 @@ urlpatterns = [
     path("api/checklists/<int:checklist_id>/items/", api.item_create),
     path("api/items/<int:item_id>/", api.item_update),
     path("api/comments/<int:comment_id>/", api.comment_update),
+    path("api/comments/<int:comment_id>/react/", api.comment_react),
+    path("api/cards/<int:card_id>/vote/", api.card_vote),
 ]

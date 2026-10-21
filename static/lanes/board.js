@@ -323,7 +323,11 @@
       const ta = $('textarea', desc), saveRow = $('.save-row', desc);
       let original = ta.value;
       ta.addEventListener('focus', () => (saveRow.hidden = false));
-      $('[data-cancel-desc]', desc).addEventListener('click', () => { ta.value = original; saveRow.hidden = true; });
+      $('[data-cancel-desc]', desc).addEventListener('click', () => {
+        ta.value = original; saveRow.hidden = true;
+        const view = $('[data-desc-view]', root);
+        if (view) { view.hidden = false; desc.hidden = true; }
+      });
       desc.addEventListener('submit', e => {
         e.preventDefault();
         cardPost('update', { description: ta.value }).then(() => (original = ta.value));
@@ -357,6 +361,19 @@
     if (!t.closest('.pop')) hidePops();
 
     if (t.closest('[data-watch-card]')) return cardPost('watch');
+    if (t.closest('[data-vote]')) return cardPost('vote');
+    const react = t.closest('[data-react]');
+    if (react) {
+      const cid = react.closest('[data-comment]').dataset.comment;
+      return post(`/api/comments/${cid}/react/`, { emoji: react.dataset.react }).then(applyCard);
+    }
+    const dv = t.closest('[data-desc-view]');
+    if (dv && !t.closest('a')) {
+      const form = $('[data-description]', dialogBody);
+      dv.hidden = true; form.hidden = false;
+      const ta = $('textarea', form); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+      return;
+    }
     const press = t.closest('[data-press-card]');
     if (press) {
       press.disabled = true;
@@ -608,6 +625,10 @@
     await post(`/api/boards/${boardId}/update/`, { collection: value });
     location.reload();
   });
+  $$('[data-board-flag]', drawer).forEach(cb => cb.addEventListener('change', async () => {
+    await post(`/api/boards/${boardId}/update/`, { [cb.dataset.boardFlag]: cb.checked });
+    location.reload();
+  }));
   $('[data-board-template]', drawer)?.addEventListener('change', e =>
     post(`/api/boards/${boardId}/update/`, { is_template: e.target.checked })
       .then(() => toast(e.target.checked ? 'This board is now a template.' : 'No longer a template.')));

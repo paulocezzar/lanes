@@ -1,5 +1,5 @@
 {% with counts=card.checklist_counts %}
-<article class="card-tile{% if card.is_complete %} is-complete{% endif %}{% if card.is_template %} is-template{% endif %}{% if mirror %} is-mirror{% endif %}" data-card-id="{{ card.pk }}" data-token="{% if mirror %}{{ mirror.token }}{% else %}{{ card.token }}{% endif %}"{% if mirror %} data-mirror-id="{{ mirror.pk }}"{% endif %} data-title="{{ card.title }}" data-labels="{% for l in card.labels.all %}{{ l.pk }} {% endfor %}" data-members="{% for u in card.members.all %}{{ u.pk }} {% endfor %}" data-due-ts="{% if card.due_at %}{{ card.due_at|date:'U' }}{% endif %}" data-complete="{{ card.is_complete|yesno:'1,0' }}" tabindex="0">
+<article class="card-tile{% if card.is_complete %} is-complete{% endif %}{% if card.is_template %} is-template{% endif %}{% if mirror %} is-mirror{% endif %} {{ card.age_class }}" data-card-id="{{ card.pk }}" data-token="{% if mirror %}{{ mirror.token }}{% else %}{{ card.token }}{% endif %}"{% if mirror %} data-mirror-id="{{ mirror.pk }}"{% endif %} data-title="{{ card.title }}" data-labels="{% for l in card.labels.all %}{{ l.pk }} {% endfor %}" data-members="{% for u in card.members.all %}{{ u.pk }} {% endfor %}" data-due-ts="{% if card.due_at %}{{ card.due_at|date:'U' }}{% endif %}" data-complete="{{ card.is_complete|yesno:'1,0' }}" tabindex="0">
   {% if mirror %}<span class="mirror-flag" title="Mirrored from {{ card.list.board.title }} › {{ card.list.title }}">🔗 {{ card.list.board.title }} › {{ card.list.title }}</span>{% endif %}
   {% if card.cover_id %}<img class="tile-cover" src="{% url 'attachment' card.cover_id %}" alt="" loading="lazy">{% elif card.cover_colour %}<div class="tile-cover colour lc-{{ card.cover_colour }}"></div>{% endif %}
   {% if card.stickers %}<div class="tile-stickers">{% for s in card.stickers %}<span>{{ s }}</span>{% endfor %}</div>{% endif %}
@@ -9,8 +9,10 @@
   {% endif %}
   <div class="tile-title">{% if card.is_complete %}<span class="done-dot" aria-label="Complete">✓</span>{% endif %}{{ card.title }}</div>
   {% with tf=card.tile_fields %}{% if tf %}<div class="tile-fields">{% for v in tf %}<span class="field-badge"><b>{{ v.field.name }}</b> {{ v.display }}</span>{% endfor %}</div>{% endif %}{% endwith %}
-  {% if card.due_at or card.description or card.comments.all or counts.1 or card.members.all or card.attachments.all %}
+  {% with votes=card.votes.all|length %}
+  {% if card.due_at or card.description or card.comments.all or counts.1 or card.members.all or card.attachments.all or votes and card.list.board.voting %}
   <div class="tile-badges">
+    {% if votes and card.list.board.voting %}<span class="badge vote-badge" title="{{ votes }} vote{{ votes|pluralize }}">👍{{ votes }}</span>{% endif %}
     {% if card.due_at %}<span class="badge due-{{ card.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ card.due_at|date:"j M" }}</span>{% endif %}
     {% if card.description %}<span class="badge" title="Has a description">{% include "boards/_icon.html" with i="desc" %}</span>{% endif %}
     {% if card.attachments.all %}<span class="badge" title="Attachments">📎{{ card.attachments.all|length }}</span>{% endif %}
@@ -18,6 +20,6 @@
     {% if counts.1 %}<span class="badge{% if counts.0 == counts.1 %} all-done{% endif %}">{% include "boards/_icon.html" with i="check" %}{{ counts.0 }}/{{ counts.1 }}</span>{% endif %}
     {% if card.members.all %}<span class="tile-members">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% endfor %}</span>{% endif %}
   </div>
-  {% endif %}
+  {% endif %}{% endwith %}
 </article>
 {% endwith %}

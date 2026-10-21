@@ -1142,3 +1142,56 @@ class ButtonTests(TestCase):
         self.assertTrue(Card.objects.get(title="Old").is_archived)
         self.assertEqual(Card.objects.get(title="Old 2").list, self.todo)
         self.assertTrue(Card.objects.filter(title__startswith="Stocktake ", list=self.todo).exists())
+
+
+class ReactVoteFormatTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery R")
+        self.u = User.objects.create_user("r@x.com", "pw", first_name="Rae")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.board = Board.objects.create(workspace=self.ws, title="Ideas")
+        BoardMember.objects.create(board=self.board, user=self.u, role="admin")
+        self.lst = List.objects.create(board=self.board, title="Ideas")
+        self.card = Card.objects.create(list=self.lst, title="Gingerbread", description="**Big** idea <b>x</b>")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def j(self, url, data=None):
+        return self.c.post(url, json.dumps(data or {}), content_type="application/json")
+
+    def test_markdown_is_safe(self):
+        r = self.c.get(f"/cards/{self.card.pk}/")
+        self.assertContains(r, "<strong>Big</strong>")
+        self.assertContains(r, "&lt;b&gt;x&lt;/b&gt;")
+        from .templatetags.lanes_extras import render_md
+        self.assertNotIn("javascript:", render_md("[x](javascript:alert(1))").replace("[x](javascript:alert(1))", ""))
+        self.assertIn("<li>", render_md("- a\n- b"))
+
+    def test_reactions_toggle(self):
+        from .models import Comment
+        cm = Comment.objects.create(card=self.card, author=self.u, body="Nice")
+        self.assertEqual(self.j(f"/api/comments/{cm.pk}/react/", {"emoji": "👍"}).status_code, 200)
+        self.assertEqual(cm.reactions.count(), 1)
+        self.assertContains(self.c.get(f"/cards/{self.card.pk}/"), "👍 1")
+        self.j(f"/api/comments/{cm.pk}/react/", {"emoji": "👍"})
+        self.assertEqual(cm.reactions.count(), 0)
+        self.assertEqual(self.j(f"/api/comments/{cm.pk}/react/", {"emoji": "💩"}).status_code, 400)
+
+    def test_voting_needs_power_up(self):
+        self.assertEqual(self.j(f"/api/cards/{self.card.pk}/vote/").status_code, 400)
+        self.j(f"/api/boards/{self.board.pk}/update/", {"voting": True})
+        r = self.j(f"/api/cards/{self.card.pk}/vote/")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("👍1", r.json()["tile"])
+        self.j(f"/api/cards/{self.card.pk}/vote/")
+        self.assertEqual(self.card.votes.count(), 0)
+
+    def test_card_aging(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        Card.objects.filter(pk=self.card.pk).update(updated_at=timezone.now() - timedelta(days=20))
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.age_class, "")
+        self.j(f"/api/boards/{self.board.pk}/update/", {"card_aging": True})
+        self.card = Card.objects.select_related("list__board").get(pk=self.card.pk)
+        self.assertEqual(self.card.age_class, "aged-2")
+        self.assertContains(self.c.get(f"/b/{self.board.pk}/"), "aged-2")

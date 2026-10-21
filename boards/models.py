@@ -90,6 +90,8 @@ class Board(models.Model):
     version = models.PositiveBigIntegerField(default=0)
     is_template = models.BooleanField(default=False)
     collection = models.ForeignKey(Collection, on_delete=models.SET_NULL, null=True, blank=True, related_name="boards")
+    voting = models.BooleanField(default=False)       # 👍 votes on cards
+    card_aging = models.BooleanField(default=False)   # untouched cards slowly fade
 
     class Meta:
         ordering = ["title"]
@@ -207,6 +209,14 @@ class Card(models.Model):
         """Custom field values to show as badges on the card tile."""
         vals = [v for v in self.field_values.all() if v.field.show_on_card and v.display()]
         return sorted(vals, key=lambda v: (v.field.position, v.field_id))
+
+    @property
+    def age_class(self):
+        """'aged-1/2/3' after 1, 2 and 4 weeks untouched, when the board has card ageing on."""
+        if self.is_complete or not self.list.board.card_aging:
+            return ""
+        days = (timezone.now() - self.updated_at).days
+        return "aged-3" if days >= 28 else "aged-2" if days >= 14 else "aged-1" if days >= 7 else ""
 
     def checklist_counts(self):
         items = [i for cl in self.checklists.all() for i in cl.items.all()]
@@ -341,6 +351,16 @@ class Comment(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def reaction_groups(self, user):
+        """[{emoji, count, mine, names}] in first-used order."""
+        groups = {}
+        for r in self.reactions.all():
+            g = groups.setdefault(r.emoji, {"emoji": r.emoji, "count": 0, "mine": False, "names": []})
+            g["count"] += 1
+            g["names"].append(r.user.display_name)
+            g["mine"] = g["mine"] or r.user_id == user.pk
+        return list(groups.values())
 
 
 class Activity(models.Model):
@@ -620,3 +640,25 @@ class Button(models.Model):
 
     def __str__(self):
         return self.name
+
+
+REACTIONS = ["👍", "❤️", "😂", "🎉", "👀", "✅", "🙏"]
+
+
+class Reaction(models.Model):
+    comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name="reactions")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="+")
+    emoji = models.CharField(max_length=8)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.UniqueConstraint(fields=["comment", "user", "emoji"], name="uniq_reaction")]
+
+
+class Vote(models.Model):
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="votes")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["card", "user"], name="uniq_vote")]

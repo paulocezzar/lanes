@@ -807,3 +807,38 @@ button.colour-dot { width: 24px; height: 24px; border-radius: 50%; cursor: point
 .cm-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
 .press-btn { white-space: nowrap; }
 .btn-preview { display: inline-flex; gap: 6px; align-items: center; }
+
+/* ---------- formatting (light Markdown) ---------- */
+.md p { margin: 0 0 6px; }
+.md p:last-child { margin-bottom: 0; }
+.md ul, .md ol { margin: 4px 0 6px; padding-left: 20px; }
+.md li.task { list-style: none; margin-left: -18px; }
+.md h4, .md h5 { margin: 8px 0 4px; font-size: 15px; }
+.md h5 { font-size: 13px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-2); }
+.md code { background: var(--surface-3); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+.md blockquote { margin: 4px 0; padding: 2px 10px; border-left: 3px solid var(--border); color: var(--text-2); }
+.md a { color: var(--accent); }
+.md hr { border: 0; border-top: 1px solid var(--border); margin: 8px 0; }
+.desc-read[data-desc-view] { cursor: text; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); line-height: 1.5; }
+.desc-read[data-desc-view]:hover { background: var(--surface-3); }
+.md-hint { margin-left: auto; font-size: 11px; color: var(--text-2); align-self: center; }
+
+/* ---------- reactions and votes ---------- */
+.reactions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
+.reaction { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 1px 8px; font: inherit; font-size: 12px; cursor: pointer; line-height: 20px; }
+.reaction:hover { background: var(--surface-3); }
+.reaction.mine { border-color: var(--accent); background: rgb(87 157 255 / .15); }
+.reaction.add { list-style: none; color: var(--text-2); }
+.reaction.add::-webkit-details-marker { display: none; }
+.react-more { position: relative; display: inline-block; }
+.react-pick { position: absolute; z-index: 30; bottom: 100%; left: 0; display: flex; gap: 2px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 6px 20px rgb(0 0 0 / .3); }
+.react-pick .reaction { border: 0; background: transparent; font-size: 16px; padding: 2px 4px; }
+.reactions .link-btn { margin-left: 4px; }
+.vote-btn.on { border-color: var(--accent); color: var(--accent); }
+.vote-badge { font-weight: 600; }
+
+/* ---------- card ageing ---------- */
+.card-tile.aged-1 { opacity: .85; }
+.card-tile.aged-2 { opacity: .65; filter: saturate(.6); }
+.card-tile.aged-3 { opacity: .45; filter: saturate(.2) sepia(.25); }
+.card-tile[class*="aged-"]:hover { opacity: 1; filter: none; }

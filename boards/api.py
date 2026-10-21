@@ -470,6 +470,10 @@ def board_update(request, board_id):
         board.description = (d["description"] or "")[:5000]
     if "is_template" in d:
         board.is_template = bool(d["is_template"])
+    if "voting" in d:
+        board.voting = bool(d["voting"])
+    if "card_aging" in d:
+        board.card_aging = bool(d["card_aging"])
     if "collection" in d:
         from .models import Collection
         value = d["collection"]
@@ -709,3 +713,47 @@ def board_button_press(request, board_id, button_id):
     button = get_object_or_404(Button, pk=button_id, board=board, kind=Button.BOARD)
     done = automation.press_board_button(button, request.user)
     return {"summary": "; ".join(done) or "Nothing to change."}
+
+
+# ---------- reactions and votes ----------
+
+@api
+def comment_react(request, comment_id):
+    from .models import REACTIONS, Reaction
+    comment = get_object_or_404(Comment.objects.select_related("card__list__board"), pk=comment_id)
+    card = comment.card
+    if not permissions.can_view_card(card, request.user):
+        raise Http404
+    if not permissions.can_comment_card(card, request.user):
+        raise ApiError("Join the board to react.", 403)
+    emoji = request.data.get("emoji")
+    if emoji not in REACTIONS:
+        raise ApiError("Pick one of the reactions.")
+    r = Reaction.objects.filter(comment=comment, user=request.user, emoji=emoji).first()
+    if r:
+        r.delete()
+    else:
+        Reaction.objects.create(comment=comment, user=request.user, emoji=emoji)
+    from .signals import bump
+    bump(card.list.board_id, card.pk)
+    return card_response(card.pk, request)
+
+
+@api
+def card_vote(request, card_id):
+    from .models import Vote
+    card = get_object_or_404(Card.objects.select_related("list__board"), pk=card_id)
+    if not permissions.can_view_card(card, request.user):
+        raise Http404
+    if not card.list.board.voting:
+        raise ApiError("Voting is turned off on this board.")
+    if not permissions.can_comment_card(card, request.user):
+        raise ApiError("Join the board to vote.", 403)
+    v = Vote.objects.filter(card=card, user=request.user).first()
+    if v:
+        v.delete()
+    else:
+        Vote.objects.create(card=card, user=request.user)
+    from .signals import bump
+    bump(card.list.board_id, card.pk)
+    return card_response(card.pk, request)

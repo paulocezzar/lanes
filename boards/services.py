@@ -6,7 +6,7 @@ from django.template.loader import render_to_string
 from . import ai, permissions
 from django.contrib.auth import get_user_model
 
-from .models import (COLOURS, STICKERS, Activity, BoardMember, Card, CardFieldValue, CardMirror, Checklist,
+from .models import (COLOURS, REACTIONS, STICKERS, Activity, BoardMember, Card, CardFieldValue, CardMirror, Checklist,
                      ChecklistItem, CustomField, Label)
 
 User = get_user_model()
@@ -29,6 +29,7 @@ def cards_qs():
             Prefetch("items", queryset=ChecklistItem.objects.select_related("assignee")))),
         Prefetch("field_values", queryset=CardFieldValue.objects.select_related("field")),
         "comments",
+        "votes",
     )
 
 
@@ -70,7 +71,7 @@ def render_modal(card, request):
         "can_see_source": permissions.can_view(board, user),
         "mirrors": mirrors,
         "mirror_targets": [(b, ls) for b, ls in mirror_targets if ls],
-        "feed": _feed(card),
+        "feed": _feed(card, user),
         "label_colours": Label.COLOURS,
         "fields": _field_rows(card, board),
         "attachments_persistent": settings.ATTACHMENTS_PERSISTENT,
@@ -80,6 +81,9 @@ def render_modal(card, request):
         "ai_enabled": ai.enabled(),
         "sticker_choices": STICKERS,
         "card_buttons": [b for b in board.buttons.all() if b.kind == "card"],
+        "reaction_choices": REACTIONS,
+        "voted": any(v.user_id == user.pk for v in card.votes.all()),
+        "voters": [v.user.display_name for v in card.votes.select_related("user")],
         "watching": card.watches.filter(user=user).exists(),
         "watching_board": board.watches.filter(user=user, card__isnull=True).exists(),
     }
@@ -91,9 +95,10 @@ def _field_rows(card, board):
     return [{"field": f, "value": values.get(f.pk)} for f in board.custom_fields.all()]
 
 
-def _feed(card):
+def _feed(card, user):
     """Comments and activity merged newest first, like Trello's right panel."""
-    comments = [{"kind": "comment", "at": c.created_at, "obj": c} for c in card.comments.select_related("author")]
+    comments = [{"kind": "comment", "at": c.created_at, "obj": c, "reactions": c.reaction_groups(user)}
+                for c in card.comments.select_related("author").prefetch_related("reactions__user")]
     acts = [{"kind": "activity", "at": a.created_at, "obj": a} for a in card.activity.select_related("actor")]
     return sorted(comments + acts, key=lambda x: x["at"], reverse=True)
 
