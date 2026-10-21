@@ -5,6 +5,7 @@ from . import (api, views, views_automation, views_board, views_files, views_not
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("internal/run-automations/", views.run_automations_hook),
     path("p/<str:token>/", views_public.public_board, name="public_board"),
     path("p/<str:token>/c/<int:card_id>/", views_public.public_card, name="public_card"),
     path("my-cards/", views.my_cards, name="my_cards"),

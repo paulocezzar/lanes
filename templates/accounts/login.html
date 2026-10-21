@@ -6,6 +6,10 @@
   <div class="login-card">
     <div class="brand big"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span>Lanes</div>
     <p class="muted">Boards for every department.</p>
+    {% if ms_mode != "off" %}
+    <a class="ms-btn" href="{% url 'ms_login' %}{% if next %}?next={{ next|urlencode }}{% endif %}"><span class="ms-logo" aria-hidden="true"><i style="background:#f25022"></i><i style="background:#7fba00"></i><i style="background:#00a4ef"></i><i style="background:#ffb900"></i></span>Sign in with Microsoft</a>
+    <div class="or-line">{% if ms_mode == "required" %}guests and admins{% else %}or with a Lanes password{% endif %}</div>
+    {% endif %}
     <form method="post">
       {% csrf_token %}
       {% if form.errors %}<p class="form-error">That email and password don't match.</p>{% endif %}

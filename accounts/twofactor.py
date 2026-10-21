@@ -127,6 +127,7 @@ class EnforceTwoStepMiddleware:
     def __call__(self, request):
         user = getattr(request, "user", None)
         if (user is not None and user.is_authenticated and not user.totp_enabled
+                and request.session.get("auth_via") != "microsoft"      # Microsoft did its own check
                 and not request.path.startswith(self.ALLOWED) and required_for(user)):
             if request.path.startswith("/api/"):
                 from django.http import JsonResponse
@@ -140,8 +141,18 @@ class EnforceTwoStepMiddleware:
 class LoginView(auth_views.LoginView):
     template_name = "accounts/login.html"
 
+    def get_context_data(self, **kwargs):
+        from .ms_login import mode
+        ctx = super().get_context_data(**kwargs)
+        ctx["ms_mode"] = mode()
+        return ctx
+
     def form_valid(self, form):
         user = form.get_user()
+        from .ms_login import mode
+        if mode() == "required" and not (user.is_superuser or user.is_guest):
+            messages.error(self.request, "Your company signs in with Microsoft — use the Microsoft button.")
+            return redirect("login")
         if not user.totp_enabled:
             return super().form_valid(form)
         s = self.request.session

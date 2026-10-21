@@ -5,6 +5,7 @@ from django.db.models import Prefetch, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import automation, permissions, positions
@@ -151,3 +152,32 @@ def board_restore(request, board_id):
     audit.record(request, "board_restored", board=board)
     messages.success(request, f"{board.title} is back.")
     return redirect("board", board_id=board.pk)
+
+
+@csrf_exempt
+def run_automations_hook(request):
+    """Called every 5 minutes by the Render cron job (with CRON_TOKEN), so
+    recurring cards, reminders, due-date rules and emails run on time and only
+    the web service needs the email/Microsoft settings."""
+    import hmac
+    import time
+
+    from django.conf import settings
+    from django.http import HttpResponseNotAllowed
+
+    from . import mailer
+    from .automation import run_due_rules, run_due_schedules
+    from .notify import send_due_reminders
+    if not settings.CRON_TOKEN:
+        raise Http404
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    given = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    if not hmac.compare_digest(given, settings.CRON_TOKEN):
+        raise Http404
+    started = time.monotonic()
+    result = {"recurring": run_due_schedules(), "rules": run_due_rules(), "reminders": send_due_reminders()}
+    result["notification_emails"] = mailer.notification_emails()
+    result["digests"] = mailer.daily_digests()
+    result["sent"] = mailer.flush(limit=80, budget=40 - (time.monotonic() - started))
+    return JsonResponse(result)

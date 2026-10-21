@@ -1716,3 +1716,96 @@ class EmailTests(TestCase):
         self.u.refresh_from_db(); self.assertEqual(self.u.email_notifications, "daily")
         r = c.post("/company/settings/", {"action": "test_email"}, follow=True)
         self.assertContains(r, "Test email sent")
+
+
+class MicrosoftTests(TestCase):
+    TENANT, CLIENT = "11111111-2222-3333-4444-555555555555", "aaaa-bbbb"
+
+    def setUp(self):
+        from django.test import override_settings
+        o = override_settings(MS_TENANT_ID=self.TENANT, MS_CLIENT_ID=self.CLIENT, MS_CLIENT_SECRET="s3cret")
+        o.enable(); self.addCleanup(o.disable)
+        self.u = User.objects.create_user("paulo@thenewt.co.uk", "pw-12345", first_name="Paulo")
+
+    def token(self, real_nonce, **claims):
+        import base64, time
+        body = {"aud": self.CLIENT, "tid": self.TENANT, "iss": f"https://login.microsoftonline.com/{self.TENANT}/v2.0",
+                "nonce": real_nonce, "exp": time.time() + 600, "oid": "oid-1", "preferred_username": "paulo@thenewt.co.uk",
+                "name": "Paulo Silva", **claims}
+        enc = lambda d: base64.urlsafe_b64encode(json.dumps(d).encode()).rstrip(b"=").decode()
+        return {"id_token": f"{enc({'alg': 'RS256'})}.{enc(body)}.sig"}
+
+    def sign_in(self, client, **claims):
+        from unittest import mock
+        from accounts import microsoft
+        r = client.get("/login/microsoft/")
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("login.microsoftonline.com", r["Location"])
+        flow = client.session["ms_auth"]
+        with mock.patch.object(microsoft, "post_form", return_value=self.token(flow["nonce"], **claims)) as pf:
+            r = client.get(f"/login/microsoft/callback/?code=abc&state={flow['state']}")
+            if pf.called:
+                self.assertEqual(pf.call_args[0][1]["code_verifier"], flow["verifier"])
+        return r
+
+    def test_existing_user_signs_in_and_is_linked(self):
+        c = Client()
+        self.assertContains(c.get("/login/"), "Sign in with Microsoft")
+        r = self.sign_in(c)
+        self.assertEqual(r.status_code, 302); self.assertEqual(r["Location"], "/")
+        self.assertEqual(c.get("/").status_code, 200)
+        self.u.refresh_from_db(); self.assertEqual(self.u.ms_oid, "oid-1")
+        # later matched by oid even if the email changed
+        c2 = Client(); self.sign_in(c2, preferred_username="p.silva@thenewt.co.uk")
+        self.assertEqual(c2.get("/").status_code, 200)
+
+    def test_rejects_wrong_tenant_nonce_and_unknown(self):
+        c = Client()
+        self.sign_in(c, tid="99999999-0000-0000-0000-000000000000")
+        self.assertEqual(c.get("/").status_code, 302)                  # not signed in
+        c = Client(); self.sign_in(c, nonce="forged")
+        self.assertEqual(c.get("/").status_code, 302)
+        c = Client(); r = self.sign_in(c, oid="oid-x", preferred_username="stranger@thenewt.co.uk")
+        self.assertEqual(c.get("/").status_code, 302)
+        self.assertFalse(User.objects.filter(email="stranger@thenewt.co.uk").exists())
+
+    def test_auto_create_and_required_mode(self):
+        from .models import CompanySettings
+        cs = CompanySettings.get(); cs.microsoft_auto_create = True; cs.require_two_step = "everyone"; cs.save()
+        c = Client(); self.sign_in(c, oid="oid-new", preferred_username="new.starter@thenewt.co.uk",
+                                   given_name="New", family_name="Starter")
+        new = User.objects.get(email="new.starter@thenewt.co.uk")
+        self.assertFalse(new.has_usable_password())
+        self.assertEqual(c.get("/").status_code, 200)        # Microsoft did two-step, so no Lanes setup page
+        cs.microsoft_login = "required"; cs.save()
+        r = Client().post("/login/", {"username": "paulo@thenewt.co.uk", "password": "pw-12345"}, follow=True)
+        self.assertContains(r, "use the Microsoft button")
+        cs.microsoft_login = "off"; cs.save()
+        self.assertEqual(Client().get("/login/microsoft/").status_code, 404)
+
+    def test_graph_email_backend(self):
+        from unittest import mock
+        from django.core.mail import EmailMultiAlternatives
+        from django.test import override_settings
+        from accounts import graph_mail
+        with override_settings(EMAIL_BACKEND="accounts.graph_mail.GraphEmailBackend", MS_MAIL_SENDER="lanes@thenewt.co.uk"):
+            with mock.patch.object(graph_mail, "graph_post", return_value=202) as gp:
+                m = EmailMultiAlternatives("Hi", "text", "Lanes <lanes@thenewt.co.uk>", ["a@b.com"])
+                m.attach_alternative("<b>hi</b>", "text/html")
+                self.assertEqual(m.send(), 1)
+        path, payload = gp.call_args[0]
+        self.assertEqual(path, "/users/lanes@thenewt.co.uk/sendMail")
+        self.assertEqual(payload["message"]["body"]["contentType"], "HTML")
+        self.assertEqual(payload["message"]["toRecipients"][0]["emailAddress"]["address"], "a@b.com")
+
+
+class CronHookTests(TestCase):
+    def test_hook_needs_token(self):
+        from django.test import override_settings
+        c = Client()
+        self.assertEqual(c.post("/internal/run-automations/").status_code, 404)        # no token configured
+        with override_settings(CRON_TOKEN="t0ken"):
+            self.assertEqual(c.post("/internal/run-automations/", HTTP_AUTHORIZATION="Bearer nope").status_code, 404)
+            r = c.post("/internal/run-automations/", HTTP_AUTHORIZATION="Bearer t0ken")
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("rules", r.json())

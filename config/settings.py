@@ -123,6 +123,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 
+# Shared secret the Render cron job sends to /internal/run-automations/.
+CRON_TOKEN = os.environ.get("CRON_TOKEN", "")
+
 # Public address of Lanes, used for links in emails (the cron job has no request to read it from).
 SITE_URL = (os.environ.get("SITE_URL") or (f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}"
             if os.environ.get("RENDER_EXTERNAL_HOSTNAME") else "http://localhost:8000")).rstrip("/")

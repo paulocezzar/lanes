@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
-from accounts import twofactor
+from accounts import ms_login, twofactor
 from accounts import views as accounts_views
 from accounts.views import set_theme
 
@@ -25,6 +25,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("login/", twofactor.LoginView.as_view(), name="login"),
     path("login/code/", twofactor.login_code, name="login_code"),
+    path("login/microsoft/", ms_login.start, name="ms_login"),
+    path("login/microsoft/callback/", ms_login.callback, name="ms_callback"),
     path("account/two-step/", twofactor.setup, name="two_step_setup"),
     path("account/two-step/off/", twofactor.disable, name="two_step_disable"),
     path("account/two-step/new-codes/", twofactor.new_codes, name="two_step_new_codes"),

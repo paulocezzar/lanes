@@ -61,11 +61,16 @@ def send_one(e):
     return e.sent_at is not None
 
 
-def flush(limit=200):
+def flush(limit=200, budget=None):
+    """Send queued email, stopping after `limit` emails or `budget` seconds."""
+    import time
     if not enabled():
         return 0
+    stop = time.monotonic() + budget if budget else None
     sent = 0
     for e in OutgoingEmail.objects.filter(sent_at__isnull=True, attempts__lt=5)[:limit]:
+        if stop and time.monotonic() > stop:
+            break
         sent += send_one(e)
     return sent
 

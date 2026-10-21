@@ -22,16 +22,16 @@
       <tbody>
       {% for r in rows %}{% with u=r.u %}
       <tr>
-        <td><b>{{ u.display_name }}</b>{% if u.is_guest %} <span class="guest-pill">Guest</span>{% endif %}{% if u.is_superuser %} <span class="ok-pill">Company admin</span>{% endif %}<br><small class="muted">{{ u.email }}</small></td>
+        <td><b>{{ u.display_name }}</b>{% if u.is_guest %} <span class="guest-pill">Guest</span>{% endif %}{% if u.is_superuser %} <span class="ok-pill">Company admin</span>{% endif %}{% if u.ms_oid %} <span class="ms-pill" title="Has signed in with Microsoft">Microsoft</span>{% endif %}<br><small class="muted">{{ u.email }}</small></td>
         <td>{{ r.depts|join:", "|default:"—" }}</td>
         <td>{% if u.last_login %}{{ u.last_login|timesince }} ago{% else %}<span class="muted">Never</span>{% endif %}</td>
         <td>{% if u.totp_enabled %}<span class="ok-pill">On</span>{% elif r.needs_2fa %}<span class="guest-pill">Needs setting up</span>{% else %}<span class="muted">Off</span>{% endif %}</td>
         <td><div class="row-actions">
           {% if u.totp_enabled %}
-          <form method="post" action="{% url 'two_step_reset' u.pk %}" onsubmit="return confirm('Reset two-step sign-in for {{ u.display_name|escapejs }}? Use this if they lost their phone.')">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn ghost sm">Reset two-step</button></form>
+          <form method="post" action="{% url 'two_step_reset' u.pk %}" data-confirm="Reset two-step sign-in for {{ u.display_name }}? Use this if they lost their phone." data-confirm-ok="Reset" data-danger>{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn ghost sm">Reset two-step</button></form>
           {% endif %}
           {% if u != user %}
-          <form method="post" {% if u.is_active %}onsubmit="return confirm('Switch off {{ u.display_name|escapejs }}? They won\'t be able to sign in. Their cards and comments stay.')"{% endif %}>{% csrf_token %}
+          <form method="post" {% if u.is_active %}data-confirm="Switch off {{ u.display_name }}? They won't be able to sign in. Their cards and comments stay." data-confirm-ok="Switch off" data-danger{% endif %}>{% csrf_token %}
             <input type="hidden" name="user_id" value="{{ u.pk }}">
             {% if u.is_active %}<input type="hidden" name="action" value="deactivate"><button class="btn ghost sm danger-text">Switch off</button>
             {% else %}<input type="hidden" name="action" value="activate"><button class="btn ghost sm">Switch back on</button>{% endif %}

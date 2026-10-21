@@ -188,7 +188,7 @@
     } else if (e.target.closest('[data-list-limit]')) {
       e.target.closest('details')?.removeAttribute('open');
       const cur = listEl.dataset.limit || '';
-      const v = prompt('Maximum number of cards in this list (leave empty for no limit):', cur);
+      const v = await LanesUI.ask('Card limit for this list', { value: cur, type: 'number', hint: 'The count turns red when the list has more cards than this. Leave empty for no limit.' });
       if (v === null) return;
       await post(`/api/lists/${listEl.dataset.listId}/`, { card_limit: v.trim() });
       forceRefresh();
@@ -198,7 +198,7 @@
     } else if (e.target.closest('[data-expand-list]')) {
       toggleCollapsed(listEl.dataset.listId, false);
     } else if (e.target.closest('[data-archive-list]')) {
-      if (!confirm('Archive this list and hide its cards?')) return;
+      if (!await LanesUI.confirm('Archive this list?', { text: 'Its cards are hidden too. You can bring it back from Menu → Archived.', ok: 'Archive', danger: true })) return;
       await post(`/api/lists/${listEl.dataset.listId}/`, { archive: true });
       listEl.remove();
     } else {
@@ -402,14 +402,14 @@
     if (hide) return post(`/api/checklists/${hide.closest('[data-checklist]').dataset.checklist}/`,
       { hide_checked: hide.dataset.hideChecked === '1' }).then(applyCard);
     if (t.closest('[data-delete-checklist]')) {
-      if (!confirm('Delete this checklist?')) return;
+      if (!await LanesUI.confirm('Delete this checklist?', { ok: 'Delete', danger: true })) return;
       return post(`/api/checklists/${t.closest('[data-checklist]').dataset.checklist}/`, { delete: true }).then(applyCard);
     }
     const delItem = t.closest('[data-delete-item]');
     if (delItem) return post(`/api/items/${delItem.dataset.deleteItem}/`, { delete: true }).then(applyCard);
     const rmMirror = t.closest('[data-remove-mirror]');
     if (rmMirror) {
-      if (!confirm('Remove the card from that board? The original stays where it is.')) return;
+      if (!await LanesUI.confirm('Remove the mirror from that board?', { text: 'The original card stays where it is.', ok: 'Remove', danger: true })) return;
       return post(`/api/mirrors/${rmMirror.dataset.removeMirror}/`, { delete: true }).then(data => {
         $(`.card-tile[data-mirror-id="${rmMirror.dataset.removeMirror}"]`, listsEl)?.remove();
         refreshCounts();
@@ -426,24 +426,24 @@
     if (cover) return post(`/api/attachments/${cover.dataset.cover}/`, { cover: cover.dataset.on === '1' }).then(applyCard);
     const delAtt = t.closest('[data-delete-attachment]');
     if (delAtt) {
-      if (!confirm('Delete this attachment?')) return;
+      if (!await LanesUI.confirm('Delete this attachment?', { ok: 'Delete', danger: true })) return;
       return post(`/api/attachments/${delAtt.dataset.deleteAttachment}/`, { delete: true }).then(applyCard);
     }
     const delComment = t.closest('[data-delete-comment]');
     if (delComment) {
-      if (!confirm('Delete this comment?')) return;
+      if (!await LanesUI.confirm('Delete this comment?', { ok: 'Delete', danger: true })) return;
       return post(`/api/comments/${delComment.dataset.deleteComment}/`, { delete: true }).then(applyCard);
     }
   });
 
-  dialogBody.addEventListener('change', e => {
+  dialogBody.addEventListener('change', async e => {
     const t = e.target;
     if (t.matches('[data-label]')) return cardPost('labels', { label_id: +t.dataset.label });
     if (t.matches('[data-item]')) return post(`/api/items/${t.dataset.item}/`, { is_done: t.checked }).then(applyCard);
     if (t.matches('[data-move-list]')) return cardPost('move', { list_id: +t.value });
     if (t.matches('[data-move-board]')) {
       const opt = t.selectedOptions[0];
-      if (!t.value || !confirm(`Move this card to ${opt.parentElement.label} › ${opt.textContent}?\nLabels and fields that don't exist there are dropped.`)) { t.value = ''; return; }
+      if (!t.value || !await LanesUI.confirm(`Move this card to ${opt.parentElement.label} › ${opt.textContent}?`, { text: 'Comments, checklists and attachments come too. Labels and fields that don\'t exist on that board are dropped.', ok: 'Move' })) { t.value = ''; return; }
       return post(`/api/cards/${openCardId}/move/`, { list_id: +t.value }).then(data => {
         $$(`.card-tile[data-card-id="${data.card_id}"]:not([data-mirror-id])`, listsEl).forEach(el => el.remove());
         refreshCounts();
@@ -601,7 +601,7 @@
   });
   shareMembers.addEventListener('click', async e => {
     const b = e.target.closest('[data-member-remove]');
-    if (!b || !confirm('Remove from this board?')) return;
+    if (!b || !await LanesUI.confirm('Remove this person from the board?', { ok: 'Remove', danger: true })) return;
     updateMembers(await post(`/api/boards/${boardId}/members/${b.dataset.memberRemove}/`, { remove: true }));
   });
 
@@ -639,7 +639,7 @@
     }
     const del = e.target.closest('[data-delete-card]');
     if (del) {
-      if (!confirm('Delete this card for good? Its comments, checklists and attachments go too. This can\'t be undone.')) return;
+      if (!await LanesUI.confirm('Delete this card for good?', { text: 'Its comments, checklists and attachments go too. This can\'t be undone.', ok: 'Delete for good', danger: true })) return;
       await post(`/api/cards/${del.dataset.deleteCard}/delete/`);
       del.closest('.archived-row').remove();
       return toast('Card deleted.');
@@ -657,7 +657,7 @@
       return;
     }
     if (e.target.closest('[data-archive-board]')) {
-      if (!confirm('Archive this board? It disappears for everyone until an admin restores it.')) return;
+      if (!await LanesUI.confirm('Archive this board?', { text: 'It disappears for everyone until an admin restores it from the Boards page.', ok: 'Archive board', danger: true })) return;
       await post(`/api/boards/${boardId}/update/`, { archive: true });
       location.href = '/';
     }
@@ -681,7 +681,7 @@
   });
   drawer.addEventListener('click', async e => {
     const del = e.target.closest('[data-field-delete]');
-    if (!del || !confirm('Delete this field and every value stored in it?')) return;
+    if (!del || !await LanesUI.confirm('Delete this field?', { text: 'Every value stored in it on every card goes too.', ok: 'Delete', danger: true })) return;
     await post(`/api/boards/${boardId}/fields/`, { field_id: +del.closest('[data-field-row]').dataset.fieldRow, delete: true });
     del.closest('[data-field-row]').remove();
   });
@@ -689,7 +689,7 @@
   $('[data-board-collection]', drawer)?.addEventListener('change', async e => {
     let value = e.target.value;
     if (value === '__new') {
-      const name = prompt('Name the new collection (e.g. Christmas 2026):');
+      const name = await LanesUI.ask('New collection', { placeholder: 'e.g. Christmas 2026', ok: 'Create' });
       if (!name || !name.trim()) { location.reload(); return; }
       value = `new:${name.trim()}`;
     }
@@ -832,9 +832,9 @@
       toast('No templates yet. Open a card and click “Make template” to create one.');
       return;
     }
-    const choice = prompt('Create a card from which template?\n\n' +
-      templates.map((t, i) => `${i + 1}. ${t.dataset.title}`).join('\n') + '\n\nType a number:');
-    const tpl = templates[parseInt(choice, 10) - 1];
+    const pick = await LanesUI.choose('Create a card from which template?',
+      templates.map((t, i) => ({ label: t.dataset.title, value: i })));
+    const tpl = pick === null ? null : templates[pick];
     if (!tpl) return;
     const listEl = btn.closest('.list');
     const data = await post(`/api/lists/${listEl.dataset.listId}/from-template/`, { template_id: +tpl.dataset.cardId });

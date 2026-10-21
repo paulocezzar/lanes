@@ -53,11 +53,11 @@
         <summary class="icon-btn" title="More">{% include "boards/_icon.html" with i="dots" %}</summary>
         <div class="menu-panel right">
           {% if m.user != request.user %}
-          <form method="post" action="{% url 'workspace_member_reset_password' workspace.pk m.user.pk %}" onsubmit="return confirm('Give {{ m.user.display_name|escapejs }} a new temporary password? Their old one stops working.')">
+          <form method="post" action="{% url 'workspace_member_reset_password' workspace.pk m.user.pk %}" data-confirm="Give {{ m.user.display_name }} a new temporary password? Their old one stops working." data-confirm-ok="Reset" data-danger>
             {% csrf_token %}<button class="menu-item">Reset password</button>
           </form>
           {% endif %}
-          <form method="post" action="{% url 'workspace_member_update' workspace.pk m.user.pk %}" onsubmit="return confirm('Remove {{ m.user.display_name|escapejs }} from {{ workspace.name|escapejs }}?')">
+          <form method="post" action="{% url 'workspace_member_update' workspace.pk m.user.pk %}" data-confirm="Remove {{ m.user.display_name }} from {{ workspace.name }}?" data-confirm-ok="Remove" data-danger>
             {% csrf_token %}<input type="hidden" name="action" value="remove">
             <button class="menu-item danger">Remove from {{ workspace.name }}</button>
           </form>

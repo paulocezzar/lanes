@@ -986,3 +986,13 @@ kbd { display: inline-block; min-width: 20px; text-align: center; padding: 1px 6
 .keys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px 22px; }
 .keys-grid p { margin: 6px 0; font-size: 13px; }
 .card-tile.kb-current { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ms-pill { display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px; background: rgb(0 164 239 / .15); color:#0078d4; vertical-align: middle; }
+
+/* ---------- in-app question boxes (instead of the browser's) ---------- */
+.ui-dialog { width: min(440px, calc(100vw - 32px)); }
+.ui-title { margin: 0 0 6px; font-size: 16px; }
+.ui-text { margin: 0 0 12px; color: var(--text-2); font-size: 14px; line-height: 1.45; }
+.ui-input { width: 100%; margin: 4px 0 14px; box-sizing: border-box; }
+.ui-choices { display: grid; gap: 6px; margin: 8px 0 12px; max-height: 50vh; overflow-y: auto; }
+.ui-choice { text-align: left; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 8px; padding: 9px 12px; font: inherit; cursor: pointer; }
+.ui-choice:hover, .ui-choice:focus { border-color: var(--accent); outline: none; }

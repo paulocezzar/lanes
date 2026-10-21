@@ -53,7 +53,7 @@
       const btn = e.target.closest('[data-cal-add]');
       if (!btn || !firstList) return;
       const day = btn.closest('[data-day]').dataset.day;
-      const title = prompt(`New card due ${day} (added to “${firstList.dataset.listTitle}”):`);
+      const title = await LanesUI.ask(`New card due ${day}`, { hint: `It goes into “${firstList.dataset.listTitle}”.`, placeholder: 'Card title', ok: 'Add card' });
       if (!title || !title.trim()) return;
       const data = await L.post(`/api/lists/${firstList.dataset.listId}/cards/`, { title: title.trim() });
       await L.post(`/api/cards/${data.card_id}/update/`, { due_at: `${day}T17:00` });
