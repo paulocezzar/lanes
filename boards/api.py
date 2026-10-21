@@ -401,16 +401,30 @@ def board_share(request, board_id):
         raise ApiError("Only board admins can share this board.", 403)
     email = (request.data.get("email") or "").strip().lower()
     person = User.objects.filter(email__iexact=email, is_active=True).first()
+    new_account = None
     if not person:
-        raise ApiError(f"No Lanes account for {email or 'that address'} yet. Ask an admin to add them.")
+        if not request.data.get("invite_guest"):
+            return {"needs_guest": True, "email": email}
+        if "@" not in email or "." not in email.split("@")[-1]:
+            raise ApiError("That doesn't look like an email address.")
+        if User.objects.filter(email__iexact=email).exists():
+            raise ApiError("That account has been switched off. Ask a company admin.")
+        from .views_people import temporary_password
+        password = temporary_password()
+        person = User.objects.create_user(email=email, password=password, is_guest=True,
+                                          first_name=(request.data.get("first_name") or "").strip()[:150],
+                                          last_name=(request.data.get("last_name") or "").strip()[:150])
+        new_account = {"email": email, "password": password}
     role = request.data.get("role") if request.data.get("role") in dict(BoardMember.ROLES) else BoardMember.MEMBER
+    if person.is_guest and role == BoardMember.ADMIN:
+        role = BoardMember.MEMBER
     _, created = BoardMember.objects.get_or_create(board=board, user=person, defaults={"role": role})
     if not created:
         raise ApiError(f"{person.display_name} is already on this board.")
     notify.send(person, Notification.ADDED_TO_BOARD, actor=request.user, board=board,
                 text=f"added you to the board {board.title}")
     log(board, request.user, "board_member_added", name=person.display_name)
-    return {"html": _members_html(board, request), "count": board.memberships.count()}
+    return {"html": _members_html(board, request), "count": board.memberships.count(), "new_account": new_account}
 
 
 @api
@@ -429,6 +443,8 @@ def board_member_update(request, board_id, user_id):
     elif request.data.get("role") in dict(BoardMember.ROLES):
         if last_admin and request.data["role"] != BoardMember.ADMIN:
             raise ApiError("A board needs at least one admin.")
+        if membership.user.is_guest and request.data["role"] == BoardMember.ADMIN:
+            raise ApiError("Guests can be members or observers, not admins.")
         membership.role = request.data["role"]
         membership.save()
     return {"html": _members_html(board, request), "count": board.memberships.count()}
@@ -474,6 +490,9 @@ def board_update(request, board_id):
         board.voting = bool(d["voting"])
     if "card_aging" in d:
         board.card_aging = bool(d["card_aging"])
+    if "public" in d:
+        import secrets
+        board.public_token = secrets.token_urlsafe(18) if d["public"] else ""
     if "collection" in d:
         from .models import Collection
         value = d["collection"]
@@ -487,7 +506,7 @@ def board_update(request, board_id):
     if d.get("archive"):
         board.is_archived = True
     board.save()
-    return {"ok": True}
+    return {"ok": True, "public_token": board.public_token}
 
 
 

@@ -842,3 +842,23 @@ button.colour-dot { width: 24px; height: 24px; border-radius: 50%; cursor: point
 .card-tile.aged-2 { opacity: .65; filter: saturate(.6); }
 .card-tile.aged-3 { opacity: .45; filter: saturate(.2) sepia(.25); }
 .card-tile[class*="aged-"]:hover { opacity: 1; filter: none; }
+
+/* ---------- guests and public boards ---------- */
+.guest-pill { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px; background: #5d4a12; color: #ffe7a3; vertical-align: middle; }
+.guest-invite, .new-account { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin: 8px 0; display: grid; gap: 8px; font-size: 13px; }
+.guest-invite p { margin: 0; }
+.guest-invite .row input { flex: 1; min-width: 0; }
+.new-account .cred { display: flex; gap: 10px; align-items: baseline; }
+.new-account .cred span { color: var(--text-2); min-width: 130px; }
+.new-account code { font-size: 14px; font-weight: 700; user-select: all; }
+.public-link { display: flex; gap: 6px; margin: 6px 0; }
+.public-link input { flex: 1; min-width: 0; font-size: 12px; }
+.public-desc { margin: 0 16px 8px; color: #fff; max-width: 900px; }
+.public-card { max-width: 820px; margin: 24px auto; padding: 0 16px; }
+.public-card .cm { background: var(--surface); border-radius: 12px; margin-top: 10px; color: var(--text); }
+.public-card .cm-body.single { display: block; }
+.public-fields { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0 0 0 26px; }
+.public-fields dt { color: var(--text-2); }
+.public-fields dd { margin: 0; }
+.public-page .card-tile { cursor: pointer; }
+.public-page .board { min-height: 100vh; height: auto; }

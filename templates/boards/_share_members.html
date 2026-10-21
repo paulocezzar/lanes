@@ -1,7 +1,7 @@
 {% for m in memberships %}
 <div class="member-row">
   {% include "boards/_avatar.html" with u=m.user size="lg" %}
-  <div class="member-name">{{ m.user.display_name }}{% if m.user == request.user %} (you){% endif %}<small>{{ m.user.email }}</small></div>
+  <div class="member-name">{{ m.user.display_name }}{% if m.user == request.user %} (you){% endif %}{% if m.user.is_guest %} <span class="guest-pill">Guest</span>{% endif %}<small>{{ m.user.email }}</small></div>
   {% if can_manage %}
   <select data-member-role="{{ m.user.pk }}" aria-label="Role for {{ m.user.display_name }}">
     {% for key, name in roles %}<option value="{{ key }}" {% if key == m.role %}selected{% endif %}>{{ name }}</option>{% endfor %}

@@ -32,6 +32,8 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     THEMES = [("system", "Match my device"), ("light", "Light"), ("dark", "Dark")]
     theme = models.CharField(max_length=10, choices=THEMES, default="system")
+    # Guests (suppliers, contractors…) only ever see the boards they're added to.
+    is_guest = models.BooleanField(default=False)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]

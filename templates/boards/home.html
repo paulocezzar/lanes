@@ -54,6 +54,9 @@
     {% if user.is_superuser %}
     <h2>Create your first department</h2>
     <p class="muted">Departments hold boards and people — Bakery, Butchery, Kitchen and so on.</p>
+    {% elif user.is_guest %}
+    <h2>Welcome to Lanes</h2>
+    <p class="muted">You're a guest, so you'll see the boards people share with you below.</p>
     {% else %}
     <h2>You're not in a department yet</h2>
     <p class="muted">Ask your manager to add you to your department. Boards shared with you will still appear below.</p>

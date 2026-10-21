@@ -95,6 +95,9 @@ def workspace_member_add(request, workspace_id):
         return back
 
     _, created = WorkspaceMember.objects.get_or_create(workspace=ws, user=person, defaults={"role": role})
+    if person.is_guest:            # joining a department makes them a normal member of staff
+        person.is_guest = False
+        person.save(update_fields=["is_guest"])
     if created:
         messages.success(request, f"{person.display_name} added to {ws.name}.")
     else:

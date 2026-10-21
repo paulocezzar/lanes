@@ -92,6 +92,7 @@ class Board(models.Model):
     collection = models.ForeignKey(Collection, on_delete=models.SET_NULL, null=True, blank=True, related_name="boards")
     voting = models.BooleanField(default=False)       # 👍 votes on cards
     card_aging = models.BooleanField(default=False)   # untouched cards slowly fade
+    public_token = models.CharField(max_length=40, blank=True, db_index=True)  # read-only share link when set
 
     class Meta:
         ordering = ["title"]

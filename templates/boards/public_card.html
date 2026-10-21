@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load lanes_extras %}
+{% block title %}{{ card.title }} · {{ board.title }}{% endblock %}
+{% block body_class %}public-page{% endblock %}
+{% block head %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block content %}
+<main class="public-card">
+  <a class="link-btn" href="{% url 'public_board' token %}">← {{ board.title }}</a>
+  <article class="cm public">
+    <header class="cm-top"><span class="list-picker static">{{ board.title }} › {{ card.list.title }}</span></header>
+    <div class="cm-body single">
+      <div class="cm-main">
+        <div class="cm-title-row"><span class="complete-toggle{% if card.is_complete %} on{% endif %}">✓</span><h2 class="cm-title">{{ card.title }}</h2></div>
+        {% if card.labels.all or card.due_at or card.start_date %}
+        <div class="cm-meta">
+          {% if card.labels.all %}<div><h4 class="section-label">Labels</h4><div class="label-row">{% for l in card.labels.all %}<span class="label-swatch lc-{{ l.colour }}">{{ l.name }}</span>{% endfor %}</div></div>{% endif %}
+          {% if card.start_date or card.due_at %}<div><h4 class="section-label">Dates</h4><span class="date-pill due-{{ card.due_state|default:'none' }}">{% if card.start_date %}{{ card.start_date|date:"j M" }}{% if card.due_at %} – {% endif %}{% endif %}{% if card.due_at %}{{ card.due_at|date:"j M, H:i" }}{% endif %}</span></div>{% endif %}
+        </div>
+        {% endif %}
+        {% if fields %}<section class="cm-section"><h4 class="cm-h">Details</h4><dl class="public-fields">{% for f, v in fields %}<dt>{{ f.name }}</dt><dd>{{ v.display }}</dd>{% endfor %}</dl></section>{% endif %}
+        {% if card.description %}<section class="cm-section"><h4 class="cm-h">Description</h4><div class="desc-read md">{{ card.description|md }}</div></section>{% endif %}
+        {% for cl in card.checklists.all %}
+        <section class="cm-section checklist">
+          <h4 class="cm-h">{{ cl.title }}</h4>
+          {% with p=cl.progress %}<div class="progress"><span>{{ p }}%</span><div class="bar"><i style="width:{{ p }}%" class="{% if p == 100 %}full{% endif %}"></i></div></div>{% endwith %}
+          <ul class="items">{% for item in cl.items.all %}<li class="item{% if item.is_done %} done{% endif %}"><input type="checkbox" disabled {% if item.is_done %}checked{% endif %} aria-label="{{ item.text }}"><span class="item-text">{{ item.text }}</span></li>{% endfor %}</ul>
+        </section>
+        {% endfor %}
+      </div>
+    </div>
+  </article>
+</main>
+{% endblock %}

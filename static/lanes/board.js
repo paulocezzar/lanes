@@ -542,13 +542,42 @@
     shareMembers.innerHTML = data.html;
     document.getElementById('member-count').textContent = data.count;
   };
-  document.getElementById('share-form')?.addEventListener('submit', async e => {
+  const guestBox = document.getElementById('guest-invite');
+  const accountBox = document.getElementById('guest-account');
+  const shareForm = document.getElementById('share-form');
+  shareForm?.addEventListener('submit', async e => {
     e.preventDefault();
     const f = e.target;
+    accountBox.hidden = true;
     const data = await post(`/api/boards/${boardId}/share/`, { email: f.email.value, role: f.role.value });
+    if (data.needs_guest) {
+      guestBox.hidden = false;
+      $('[data-guest-email]', guestBox).textContent = data.email;
+      $('[data-guest-first]', guestBox).focus();
+      return;
+    }
     updateMembers(data);
     f.email.value = '';
     toast('Added to the board. Reload to assign them to cards.');
+  });
+  $('[data-guest-cancel]', guestBox || document.createElement('div'))?.addEventListener('click', () => (guestBox.hidden = true));
+  $('[data-invite-guest]', guestBox || document.createElement('div'))?.addEventListener('click', async () => {
+    const data = await post(`/api/boards/${boardId}/share/`, {
+      email: shareForm.email.value, role: shareForm.role.value, invite_guest: true,
+      first_name: $('[data-guest-first]', guestBox).value, last_name: $('[data-guest-last]', guestBox).value,
+    });
+    updateMembers(data);
+    guestBox.hidden = true;
+    shareForm.email.value = '';
+    if (data.new_account) {
+      const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      accountBox.innerHTML = `<b>Guest account created.</b> Send them these details — the password is shown only once:
+        <div class="cred"><span>Sign in at</span><code>${esc(location.origin)}/login/</code></div>
+        <div class="cred"><span>Email</span><code>${esc(data.new_account.email)}</code></div>
+        <div class="cred"><span>Temporary password</span><code>${esc(data.new_account.password)}</code></div>
+        <small class="muted">They can change it from their profile menu.</small>`;
+      accountBox.hidden = false;
+    }
   });
   shareMembers.addEventListener('change', async e => {
     const s = e.target.closest('[data-member-role]');
@@ -624,6 +653,18 @@
     }
     await post(`/api/boards/${boardId}/update/`, { collection: value });
     location.reload();
+  });
+  $('[data-public-toggle]', drawer)?.addEventListener('change', async e => {
+    const data = await post(`/api/boards/${boardId}/update/`, { public: e.target.checked });
+    const box = $('[data-public-link]', drawer);
+    box.hidden = !data.public_token;
+    $('[data-public-url]', box).value = data.public_token ? `${location.origin}/p/${data.public_token}/` : '';
+    toast(data.public_token ? 'Public link is on. Anyone with it can view this board.' : 'Public link turned off.');
+  });
+  $('[data-copy-public]', drawer)?.addEventListener('click', async () => {
+    const input = $('[data-public-url]', drawer);
+    try { await navigator.clipboard.writeText(input.value); toast('Link copied.'); }
+    catch { input.select(); toast('Press Ctrl+C to copy.'); }
   });
   $$('[data-board-flag]', drawer).forEach(cb => cb.addEventListener('change', async () => {
     await post(`/api/boards/${boardId}/update/`, { [cb.dataset.boardFlag]: cb.checked });

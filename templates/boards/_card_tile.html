@@ -1,7 +1,7 @@
 {% with counts=card.checklist_counts %}
 <article class="card-tile{% if card.is_complete %} is-complete{% endif %}{% if card.is_template %} is-template{% endif %}{% if mirror %} is-mirror{% endif %} {{ card.age_class }}" data-card-id="{{ card.pk }}" data-token="{% if mirror %}{{ mirror.token }}{% else %}{{ card.token }}{% endif %}"{% if mirror %} data-mirror-id="{{ mirror.pk }}"{% endif %} data-title="{{ card.title }}" data-labels="{% for l in card.labels.all %}{{ l.pk }} {% endfor %}" data-members="{% for u in card.members.all %}{{ u.pk }} {% endfor %}" data-due-ts="{% if card.due_at %}{{ card.due_at|date:'U' }}{% endif %}" data-complete="{{ card.is_complete|yesno:'1,0' }}" tabindex="0">
   {% if mirror %}<span class="mirror-flag" title="Mirrored from {{ card.list.board.title }} › {{ card.list.title }}">🔗 {{ card.list.board.title }} › {{ card.list.title }}</span>{% endif %}
-  {% if card.cover_id %}<img class="tile-cover" src="{% url 'attachment' card.cover_id %}" alt="" loading="lazy">{% elif card.cover_colour %}<div class="tile-cover colour lc-{{ card.cover_colour }}"></div>{% endif %}
+  {% if card.cover_id and not public %}<img class="tile-cover" src="{% url 'attachment' card.cover_id %}" alt="" loading="lazy">{% elif card.cover_colour %}<div class="tile-cover colour lc-{{ card.cover_colour }}"></div>{% endif %}
   {% if card.stickers %}<div class="tile-stickers">{% for s in card.stickers %}<span>{{ s }}</span>{% endfor %}</div>{% endif %}
   {% if card.is_template %}<span class="template-flag">Template</span>{% endif %}
   {% if card.labels.all %}
@@ -18,7 +18,7 @@
     {% if card.attachments.all %}<span class="badge" title="Attachments">📎{{ card.attachments.all|length }}</span>{% endif %}
     {% if card.comments.all %}<span class="badge">{% include "boards/_icon.html" with i="comment" %}{{ card.comments.all|length }}</span>{% endif %}
     {% if counts.1 %}<span class="badge{% if counts.0 == counts.1 %} all-done{% endif %}">{% include "boards/_icon.html" with i="check" %}{{ counts.0 }}/{{ counts.1 }}</span>{% endif %}
-    {% if card.members.all %}<span class="tile-members">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% endfor %}</span>{% endif %}
+    {% if card.members.all and not public %}<span class="tile-members">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% endfor %}</span>{% endif %}
   </div>
   {% endif %}{% endwith %}
 </article>

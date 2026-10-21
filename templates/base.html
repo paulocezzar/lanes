@@ -6,6 +6,7 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}Lanes{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'lanes/app.css' %}">
+  {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% if user.is_authenticated %}

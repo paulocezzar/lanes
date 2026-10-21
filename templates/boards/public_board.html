@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ board.title }} · Lanes{% endblock %}
+{% block body_class %}board-page public-page{% endblock %}
+{% block head %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block content %}
+<main class="board bg-{{ board.background }}" id="public-board">
+  <header class="board-head">
+    <h1 class="board-title">{{ board.title }}</h1>
+    <span class="board-vis">👁 Read-only public view</span>
+    <div class="board-head-right">{% if user.is_authenticated %}<a class="btn light sm" href="{% url 'board' board.pk %}">Open in Lanes</a>{% else %}<a class="btn light sm" href="{% url 'login' %}">Sign in</a>{% endif %}</div>
+  </header>
+  {% if board.description %}<div class="public-desc md">{{ board.description }}</div>{% endif %}
+  <div class="lists" id="lists">
+    {% for list in lists %}{% include "boards/_list.html" %}{% endfor %}
+  </div>
+</main>
+<script>
+document.addEventListener('click', e => {
+  const t = e.target.closest('.card-tile');
+  if (t) location.href = `c/${t.dataset.cardId}/`;
+});
+document.addEventListener('keydown', e => {
+  const t = e.target.closest('.card-tile');
+  if (t && e.key === 'Enter') location.href = `c/${t.dataset.cardId}/`;
+});
+</script>
+{% endblock %}

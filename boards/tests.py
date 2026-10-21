@@ -1195,3 +1195,52 @@ class ReactVoteFormatTests(TestCase):
         self.card = Card.objects.select_related("list__board").get(pk=self.card.pk)
         self.assertEqual(self.card.age_class, "aged-2")
         self.assertContains(self.c.get(f"/b/{self.board.pk}/"), "aged-2")
+
+
+class GuestPublicTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery G")
+        self.admin = User.objects.create_user("adm@x.com", "pw", first_name="Ad")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.admin)
+        self.board = Board.objects.create(workspace=self.ws, title="Supplier board")
+        self.other = Board.objects.create(workspace=self.ws, title="Secret plans")
+        BoardMember.objects.create(board=self.board, user=self.admin, role="admin")
+        self.lst = List.objects.create(board=self.board, title="Orders")
+        self.card = Card.objects.create(list=self.lst, title="Flour delivery", description="Hi **there**")
+        self.c = Client(); self.c.force_login(self.admin)
+
+    def j(self, url, data=None, client=None):
+        return (client or self.c).post(url, json.dumps(data or {}), content_type="application/json")
+
+    def test_invite_guest(self):
+        r = self.j(f"/api/boards/{self.board.pk}/share/", {"email": "sup@mill.co.uk", "role": "admin"})
+        self.assertTrue(r.json()["needs_guest"])
+        r = self.j(f"/api/boards/{self.board.pk}/share/", {"email": "sup@mill.co.uk", "role": "admin",
+                                                            "invite_guest": True, "first_name": "Sue"})
+        acct = r.json()["new_account"]
+        guest = User.objects.get(email="sup@mill.co.uk")
+        self.assertTrue(guest.is_guest)
+        self.assertEqual(BoardMember.objects.get(board=self.board, user=guest).role, "member")  # never admin
+        self.assertIn("Guest", r.json()["html"])
+        g = Client()
+        self.assertTrue(g.login(username="sup@mill.co.uk", password=acct["password"]))
+        home = g.get("/")
+        self.assertContains(home, "Supplier board")
+        self.assertNotContains(home, "Secret plans")
+        self.assertEqual(g.get(f"/b/{self.other.pk}/").status_code, 404)
+        r = self.j(f"/api/boards/{self.board.pk}/members/{guest.pk}/", {"role": "admin"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_public_link(self):
+        r = self.j(f"/api/boards/{self.board.pk}/update/", {"public": True})
+        token = r.json()["public_token"]
+        anon = Client()
+        page = anon.get(f"/p/{token}/")
+        self.assertContains(page, "Flour delivery")
+        self.assertContains(page, "noindex")
+        self.assertContains(anon.get(f"/p/{token}/c/{self.card.pk}/"), "<strong>there</strong>")
+        other_card = Card.objects.create(list=List.objects.create(board=self.other, title="x"), title="Hidden")
+        self.assertEqual(anon.get(f"/p/{token}/c/{other_card.pk}/").status_code, 404)
+        self.j(f"/api/boards/{self.board.pk}/update/", {"public": False})
+        self.assertEqual(anon.get(f"/p/{token}/").status_code, 404)
+        self.assertEqual(anon.get("/p/short/").status_code, 404)
