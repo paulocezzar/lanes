@@ -45,6 +45,7 @@
           <select name="user_{{ i }}" data-param="add_member">{% for u in people %}<option value="{{ u.pk }}">{{ u.display_name }}</option>{% endfor %}</select>
           <input name="days_{{ i }}" type="number" min="0" max="365" value="1" data-param="set_due" aria-label="Days from now">
           <input name="text_{{ i }}" maxlength="2000" placeholder="Comment text" data-param="comment">
+          <select name="sticker_{{ i }}" data-param="add_sticker" aria-label="Sticker">{% for s in stickers %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
         </div>
         {% endfor %}
         <div class="row"><button type="button" class="btn ghost sm" data-more-actions>+ Another action</button><button class="btn primary sm">Add rule</button></div>

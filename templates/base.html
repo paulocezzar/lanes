@@ -38,6 +38,7 @@
         <div class="menu-panel right">
           <div class="menu-head">{{ user.display_name }}<small>{{ user.email }}</small></div>
           <a class="menu-item" href="{% url 'password_change' %}">Change password</a>
+          <a class="menu-item" href="{% url 'export_all' %}">Export all my boards (JSON)</a>
           <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="menu-item">Log out</button></form>
         </div>
       </details>

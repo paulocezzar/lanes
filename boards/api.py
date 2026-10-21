@@ -93,9 +93,18 @@ def list_create(request, board_id):
 def list_update(request, list_id):
     lst = get_object_or_404(List.objects.select_related("board"), pk=list_id)
     _edit(lst.board, request.user)
-    if "title" in request.data:
-        lst.title = _text(request.data["title"], 120, "title")
-    if request.data.get("archive"):
+    from .models import COLOURS
+    d = request.data
+    if "title" in d:
+        lst.title = _text(d["title"], 120, "title")
+    if "colour" in d:
+        lst.colour = d["colour"] if d["colour"] in COLOURS else ""
+    if "card_limit" in d:
+        try:
+            lst.card_limit = max(1, min(int(d["card_limit"]), 500)) if d["card_limit"] not in (None, "", 0) else None
+        except (TypeError, ValueError):
+            raise ApiError("The limit must be a number.")
+    if d.get("archive"):
         lst.is_archived = True
     lst.save()
     return {"ok": True}
@@ -171,6 +180,20 @@ def card_update(request, card_id):
         card.start_date = parse_date(d["start_date"]) if d["start_date"] else None
     if "is_template" in d:
         card.is_template = bool(d["is_template"])
+    if "cover_colour" in d:
+        from .models import COLOURS
+        card.cover_colour = d["cover_colour"] if d["cover_colour"] in COLOURS else ""
+        if card.cover_colour:
+            card.cover = None
+    if "sticker" in d:
+        from .models import STICKERS
+        s = d["sticker"]
+        stickers = list(card.stickers or [])
+        if s in stickers:
+            stickers.remove(s)
+        elif s in STICKERS and len(stickers) < 6:
+            stickers.append(s)
+        card.stickers = stickers
     if "archive" in d:
         card.is_archived = bool(d["archive"])
         log(board, user, "card_archived" if card.is_archived else "card_restored", card=card)

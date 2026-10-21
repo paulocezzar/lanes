@@ -64,7 +64,10 @@
   function refreshCounts() {
     $$('.list').forEach(l => {
       const c = $('.list-count', l);
-      if (c) c.textContent = $$('.card-tile', l).length;
+      if (!c) return;
+      const n = $$('.card-tile', l).length, lim = +l.dataset.limit || 0;
+      c.textContent = lim ? `${n}/${lim}` : n;
+      c.classList.toggle('over', lim > 0 && n > lim);
     });
   }
 
@@ -178,6 +181,22 @@
       openAddCard(listEl);
     } else if (e.target.closest('[data-cancel]') && e.target.closest('[data-add-card-form]')) {
       closeAddCard(listEl);
+    } else if (e.target.closest('[data-list-colour]')) {
+      await post(`/api/lists/${listEl.dataset.listId}/`, { colour: e.target.closest('[data-list-colour]').dataset.listColour });
+      e.target.closest('details')?.removeAttribute('open');
+      forceRefresh();
+    } else if (e.target.closest('[data-list-limit]')) {
+      e.target.closest('details')?.removeAttribute('open');
+      const cur = listEl.dataset.limit || '';
+      const v = prompt('Maximum number of cards in this list (leave empty for no limit):', cur);
+      if (v === null) return;
+      await post(`/api/lists/${listEl.dataset.listId}/`, { card_limit: v.trim() });
+      forceRefresh();
+    } else if (e.target.closest('[data-collapse-list]')) {
+      e.target.closest('details')?.removeAttribute('open');
+      toggleCollapsed(listEl.dataset.listId, true);
+    } else if (e.target.closest('[data-expand-list]')) {
+      toggleCollapsed(listEl.dataset.listId, false);
     } else if (e.target.closest('[data-archive-list]')) {
       if (!confirm('Archive this list and hide its cards?')) return;
       await post(`/api/lists/${listEl.dataset.listId}/`, { archive: true });
@@ -365,6 +384,10 @@
         applyCard(data);
       });
     }
+    const cc = t.closest('[data-cover-colour]');
+    if (cc) return cardPost('update', { cover_colour: cc.dataset.coverColour });
+    const st = t.closest('[data-sticker]');
+    if (st) return cardPost('update', { sticker: st.dataset.sticker });
     const tplBtn = t.closest('[data-template-toggle]');
     if (tplBtn) return cardPost('update', { is_template: tplBtn.dataset.templateToggle === '1' });
     const cover = t.closest('[data-cover]');
@@ -614,6 +637,34 @@
     openCard(data.card_id);
   });
 
+  // ---------- collapsed lists (personal, remembered in this browser) ----------
+  const collapseKey = `lanes-collapsed-${boardId}`;
+  function collapsedSet() {
+    try { return new Set(JSON.parse(localStorage.getItem(collapseKey) || '[]')); } catch { return new Set(); }
+  }
+  function applyCollapsed() {
+    const set = collapsedSet();
+    $$('.list', listsEl).forEach(l => {
+      const on = set.has(l.dataset.listId);
+      l.classList.toggle('collapsed', on);
+      if (on && !$('[data-expand-list]', l)) {
+        const b = document.createElement('button');
+        b.className = 'expand-btn'; b.dataset.expandList = ''; b.title = 'Expand list';
+        b.innerHTML = `<span>${$('.list-title', l).textContent.trim()}</span><b>${$('.list-count', l).textContent}</b>`;
+        l.prepend(b);
+      }
+      if (!on) $('[data-expand-list]', l)?.remove();
+    });
+  }
+  function toggleCollapsed(id, on) {
+    const set = collapsedSet();
+    on ? set.add(id) : set.delete(id);
+    try { localStorage.setItem(collapseKey, JSON.stringify([...set])); } catch { /* private mode */ }
+    applyCollapsed();
+  }
+  applyCollapsed();
+  function forceRefresh() { version = -1; poll(); }
+
   // ---------- live updates ----------
   // Poll a tiny version stamp; only when it moves do we pull fresh HTML.
   // Updates wait while you're dragging, typing in a list, or adding a card.
@@ -664,6 +715,7 @@
       listsEl.scrollLeft = scroll;
       version = data.version;
       window.LanesBoard.applyFilter?.();
+      applyCollapsed();
       if (dialog.open && openCardId && !modalIsBusy()) refreshOpenCard();
     } catch { /* offline for a moment — next tick will retry */ }
     finally { polling = false; }

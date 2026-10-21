@@ -1,12 +1,21 @@
-<section class="list" data-list-id="{{ list.pk }}">
+{% load lanes_extras %}<section class="list{% if list.colour %} list-c lc-border-{{ list.colour }}{% endif %}" data-list-id="{{ list.pk }}" data-limit="{{ list.card_limit|default:'' }}">
   <header class="list-head">
     <h3 class="list-title" {% if can_edit %}contenteditable="plaintext-only" spellcheck="false" data-list-title{% endif %}>{{ list.title }}</h3>
-    <span class="list-count">{{ list.entries|length }}</span>
+    <span class="list-count{% if list.over_limit %} over{% endif %}" title="{% if list.card_limit %}Limit {{ list.card_limit }}{% endif %}">{{ list.entries|length }}{% if list.card_limit %}/{{ list.card_limit }}{% endif %}</span>
     {% if can_edit %}
     <details class="menu">
       <summary class="icon-btn" title="List actions">{% include "boards/_icon.html" with i="dots" %}</summary>
       <div class="menu-panel right">
         <button class="menu-item" data-add-card-top>Add card</button>
+        <button class="menu-item" data-collapse-list>Collapse list</button>
+        <div class="menu-sub">
+          <span class="muted small">Colour</span>
+          <div class="colour-row">
+            <button class="colour-dot none" data-list-colour="" title="No colour"></button>
+            {% for c in "green yellow orange red purple blue sky pink grey"|cut_split %}<button class="colour-dot lc-{{ c }}{% if c == list.colour %} on{% endif %}" data-list-colour="{{ c }}" title="{{ c|capfirst }}"></button>{% endfor %}
+          </div>
+        </div>
+        <button class="menu-item" data-list-limit>{% if list.card_limit %}Change card limit ({{ list.card_limit }}){% else %}Set a card limit…{% endif %}</button>
         <button class="menu-item danger" data-archive-list>Archive this list</button>
       </div>
     </details>

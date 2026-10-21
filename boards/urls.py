@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import (api, views, views_automation, views_board, views_files, views_notify, views_people, views_planner,
-               views_search)
+               views_export, views_search)
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -38,6 +38,9 @@ urlpatterns = [
     path("cards/<int:card_id>/", views.card_modal, name="card_modal"),
     path("files/<int:attachment_id>/", views_files.attachment_download, name="attachment"),
     path("b/<int:board_id>/copy/", views_files.board_copy, name="board_copy"),
+    path("b/<int:board_id>/export.csv", views_export.board_csv, name="board_csv"),
+    path("b/<int:board_id>/export.json", views_export.board_json, name="board_json"),
+    path("export/all.json", views_export.export_all, name="export_all"),
     path("api/cards/<int:card_id>/attachments/", views_files.attachment_upload),
     path("api/attachments/<int:attachment_id>/", api.attachment_update),
     path("api/cards/<int:card_id>/copy/", api.card_copy),

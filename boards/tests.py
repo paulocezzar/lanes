@@ -902,3 +902,69 @@ class CrossBoardTests(TestCase):
         r = self.client.post(f"/api/boards/{self.b2.pk}/update/", json.dumps({"collection": foreign.pk}),
                              content_type="application/json")
         self.assertEqual(r.status_code, 404)
+
+
+class ListToolsLooksExportTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.user = User.objects.create_user("u@x.com", "pw", first_name="Una")
+        self.board = Board.objects.create(workspace=self.ws, title="Xmas cakes")
+        BoardMember.objects.create(board=self.board, user=self.user, role="admin")
+        self.lst = List.objects.create(board=self.board, title="Doing")
+        self.card = Card.objects.create(list=self.lst, title="=HYPERLINK(evil)", position=100)
+        self.client.force_login(self.user)
+
+    def api(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_list_colour_and_limit(self):
+        self.api(f"/api/lists/{self.lst.pk}/", {"colour": "red", "card_limit": "1"})
+        Card.objects.create(list=self.lst, title="second")
+        self.lst.refresh_from_db()
+        self.assertEqual((self.lst.colour, self.lst.card_limit, self.lst.over_limit), ("red", 1, True))
+        self.assertContains(self.client.get(reverse("board", args=[self.board.pk])), "list-count over")
+        self.api(f"/api/lists/{self.lst.pk}/", {"colour": "tartan", "card_limit": ""})
+        self.lst.refresh_from_db()
+        self.assertEqual((self.lst.colour, self.lst.card_limit), ("", None))
+
+    def test_cover_colour_and_stickers(self):
+        self.api(f"/api/cards/{self.card.pk}/update/", {"cover_colour": "blue"})
+        for s in ["⭐", "🔥", "⭐", "not-a-sticker"]:
+            self.api(f"/api/cards/{self.card.pk}/update/", {"sticker": s})
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.cover_colour, "blue")
+        self.assertEqual(self.card.stickers, ["🔥"])   # ⭐ toggled on then off
+
+    def test_location_field(self):
+        r = self.api(f"/api/boards/{self.board.pk}/fields/", {"name": "Deliver to", "kind": "location"})
+        fid = r.json()["field_id"]
+        r = self.api(f"/api/cards/{self.card.pk}/fields/", {"field_id": fid, "value": "BA4 4NL"})
+        self.assertIn("📍 BA4 4NL", r.json()["tile"])
+        self.assertIn("maps/search", r.json()["modal"])
+
+    def test_csv_export_escapes_formulas(self):
+        r = self.client.get(reverse("board_csv", args=[self.board.pk]))
+        body = r.content.decode("utf-8-sig")
+        self.assertIn("'=HYPERLINK(evil)", body)
+        self.assertEqual(r["Content-Type"], "text/csv; charset=utf-8")
+        data = json.loads(self.client.get(reverse("board_json", args=[self.board.pk])).content)
+        self.assertEqual(data["cards"][0]["title"], "=HYPERLINK(evil)")
+        self.assertIn("Xmas cakes", self.client.get(reverse("export_all")).content.decode())
+
+    def test_export_private(self):
+        self.board.visibility = Board.PRIVATE
+        self.board.save()
+        self.client.force_login(User.objects.create_user("o@x.com", "pw"))
+        self.assertEqual(self.client.get(reverse("board_csv", args=[self.board.pk])).status_code, 404)
+        self.assertNotIn("Xmas cakes", self.client.get(reverse("export_all")).content.decode())
+
+    def test_automation_move_top_and_sticker(self):
+        from .models import Rule
+        done = List.objects.create(board=self.board, title="Done")
+        Card.objects.create(list=done, title="older", position=10)
+        Rule.objects.create(board=self.board, trigger="card_moved", trigger_list=done,
+                            actions=[{"type": "move_top"}, {"type": "add_sticker", "sticker": "✅"}])
+        self.api(f"/api/cards/{self.card.pk}/move/", {"list_id": done.pk})
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.stickers, ["✅"])
+        self.assertEqual([e["card"].title for e in List.objects.get(pk=done.pk).entries()][0], "=HYPERLINK(evil)")

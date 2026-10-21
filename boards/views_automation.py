@@ -8,11 +8,11 @@ from django.views.decorators.http import require_POST
 
 from . import automation, permissions
 from .board_context import board_context
-from .models import Board, BoardMember, Label, List, Rule, Schedule
+from .models import STICKERS, Board, BoardMember, Label, List, Rule, Schedule
 
 MAX_ACTIONS = 4
 NEEDS = {"move": "list", "add_label": "label", "remove_label": "label", "add_member": "user",
-         "set_due": "days", "comment": "text"}
+         "set_due": "days", "comment": "text", "add_sticker": "sticker"}
 
 
 @login_required
@@ -35,6 +35,7 @@ def automation_page(request, board_id):
         "weekdays": list(enumerate(automation.WEEKDAYS)),
         "hours": range(0, 24),
         "month_days": range(1, 29),
+        "stickers": STICKERS,
     })
     return render(request, "boards/automation.html", ctx)
 
@@ -105,6 +106,12 @@ def rule_create(request, board_id):
                 a["days"] = max(0, min(int(p.get(f"days_{i}") or 0), 365))
             except ValueError:
                 a["days"] = 0
+        elif need == "sticker":
+            s = p.get(f"sticker_{i}")
+            if s not in STICKERS:
+                messages.error(request, "Pick a sticker.")
+                return back
+            a["sticker"] = s
         elif need == "text":
             text = (p.get(f"text_{i}") or "").strip()[:2000]
             if not text:

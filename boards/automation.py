@@ -61,6 +61,19 @@ def run_action(card, action):
             card.position = positions.end_position(target.cards.filter(is_archived=False))
             card.save(update_fields=["list", "position", "updated_at"])
             return f"moved to {target.title}"
+    elif t == "move_top":
+        top = min((p for _, p in positions._entry_positions(card.list, exclude=card.token)), default=None)
+        if top is not None and top <= card.position:
+            card.position = positions.between(None, top)
+            card.save(update_fields=["position", "updated_at"])
+            return "moved to the top"
+    elif t == "add_sticker":
+        from .models import STICKERS
+        s = action.get("sticker")
+        if s in STICKERS and s not in (card.stickers or []) and len(card.stickers or []) < 6:
+            card.stickers = [*(card.stickers or []), s]
+            card.save(update_fields=["stickers", "updated_at"])
+            return f"added sticker {s}"
     elif t in ("complete", "incomplete"):
         want = t == "complete"
         if card.is_complete != want:
@@ -153,6 +166,8 @@ def describe_action(board, a):
         return f"set due date to {a.get('days', 0)} day(s) from now, 17:00"
     if t == "comment":
         return f"post comment “{a.get('text', '')}”"
+    if t == "add_sticker":
+        return f"add sticker {a.get('sticker', '')}"
     return name
 
 

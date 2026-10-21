@@ -682,3 +682,28 @@ code { background: var(--surface-3); padding: 1px 5px; border-radius: 4px; font-
 .label-swatch.sm { min-height: 20px; min-width: 36px; font-size: 11px; padding: 0 6px; }
 .filter-count { font-weight: 700; }
 .card-tile[hidden] { display: none !important; }
+
+/* ---------- list tools & card looks ---------- */
+.list.list-c { border-top: 4px solid var(--lc); }
+.lc-border-green { --lc: #4bce97; } .lc-border-yellow { --lc: #f5cd47; } .lc-border-orange { --lc: #fea362; }
+.lc-border-red { --lc: #f87168; } .lc-border-purple { --lc: #9f8fef; } .lc-border-blue { --lc: #579dff; }
+.lc-border-sky { --lc: #6cc3e0; } .lc-border-pink { --lc: #e774bb; } .lc-border-grey { --lc: #8c9bab; }
+.list.list-c .list-head { background: color-mix(in srgb, var(--lc) 14%, transparent); border-radius: 8px 8px 0 0; }
+.list-count.over { background: #ae2e24; color: #fff; border-radius: 10px; padding: 0 7px; font-weight: 700; }
+.menu-sub { padding: 6px 10px 8px; display: grid; gap: 6px; }
+.colour-dot { padding: 0; }
+.colour-dot.none { background: transparent; border: 2px dashed var(--text-2); }
+.colour-dot.on { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+button.colour-dot { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+.tile-cover.colour { height: 32px; border-radius: 8px 8px 0 0; }
+.tile-stickers { display: flex; gap: 4px; font-size: 20px; line-height: 1; margin-bottom: 4px; }
+.sticker-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.sticker { font-size: 20px; border: 2px solid transparent; background: var(--surface-3); border-radius: 8px; padding: 4px; cursor: pointer; }
+.sticker.on { border-color: var(--accent); }
+.loc-field { display: flex; gap: 6px; }
+.loc-field a { text-decoration: none; white-space: nowrap; }
+.list.collapsed { flex: 0 0 44px; min-height: 220px; overflow: hidden; }
+.list.collapsed > :not(.expand-btn) { display: none; }
+.expand-btn { border: 0; background: none; color: var(--text); cursor: pointer; writing-mode: vertical-rl; padding: 12px 0; width: 44px;
+  display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; }
+.expand-btn b { color: var(--text-2); font-size: 12px; }

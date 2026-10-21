@@ -6,8 +6,8 @@ from django.template.loader import render_to_string
 from . import permissions
 from django.contrib.auth import get_user_model
 
-from .models import (Activity, BoardMember, Card, CardFieldValue, CardMirror, Checklist, ChecklistItem, CustomField,
-                     Label)
+from .models import (COLOURS, STICKERS, Activity, BoardMember, Card, CardFieldValue, CardMirror, Checklist,
+                     ChecklistItem, CustomField, Label)
 
 User = get_user_model()
 
@@ -73,6 +73,8 @@ def render_modal(card, request):
         "attachments_persistent": settings.ATTACHMENTS_PERSISTENT,
         "max_mb": settings.ATTACHMENT_MAX_MB,
         "field_kinds": CustomField.KINDS,
+        "colours": COLOURS,
+        "sticker_choices": STICKERS,
     }
     return render_to_string("boards/_card_modal.html", ctx, request=request)
 

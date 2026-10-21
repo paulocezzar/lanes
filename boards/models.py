@@ -12,6 +12,14 @@ from django.utils import timezone
 User = settings.AUTH_USER_MODEL
 
 
+def empty_list():
+    return []
+
+
+STICKERS = "⭐ ✅ ⚠️ 🔥 ❤️ 👍 🎄 🎂 🥐 🍞 🚚 📦 💷 ❄️ 🧁 🍰 🎉 ⏰ 📌 💡".split()
+COLOURS = ["green", "yellow", "orange", "red", "purple", "blue", "sky", "pink", "grey"]
+
+
 class Workspace(models.Model):
     """One per department (Bakery, Butchery, Kitchen…)."""
 
@@ -127,12 +135,18 @@ class List(models.Model):
     title = models.CharField(max_length=120)
     position = models.FloatField(default=1000)
     is_archived = models.BooleanField(default=False)
+    colour = models.CharField(max_length=10, blank=True)            # one of Label.COLOURS keys, or ""
+    card_limit = models.PositiveSmallIntegerField(null=True, blank=True)  # work-in-progress limit
 
     class Meta:
         ordering = ["position", "id"]
 
     def __str__(self):
         return self.title
+
+    @property
+    def over_limit(self):
+        return bool(self.card_limit) and len(self.entries()) > self.card_limit
 
     def entries(self):
         """Cards and mirrored cards in this list, in order. Uses prefetched
@@ -153,6 +167,8 @@ class Card(models.Model):
     is_archived = models.BooleanField(default=False)
     is_template = models.BooleanField(default=False)
     cover = models.ForeignKey("Attachment", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    cover_colour = models.CharField(max_length=10, blank=True)      # colour cover when there's no image
+    stickers = models.JSONField(default=empty_list, blank=True)     # up to 6 emoji
     labels = models.ManyToManyField(Label, blank=True, related_name="cards")
     members = models.ManyToManyField(User, blank=True, related_name="assigned_cards")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
@@ -243,8 +259,9 @@ class ChecklistItem(models.Model):
 class CustomField(models.Model):
     """A board-level field every card can fill in: Quantity, Supplier, Site…"""
 
-    TEXT, NUMBER, DATE, CHECKBOX, DROPDOWN = "text", "number", "date", "checkbox", "dropdown"
-    KINDS = [(TEXT, "Text"), (NUMBER, "Number"), (DATE, "Date"), (CHECKBOX, "Checkbox"), (DROPDOWN, "Dropdown")]
+    TEXT, NUMBER, DATE, CHECKBOX, DROPDOWN, LOCATION = "text", "number", "date", "checkbox", "dropdown", "location"
+    KINDS = [(TEXT, "Text"), (NUMBER, "Number"), (DATE, "Date"), (CHECKBOX, "Checkbox"), (DROPDOWN, "Dropdown"),
+             (LOCATION, "Location")]
 
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="custom_fields")
     name = models.CharField(max_length=60)
@@ -278,6 +295,8 @@ class CustomField(models.Model):
             if raw not in self.options:
                 raise ValueError("Not one of the options")
             return raw
+        if self.kind == self.LOCATION:
+            return str(raw).strip()[:300] or None
         return str(raw).strip()[:500] or None
 
 
@@ -289,10 +308,17 @@ class CardFieldValue(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["card", "field"], name="uniq_card_field")]
 
+    @property
+    def map_url(self):
+        from urllib.parse import quote
+        return f"https://www.google.com/maps/search/?api=1&query={quote(str(self.value))}"
+
     def display(self):
         f, v = self.field, self.value
         if f.kind == CustomField.CHECKBOX:
             return "✓" if v else ""
+        if f.kind == CustomField.LOCATION:
+            return f"📍 {v}"
         if f.kind == CustomField.DATE:
             from datetime import date
             try:
@@ -372,6 +398,7 @@ class Rule(models.Model):
     ]
     ACTIONS = [
         ("move", "move it to list…"),
+        ("move_top", "move it to the top of its list"),
         ("complete", "mark it complete"),
         ("incomplete", "mark it incomplete"),
         ("check_all", "tick all its checklist items"),
@@ -382,6 +409,7 @@ class Rule(models.Model):
         ("set_due", "set due date to … days from now"),
         ("clear_due", "remove the due date"),
         ("comment", "post comment…"),
+        ("add_sticker", "add sticker…"),
         ("archive", "archive it"),
     ]
 

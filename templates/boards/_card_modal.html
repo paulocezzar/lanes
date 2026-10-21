@@ -83,6 +83,18 @@
             </form>
           </div>
         </div>
+        <div class="pop-wrap"><button class="chip-btn" data-pop="look">🎨 Cover &amp; stickers</button>
+          <div class="pop" data-pop-panel="look" hidden>
+            <div class="pop-head">Cover</div>
+            <div class="colour-row">
+              <button class="colour-dot none" data-cover-colour="" title="No colour cover"></button>
+              {% for c in colours %}<button class="colour-dot lc-{{ c }}{% if c == card.cover_colour %} on{% endif %}" data-cover-colour="{{ c }}" title="{{ c|capfirst }}"></button>{% endfor %}
+            </div>
+            <p class="muted small">Or attach a photo and make it the cover.</p>
+            <div class="pop-head">Stickers <small class="muted">(up to 6)</small></div>
+            <div class="sticker-grid">{% for s in sticker_choices %}<button class="sticker{% if s in card.stickers %} on{% endif %}" data-sticker="{{ s }}">{{ s }}</button>{% endfor %}</div>
+          </div>
+        </div>
         <button class="chip-btn{% if card.is_template %} on{% endif %}" data-template-toggle="{{ card.is_template|yesno:'0,1' }}" title="Templates can be stamped out from any list's copy button">{% include "boards/_icon.html" with i="copy" %}{% if card.is_template %}Template ✓{% else %}Make template{% endif %}</button>
         <button class="chip-btn" data-archive-card="{{ card.is_archived|yesno:'0,1' }}">{% include "boards/_icon.html" with i="archive" %}{% if card.is_archived %}Restore{% else %}Archive{% endif %}</button>
       </div>
@@ -110,6 +122,9 @@
               <select data-field="{{ f.pk }}" {% if not can_edit %}disabled{% endif %}><option value="">—</option>{% for o in f.options %}<option value="{{ o }}" {% if o == v %}selected{% endif %}>{{ o }}</option>{% endfor %}</select>
             {% elif f.kind == "date" %}
               <input type="date" data-field="{{ f.pk }}" value="{{ v|default:'' }}" {% if not can_edit %}disabled{% endif %}>
+            {% elif f.kind == "location" %}
+              <span class="loc-field"><input type="text" data-field="{{ f.pk }}" value="{{ v|default:'' }}" placeholder="Add an address or postcode…" maxlength="300" {% if not can_edit %}disabled{% endif %}>
+              {% if v %}<a class="btn sm" href="https://www.google.com/maps/search/?api=1&amp;query={{ v|urlencode }}" target="_blank" rel="noopener" title="Open in Google Maps">📍 Map</a>{% endif %}</span>
             {% elif f.kind == "number" %}
               <input type="number" step="any" data-field="{{ f.pk }}" value="{% if v is not None %}{{ v }}{% endif %}" placeholder="Add a number…" {% if not can_edit %}disabled{% endif %}>
             {% else %}

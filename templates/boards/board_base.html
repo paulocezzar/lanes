@@ -99,6 +99,7 @@
     <button data-tab="archived">Archived</button>
     {% if can_edit %}<button data-tab="fields">Fields</button>{% endif %}
     <button data-tab="copy">Copy</button>
+    <button data-tab="export">Export</button>
     {% if can_manage %}<button data-tab="settings">Settings</button>{% endif %}
   </div>
   <div class="drawer-pane" data-pane="activity">
@@ -135,6 +136,12 @@
     </form>
   </div>
   {% endif %}
+  <div class="drawer-pane" data-pane="export" hidden>
+    <h4 class="section-label">Export this board</h4>
+    <a class="btn" href="{% url 'board_csv' board.pk %}">⬇ Spreadsheet (CSV, opens in Excel)</a>
+    <a class="btn ghost" href="{% url 'board_json' board.pk %}">⬇ Full data (JSON)</a>
+    <p class="muted small">Includes every card with its list, labels, members, dates, checklist items, custom fields and comment counts. Archived cards are included and marked.</p>
+  </div>
   <div class="drawer-pane" data-pane="copy" hidden>
     <form method="post" action="{% url 'board_copy' board.pk %}" class="stack">
       {% csrf_token %}
