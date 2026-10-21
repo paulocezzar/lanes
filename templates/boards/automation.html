@@ -59,8 +59,10 @@
         <h4 class="section-label">New scheduled job</h4>
         <div class="auto-line">
           <select name="frequency" data-frequency aria-label="How often">{% for k, v in frequencies %}<option value="{{ k }}" {% if k == 'weekly' %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-          <select name="weekday" data-freq-show="weekly" aria-label="Day">{% for i, d in weekdays %}<option value="{{ i }}">{{ d }}</option>{% endfor %}</select>
-          <select name="month_day" data-freq-show="monthly" aria-label="Day of month">{% for d in month_days %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select>
+          <select name="nth" data-freq-show="month_nth" aria-label="Which">{% for k, v in nths %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+          <select name="weekday" data-freq-show="weekly month_nth" aria-label="Day">{% for i, d in weekdays %}<option value="{{ i }}">{{ d }}</option>{% endfor %}</select>
+          <select name="month_day" data-freq-show="monthly yearly" aria-label="Day of month">{% for d in month_days %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select>
+          <select name="month" data-freq-show="yearly" aria-label="Month">{% for k, v in months %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
           <span class="auto-word">at</span>
           <select name="hour" aria-label="Time">{% for h in hours %}<option value="{{ h }}" {% if h == 7 %}selected{% endif %}>{{ h|stringformat:"02d" }}:00</option>{% endfor %}</select>
           <select name="kind" data-sched-kind aria-label="What to do"><option value="card">create a card</option><option value="actions">run board actions</option></select>
@@ -125,7 +127,7 @@
   // ----- rule trigger extras -----
   const showTrig = rf => {
     const trig = rf.querySelector('[data-trigger]');
-    rf.querySelectorAll('[data-show-for]').forEach(el => { el.hidden = !el.dataset.showFor.split(' ').includes(trig.value); });
+    rf.querySelectorAll('[data-show-for]').forEach(el => { el.hidden = !el.dataset.showFor.split(' ').includes(trig.value); el.disabled = el.hidden; });
     const by = rf.querySelector('[name=by_whom]');
     if (by) by.hidden = trig.value === 'member_added';
   };
@@ -138,7 +140,7 @@
   const syncSched = () => {
     if (!sf) return;
     const f = sf.querySelector('[data-frequency]');
-    sf.querySelectorAll('[data-freq-show]').forEach(el => { el.hidden = el.dataset.freqShow !== f.value; });
+    sf.querySelectorAll('[data-freq-show]').forEach(el => { el.hidden = !el.dataset.freqShow.split(' ').includes(f.value); });
     const kind = sf.querySelector('[data-sched-kind]').value;
     sf.querySelectorAll('[data-kind-panel]').forEach(p => {
       p.hidden = p.dataset.kindPanel !== kind;
@@ -169,6 +171,7 @@
     let o = typeof want === 'number' ? opts.find(x => x.value == want) : null;
     if (!o && want === 'first') o = opts[0];
     if (!o && want === 'last') o = opts[opts.length - 1];
+    if (!o && want === 'second') o = opts[1] || opts[0];
     if (!o) o = opts.find(x => x.text.replace(/^from /, '').trim().toLowerCase() === String(want).toLowerCase())
              || opts.find(x => x.text.toLowerCase().includes(String(want).toLowerCase()))
              || (want === 'done' ? opts[opts.length - 1] : null);
@@ -179,7 +182,10 @@
     const o = [...sel.options].find(x => x.dataset.colour === want || x.text.toLowerCase().includes(want));
     if (o) sel.value = o.value;
   };
-  const set = (form, name, v) => { const el = form.querySelector(`[name="${name}"]`); if (el && v != null) el.value = v; };
+  const set = (form, name, v) => {
+    const el = form.querySelector(`[name="${name}"]:not([disabled])`) || form.querySelector(`[name="${name}"]`);
+    if (el && v != null) el.value = v;
+  };
   const fillActions = (form, actions) => {
     const rows = [...form.querySelectorAll('[data-action-row]')].filter(r => !r.closest('[data-kind-panel][hidden]'));
     rows.forEach((row, i) => {
@@ -196,6 +202,8 @@
       if (a.text != null) { const t = vis('[data-text]'); if (t) t.value = a.text; }
       if (a.title != null) { const t = vis('[data-cltitle]'); if (t) t.value = a.title; }
       if (a.sticker) { const t = vis('[data-sticker]'); if (t) t.value = a.sticker; }
+      if (a.count != null) { const t = vis('[data-count]'); if (t) t.value = a.count; }
+      if (a.order) { const t = vis('[data-order]'); if (t) t.value = a.order; }
     });
     const more = form.querySelector('[data-kind-panel]:not([hidden]) [data-more-actions]') || form.querySelector('[data-more-actions]');
     if (more) more.hidden = !rows.some(r => r.hidden);
@@ -212,7 +220,8 @@
     }
     if (d.frequency) {
       set(builder, 'frequency', d.frequency); set(builder, 'weekday', d.weekday); set(builder, 'month_day', d.month_day);
-      set(builder, 'hour', d.hour); set(builder, 'kind', d.kind); syncSched();
+      set(builder, 'hour', d.hour); set(builder, 'nth', d.nth); set(builder, 'month', d.month);
+      set(builder, 'kind', d.kind); syncSched();
       set(builder, 'title', d.title); set(builder, 'checklist', d.checklist);
       if (d.target_list) pickList(builder.querySelector('[name=target_list]'), d.target_list);
     }

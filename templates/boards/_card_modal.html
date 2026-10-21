@@ -109,6 +109,12 @@
               {% for c in colours %}<button class="colour-dot lc-{{ c }}{% if c == card.cover_colour %} on{% endif %}" data-cover-colour="{{ c }}" title="{{ c|capfirst }}"></button>{% endfor %}
             </div>
             <p class="muted small">Or attach a photo and make it the cover.</p>
+            {% if card.cover_id or card.cover_colour %}<div class="pop-head">Size</div>
+            <div class="cover-size">
+              <button class="cover-size-opt{% if not card.cover_full %} on{% endif %}" data-cover-full="0" title="Cover on top of the card"><span class="cs-top"></span><span class="cs-lines"></span></button>
+              <button class="cover-size-opt{% if card.cover_full %} on{% endif %}" data-cover-full="1" title="Cover fills the card"><span class="cs-full"></span></button>
+            </div>{% endif %}
+            {% if not board.covers_enabled %}<p class="muted small">Covers are switched off on this board's card fronts (Menu → Settings).</p>{% endif %}
             <div class="pop-head">Stickers <small class="muted">(up to 6)</small></div>
             <div class="sticker-grid">{% for s in sticker_choices %}<button class="sticker{% if s in card.stickers %} on{% endif %}" data-sticker="{{ s }}">{{ s }}</button>{% endfor %}</div>
           </div>
@@ -255,6 +261,7 @@
       <div class="cm-h-row"><h4 class="cm-h">{% include "boards/_icon.html" with i="comment" %}Comments and activity</h4>
         {% if ai_enabled %}<button class="chip-btn ai-chip sm" data-summarise title="AI summary of this card and its comments">✨ Summarise</button>{% endif %}</div>
       <div class="ai-summary" data-summary-box hidden></div>
+      {% if board.comment_permission == "disabled" %}<p class="muted small">Commenting is switched off on this board.</p>{% endif %}
       {% if can_comment %}
       <form class="comment-new" data-comment-new data-people='[{% for u in people %}{"name": "{{ u.display_name|escapejs }}", "initials": "{{ u.initials }}", "hue": {{ u.avatar_hue }}}{% if not forloop.last %},{% endif %}{% endfor %}]'>
         <textarea name="body" rows="2" placeholder="Write a comment… type @ to mention someone" maxlength="5000"></textarea>

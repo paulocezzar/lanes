@@ -1,5 +1,5 @@
 {% load static %}<!doctype html>
-<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme }}{% else %}system{% endif %}">
+<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme }}{% else %}system{% endif %}"{% if user.is_authenticated and user.colourblind %} class="cb"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,7 +21,8 @@
       <a href="{% url 'my_cards' %}" class="{% if request.resolver_match.url_name == 'my_cards' %}on{% endif %}">My cards</a>
     </nav>
     <form class="top-search" method="get" action="{% url 'search' %}" role="search">
-      <input type="search" name="q" placeholder="Search cards" value="{% if request.resolver_match.url_name == 'search' %}{{ request.GET.q }}{% endif %}" aria-label="Search cards">
+      <input type="search" name="q" placeholder="Search cards" value="{% if request.resolver_match.url_name == 'search' %}{{ request.GET.q }}{% endif %}" aria-label="Search cards" autocomplete="off" data-top-search>
+      <div class="search-drop" data-search-drop hidden></div>
     </form>
     <div class="topbar-right">
       <div class="bell-wrap" id="bell">
@@ -29,7 +30,9 @@
           {% include "boards/_icon.html" with i="bell" %}<span class="bell-count" data-bell-count {% if not unread_count %}hidden{% endif %}>{{ unread_count }}</span>
         </button>
         <div class="bell-panel" data-bell-panel hidden>
-          <div class="bell-head"><b>Notifications</b><button class="link-btn" data-bell-readall>Mark all read</button></div>
+          <div class="bell-head"><b>Notifications</b>
+            <label class="switch-inline" title="Only show unread"><span>Only unread</span><input type="checkbox" role="switch" data-only-unread {% if user.only_unread %}checked{% endif %}></label>
+            <button class="link-btn" data-bell-readall>Mark all read</button></div>
           <div data-bell-list><p class="muted small pad">Loading…</p></div>
           <a class="bell-foot" href="{% url 'notifications' %}">See all</a>
         </div>
@@ -43,6 +46,7 @@
           <div class="theme-pick" role="group" aria-label="Theme">
             {% for key, label in user.THEMES %}<button class="theme-opt{% if user.theme == key %} on{% endif %}" data-theme-set="{{ key }}">{% if key == "light" %}☀️{% elif key == "dark" %}🌙{% else %}💻{% endif %} {{ label }}</button>{% endfor %}
           </div>
+          <button type="button" class="menu-item" data-colourblind="{{ user.colourblind|yesno:'0,1' }}">{% if user.colourblind %}Turn off colour-blind friendly mode{% else %}Enable colour-blind friendly mode{% endif %}</button>
           <a class="menu-item" href="{% url 'password_change' %}">Change password</a>
           <a class="menu-item" href="{% url 'email_prefs' %}">Email notifications</a>
           <a class="menu-item" href="{% url 'two_step_setup' %}">Two-step sign-in {% if user.totp_enabled %}<span class="ok-pill">On</span>{% endif %}</a>
@@ -86,6 +90,10 @@
         <p><kbd>Space</kbd> Add / remove me</p><p><kbd>l</kbd> Labels</p><p><kbd>1</kbd>–<kbd>9</kbd> Toggle label 1–9</p>
         <p><kbd>d</kbd> Dates</p><p><kbd>m</kbd> Members</p><p><kbd>t</kbd> Edit title</p>
         <p><kbd>w</kbd> Watch</p><p><kbd>c</kbd> Archive</p><p><kbd>v</kbd> Vote</p></section>
+      <section><h4 class="section-label">Copy and move cards</h4>
+        <p><kbd>Ctrl/⌘</kbd>+<kbd>C</kbd> Copy the card under the mouse</p><p><kbd>Ctrl/⌘</kbd>+<kbd>X</kbd> Cut it (to move)</p>
+        <p><kbd>Ctrl/⌘</kbd>+<kbd>V</kbd> Paste onto the list under the mouse — works across boards</p>
+        <p>Paste copied text onto a list to make a card from each line</p></section>
     </div>
     <p class="muted small">Shortcuts pause while you're typing. Point at a card with the mouse to select it.</p>
   </dialog>

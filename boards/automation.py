@@ -205,6 +205,9 @@ def describe_rule(rule):
     when = dict(Rule.TRIGGERS)[rule.trigger]
     if rule.trigger == Rule.DUE_SOON:
         when = when.replace("within…", f"within {dict(Rule.HOURS).get(rule.trigger_hours, f'{rule.trigger_hours} hours')}")
+    if rule.trigger == Rule.OVERDUE:
+        when = ("a card becomes due" if not rule.trigger_hours else
+                f"a card is {dict(Rule.AFTER).get(rule.trigger_hours, f'{rule.trigger_hours} hours after').replace(' after', '')} overdue")
     if rule.trigger in (Rule.ADDED, Rule.MOVED):
         when = when.replace("list…", f"list “{rule.trigger_list.title if rule.trigger_list else '?'}”")
     if rule.trigger == Rule.LABEL_ADDED:
@@ -272,6 +275,17 @@ def _matches(schedule, day):
     if f == Schedule.MONTHLY:
         last = calendar.monthrange(day.year, day.month)[1]
         return day.day == min(schedule.month_day, last)
+    if f == Schedule.MONTHLY_NTH:
+        if day.weekday() != schedule.weekday:
+            return False
+        if schedule.nth == 5:       # last one in the month
+            return day.day + 7 > calendar.monthrange(day.year, day.month)[1]
+        return (day.day - 1) // 7 + 1 == schedule.nth
+    if f == Schedule.YEARLY:
+        if day.month != schedule.month:
+            return False
+        last = calendar.monthrange(day.year, day.month)[1]
+        return day.day == min(schedule.month_day, last)
     return False
 
 
@@ -281,6 +295,8 @@ def describe_schedule(s):
         Schedule.WEEKDAYS: "Every weekday",
         Schedule.WEEKLY: f"Every {WEEKDAYS[s.weekday]}",
         Schedule.MONTHLY: f"On day {s.month_day} of every month",
+        Schedule.MONTHLY_NTH: f"Every {dict(Schedule.NTH).get(s.nth, '?')} {WEEKDAYS[s.weekday]} of the month",
+        Schedule.YEARLY: f"Every year on {s.month_day} {dict(Schedule.MONTHS).get(s.month, '?')}",
     }[s.frequency]
     return f"{when} at {s.hour:02d}:00"
 
@@ -367,8 +383,10 @@ def run_due_rules(now=None):
                                     is_template=False, is_complete=False, due_at__isnull=False)
         if rule.trigger == Rule.DUE_SOON:
             cards = cards.filter(due_at__gt=now, due_at__lte=now + timedelta(hours=rule.trigger_hours or 24))
-        else:   # overdue — ignore cards that were already long overdue when the rule was made
-            cards = cards.filter(due_at__lte=now, due_at__gte=max(now - timedelta(days=30), rule.created_at - timedelta(days=1)))
+        else:   # due date passed (+ an optional delay) — ignore cards long overdue when the rule was made
+            after = timedelta(hours=rule.trigger_hours or 0)
+            cards = cards.filter(due_at__lte=now - after,
+                                 due_at__gte=max(now - after - timedelta(days=30), rule.created_at - after - timedelta(days=1)))
         fired = RuleFire.objects.filter(rule=rule, card=OuterRef("pk"), due_at=OuterRef("due_at"))
         for card in cards.select_related("list__board").exclude(Exists(fired)):
             try:
@@ -488,9 +506,63 @@ def run_board_actions(board, actions, user):
                     Card.objects.filter(pk=c.pk).update(position=i * positions.GAP)
                 if cards:
                     done.append(f"sorted {lst.title} by due date")
+        elif t == "archive_list":
+            lst = List.objects.filter(pk=a.get("list"), board=board).first()
+            if lst:
+                n = lst.cards.filter(is_archived=False).update(is_archived=True, updated_at=timezone.now())
+                if n:
+                    done.append(f"archived {n} card{'s' if n != 1 else ''} in {lst.title}")
+        elif t == "move_random":
+            import random
+            src = List.objects.filter(pk=a.get("from_list"), board=board).first()
+            dst = List.objects.filter(pk=a.get("list"), board=board, is_archived=False).first()
+            if src and dst and src.pk != dst.pk:
+                pool = list(src.cards.filter(is_archived=False))
+                picked = random.sample(pool, min(int(a.get("count") or 1), len(pool)))
+                for c in picked:
+                    c.list = dst
+                    c.position = positions.end_position(dst.cards.filter(is_archived=False))
+                    c.save(update_fields=["list", "position", "updated_at"])
+                if picked:
+                    done.append(f"moved {len(picked)} random card{'s' if len(picked) != 1 else ''} from {src.title} to {dst.title}")
+        elif t == "sort_field":
+            from .models import CardFieldValue, CustomField
+            lst = List.objects.filter(pk=a.get("list"), board=board, is_archived=False).first()
+            field = CustomField.objects.filter(pk=a.get("field"), board=board).first()
+            if lst and field:
+                cards = list(lst.cards.filter(is_archived=False))
+                vals = {v.card_id: v for v in CardFieldValue.objects.filter(field=field, card__in=cards)}
+
+                def key(c):
+                    v = vals.get(c.pk)
+                    raw = v.sort_value() if v and hasattr(v, "sort_value") else (str(v.value) if v else None)
+                    return raw
+                have = [c for c in cards if key(c) not in (None, "")]
+                empty = [c for c in cards if key(c) in (None, "")]
+                have.sort(key=lambda c: (_num_or_text(key(c)), c.position), reverse=a.get("order") == "desc")
+                for i, c in enumerate(have + sorted(empty, key=lambda c: c.position), start=1):
+                    Card.objects.filter(pk=c.pk).update(position=i * positions.GAP)
+                if cards:
+                    done.append(f"sorted {lst.title} by {field.name}" + (" (high to low)" if a.get("order") == "desc" else ""))
+        elif t == "create_list":
+            name = (a.get("text") or "").strip()
+            if name:
+                name = timezone.localtime().strftime(name) if "%" in name else name
+                last = board.lists.filter(is_archived=False).order_by("-position").first()
+                lst = List.objects.create(board=board, title=name[:120],
+                                          position=(last.position if last else 0) + positions.GAP)
+                done.append(f"created list {lst.title}")
     from .signals import bump
     bump(board.pk)
     return done
+
+
+def _num_or_text(v):
+    """Sort numbers numerically, everything else alphabetically (numbers first)."""
+    try:
+        return (0, float(str(v).replace(",", "").replace("£", "")), "")
+    except (TypeError, ValueError):
+        return (1, 0, str(v).lower())
 
 
 def _after_press(button, user, done, card=None):
@@ -519,6 +591,16 @@ def describe_board_actions(board, actions):
             text = text.replace("list…", lists.get(a.get("list"), "?"))
         if t == "move_all":
             text = f"move every card from {lists.get(a.get('from_list'), '?')} to {lists.get(a.get('list'), '?')}"
+        if t == "move_random":
+            text = f"move {a.get('count', 1)} random card(s) from {lists.get(a.get('from_list'), '?')} to {lists.get(a.get('list'), '?')}"
+        if t == "archive_list":
+            text = f"archive every card in {lists.get(a.get('list'), '?')}"
+        if t == "create_list":
+            text = f"create a list called “{a.get('text')}”"
+        if t == "sort_field":
+            f = board.custom_fields.filter(pk=a.get("field")).first()
+            text = (f"sort {lists.get(a.get('list'), '?')} by {f.name if f else '(deleted field)'}"
+                    + (", high to low" if a.get("order") == "desc" else ", low to high"))
         if t == "create_card":
             text = f"create “{a.get('text')}” in {lists.get(a.get('list'), '?')}"
         if t in ("add_label", "remove_label"):

@@ -37,7 +37,25 @@ def can_edit(board, user):
 
 
 def can_comment(board, user):
-    return user.is_superuser or board_role(board, user) is not None or is_workspace_admin(board.workspace, user)
+    """Follows the board's Commenting setting (Trello's Settings → Commenting)."""
+    mode = getattr(board, "comment_permission", "observers")
+    if mode == "disabled":
+        return False
+    if user.is_superuser or is_workspace_admin(board.workspace, user):
+        return True
+    role = board_role(board, user)
+    if mode == "members":
+        return role in (BoardMember.ADMIN, BoardMember.MEMBER)
+    if mode == "workspace":
+        return role is not None or can_view(board, user)
+    return role is not None
+
+
+def can_manage_members(board, user):
+    """Add people / remove non-admins: admins, plus members when the board allows it."""
+    if can_manage(board, user):
+        return True
+    return board.member_permission == "members" and board_role(board, user) == BoardMember.MEMBER
 
 
 def can_manage(board, user):

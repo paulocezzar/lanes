@@ -40,11 +40,23 @@
           <label class="check-inline dark"><input type="checkbox" name="d" value="overdue"> Overdue</label>
           <label class="check-inline dark"><input type="checkbox" name="d" value="day"> Due in the next day</label>
           <label class="check-inline dark"><input type="checkbox" name="d" value="week"> Due in the next week</label>
+          <label class="check-inline dark"><input type="checkbox" name="d" value="month"> Due in the next month</label>
           <label class="check-inline dark"><input type="checkbox" name="d" value="none"> No dates</label>
           {% if labels %}<h4 class="section-label">Labels</h4>
+          <label class="check-inline dark"><input type="checkbox" name="l" value="none"> No labels</label>
           {% for l in labels %}<label class="check-inline dark"><input type="checkbox" name="l" value="{{ l.pk }}"> <span class="label-swatch sm lc-{{ l.colour }}">{{ l.name }}</span></label>{% endfor %}{% endif %}
-          <h4 class="section-label">Status</h4>
-          <label class="check-inline dark"><input type="checkbox" name="hide_done"> Hide complete cards</label>
+          <h4 class="section-label">Card status</h4>
+          <label class="check-inline dark"><input type="checkbox" name="s" value="done"> Marked as complete</label>
+          <label class="check-inline dark"><input type="checkbox" name="s" value="open"> Not marked as complete</label>
+          <h4 class="section-label">Activity</h4>
+          <label class="check-inline dark"><input type="checkbox" name="a" value="7"> Active in the last week</label>
+          <label class="check-inline dark"><input type="checkbox" name="a" value="14"> Active in the last two weeks</label>
+          <label class="check-inline dark"><input type="checkbox" name="a" value="28"> Active in the last four weeks</label>
+          <label class="check-inline dark"><input type="checkbox" name="a" value="-28"> Without activity in the last four weeks</label>
+          <select name="match" aria-label="How filters combine" class="filter-match">
+            <option value="any">Any match — cards that match any filter</option>
+            <option value="all">Exact match — cards that match every filter</option>
+          </select>
           <button type="button" class="btn ghost sm" data-filter-clear>Clear filters</button>
         </form>
       </div>
@@ -78,7 +90,7 @@
 
 <dialog id="share-dialog" class="dialog wide" aria-label="Share board">
   <div class="dialog-head"><h3>Share board</h3><button class="icon-btn" data-close>{% include "boards/_icon.html" with i="close" %}</button></div>
-  {% if can_manage %}
+  {% if can_manage_members %}
   <form class="share-form" id="share-form">
     <input type="email" name="email" placeholder="Email address" required autocomplete="off">
     <select name="role">{% for key, name in roles %}<option value="{{ key }}" {% if key == 'member' %}selected{% endif %}>{{ name }}</option>{% endfor %}</select>
@@ -135,10 +147,23 @@
       <button class="btn sm" data-collapse-all>Collapse all lists</button>
       <button class="btn sm ghost" data-expand-all>Expand all lists</button>
       <button class="btn sm ghost" data-copy-board-link>🔗 Copy link to board</button>
+      {% if me %}<button class="btn sm ghost danger-text" data-leave-board>Leave board</button>{% endif %}
     </div>
     <p class="muted small">Made by {{ board.created_by.display_name|default:"—" }} · {{ board.created_at|date:"j M Y" }} · {{ board.workspace.name }}</p>
   </div>
   <div class="drawer-pane" data-pane="activity" hidden>
+    <div class="seg-tabs" role="tablist"><button class="on" data-act-tab="all">All</button><button data-act-tab="comments">Comments</button></div>
+    <div data-act-list="comments" hidden>
+    {% for c in recent_comments %}
+    <div class="feed-item">
+      {% if c.author %}{% include "boards/_avatar.html" with u=c.author %}{% endif %}
+      <div><b>{{ c.author.display_name|default:"⚡ Automation" }}</b> on <a href="?card={{ c.card.pk }}" data-card-link="{{ c.card.pk }}">{{ c.card.title }}</a>
+        <div class="feed-comment">{{ c.body|truncatechars:300 }}</div>
+        <time>{{ c.created_at|timesince }} ago</time></div>
+    </div>
+    {% empty %}<p class="muted">No comments yet.</p>{% endfor %}
+    </div>
+    <div data-act-list="all">
     {% for a in activity %}
     <div class="feed-item">
       {% if a.actor %}{% include "boards/_avatar.html" with u=a.actor %}{% endif %}
@@ -146,6 +171,7 @@
         <time>{{ a.created_at|timesince }} ago</time></div>
     </div>
     {% empty %}<p class="muted">Nothing yet.</p>{% endfor %}
+    </div>
   </div>
   <div class="drawer-pane" data-pane="archived" hidden>
     {% if archived_lists %}<h4 class="section-label">Lists</h4>
@@ -159,6 +185,7 @@
   {% if can_edit %}
   <div class="drawer-pane" data-pane="labels" hidden>
     <p class="muted small">Rename or recolour a label and every card with it updates. Keys <kbd>1</kbd>–<kbd>9</kbd> toggle labels in this order.</p>
+    <button type="button" class="btn ghost sm block" data-colourblind="{{ user.colourblind|yesno:'0,1' }}">{% if user.colourblind %}Turn off colour-blind friendly mode{% else %}Enable colour-blind friendly mode{% endif %}</button>
     {% for l in labels %}
     <form class="label-edit-row" data-label-edit="{{ l.pk }}">
       <span class="kbd-n">{% if forloop.counter < 10 %}<kbd>{{ forloop.counter }}</kbd>{% endif %}</span>
@@ -222,6 +249,14 @@
     <h4 class="section-label">Power-ups</h4>
     <label class="check-inline dark"><input type="checkbox" data-board-flag="voting" {% if board.voting %}checked{% endif %}> 👍 Voting — people can vote on cards</label>
     <label class="check-inline dark"><input type="checkbox" data-board-flag="card_aging" {% if board.card_aging %}checked{% endif %}> 🍂 Card ageing — cards fade after 1, 2 and 4 weeks untouched</label>
+    <h4 class="section-label">Permissions</h4>
+    <label class="field-label">Commenting
+      <select data-board-select="comment_permission">{% for k, v in board.COMMENTS %}<option value="{{ k }}" {% if k == board.comment_permission %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label class="field-label">Adding and removing members
+      <select data-board-select="member_permission">{% for k, v in board.MEMBER_PERMS %}<option value="{{ k }}" {% if k == board.member_permission %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <h4 class="section-label">Card fronts</h4>
+    <label class="check-inline dark"><input type="checkbox" data-board-flag="show_complete" {% if board.show_complete %}checked{% endif %}> Show complete status (✓) on card fronts</label>
+    <label class="check-inline dark"><input type="checkbox" data-board-flag="covers_enabled" {% if board.covers_enabled %}checked{% endif %}> Show card covers (image attachments and colours)</label>
     <h4 class="section-label">Public link</h4>
     {% if public_off %}<p class="muted small">Public links are switched off for the company.</p>{% else %}
     <label class="check-inline dark"><input type="checkbox" data-public-toggle {% if board.public_token %}checked{% endif %} {% if not can_public and not board.public_token %}disabled{% endif %}> Anyone with the link can view this board (read-only, no sign-in)</label>

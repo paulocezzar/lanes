@@ -69,3 +69,42 @@
     if (ok) { f.dataset.confirmed = '1'; f.requestSubmit(e.submitter || undefined); }
   }, true);
 })();
+
+// Colour-blind friendly labels (any page): <button data-colourblind="1|0">
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-colourblind]');
+  if (!b) return;
+  const on = b.dataset.colourblind === '1';
+  const fd = new FormData(); fd.append('colourblind', on ? '1' : '0');
+  await fetch('/account/theme/', { method: 'POST', body: fd, credentials: 'same-origin',
+    headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content } });
+  document.documentElement.classList.toggle('cb', on);
+  document.querySelectorAll('[data-colourblind]').forEach(x => {
+    x.dataset.colourblind = on ? '0' : '1';
+    x.textContent = on ? 'Turn off colour-blind friendly mode' : 'Enable colour-blind friendly mode';
+  });
+});
+
+// Top search: show recently viewed boards when the box is focused and empty.
+(() => {
+  const input = document.querySelector('[data-top-search]');
+  const drop = document.querySelector('[data-search-drop]');
+  if (!input || !drop) return;
+  let loaded = null;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  async function show() {
+    if (input.value.trim()) { drop.hidden = true; return; }
+    if (!loaded) {
+      try { loaded = (await (await fetch('/api/boards/recent/', { credentials: 'same-origin' })).json()).boards || []; }
+      catch { loaded = []; }
+    }
+    drop.innerHTML = (loaded.length ? '<div class="sd-head">Recent boards</div>' + loaded.map(b =>
+      `<a class="sd-row" href="/b/${b.id}/"><span class="sd-thumb bg-${esc(b.bg)}"></span><span><b>${esc(b.title)}</b><small>${esc(b.where)}</small></span></a>`).join('') : '')
+      + '<div class="sd-foot">Type and press Enter to search every card</div>';
+    drop.hidden = false;
+  }
+  input.addEventListener('focus', show);
+  input.addEventListener('input', show);
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') { drop.hidden = true; input.blur(); } });
+  document.addEventListener('click', e => { if (!e.target.closest('.top-search')) drop.hidden = true; });
+})();

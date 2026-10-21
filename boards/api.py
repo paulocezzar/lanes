@@ -206,6 +206,8 @@ def card_update(request, card_id):
         card.cover_colour = d["cover_colour"] if d["cover_colour"] in COLOURS else ""
         if card.cover_colour:
             card.cover = None
+    if "cover_full" in d:
+        card.cover_full = bool(d["cover_full"])
     if "sticker" in d:
         from .models import STICKERS
         s = d["sticker"]
@@ -412,15 +414,17 @@ def comment_update(request, comment_id):
 
 def _members_html(board, request):
     ctx = {"board": board, "memberships": board.memberships.select_related("user").order_by("added_at"),
-           "roles": BoardMember.ROLES, "can_manage": permissions.can_manage(board, request.user)}
+           "roles": BoardMember.ROLES, "can_manage": permissions.can_manage(board, request.user),
+           "can_manage_members": permissions.can_manage_members(board, request.user)}
     return render_to_string("boards/_share_members.html", ctx, request=request)
 
 
 @api
 def board_share(request, board_id):
     board = get_object_or_404(Board, pk=board_id)
-    if not permissions.can_manage(board, request.user):
-        raise ApiError("Only board admins can share this board.", 403)
+    if not permissions.can_manage_members(board, request.user):
+        raise ApiError("Only board admins can share this board." if board.member_permission == "admins"
+                       else "Observers can't add people to this board.", 403)
     email = (request.data.get("email") or "").strip().lower()
     person = User.objects.filter(email__iexact=email, is_active=True).first()
     new_account = None
@@ -446,6 +450,8 @@ def board_share(request, board_id):
         e = mailer.invite(person, request.user, f"the board {board.title}")
         new_account["emailed"] = bool(e and e.sent_at)
     role = request.data.get("role") if request.data.get("role") in dict(BoardMember.ROLES) else BoardMember.MEMBER
+    if role == BoardMember.ADMIN and not permissions.can_manage(board, request.user):
+        role = BoardMember.MEMBER          # members who can add people can't make admins
     if person.is_guest and role == BoardMember.ADMIN:
         role = BoardMember.MEMBER
     _, created = BoardMember.objects.get_or_create(board=board, user=person, defaults={"role": role})
@@ -464,7 +470,9 @@ def board_member_update(request, board_id, user_id):
     board = get_object_or_404(Board, pk=board_id)
     membership = get_object_or_404(BoardMember, board=board, user_id=user_id)
     leaving = user_id == request.user.pk and request.data.get("remove")
-    if not (leaving or permissions.can_manage(board, request.user)):
+    member_removing = (request.data.get("remove") and membership.role != BoardMember.ADMIN
+                       and permissions.can_manage_members(board, request.user))
+    if not (leaving or member_removing or permissions.can_manage(board, request.user)):
         raise ApiError("Only board admins can change members.", 403)
     admins = board.memberships.filter(role=BoardMember.ADMIN)
     last_admin = membership.role == BoardMember.ADMIN and admins.count() == 1
@@ -492,6 +500,14 @@ def board_join(request, board_id):
         raise Http404
     BoardMember.objects.get_or_create(board=board, user=request.user, defaults={"role": BoardMember.MEMBER})
     return {"ok": True}
+
+
+@login_required
+def recent_boards(request):
+    ids = list(request.user.recent_boards or [])
+    boards = {b.pk: b for b in permissions.visible_boards(request.user).filter(pk__in=ids).select_related("workspace")}
+    return JsonResponse({"boards": [{"id": b.pk, "title": b.title, "where": b.workspace.name, "bg": b.background}
+                                    for b in (boards.get(i) for i in ids) if b]})
 
 
 @api
@@ -532,6 +548,13 @@ def board_update(request, board_id):
         board.voting = bool(d["voting"])
     if "card_aging" in d:
         board.card_aging = bool(d["card_aging"])
+    for flag in ("show_complete", "covers_enabled"):
+        if flag in d:
+            setattr(board, flag, bool(d[flag]))
+    if d.get("comment_permission") in dict(Board.COMMENTS):
+        board.comment_permission = d["comment_permission"]
+    if d.get("member_permission") in dict(Board.MEMBER_PERMS):
+        board.member_permission = d["member_permission"]
     if "public" in d:
         import secrets
         board.public_token = secrets.token_urlsafe(18) if d["public"] else ""
@@ -618,7 +641,10 @@ def card_field_set(request, card_id):
 def card_copy(request, card_id):
     card = _card(request, card_id)
     d = request.data
-    target = get_object_or_404(List, pk=d.get("list_id") or card.list_id, board=card.list.board, is_archived=False)
+    target = get_object_or_404(List.objects.select_related("board"), pk=d.get("list_id") or card.list_id,
+                               is_archived=False, board__is_archived=False)
+    if not permissions.can_view(target.board, request.user):
+        raise Http404
     if not permissions.can_edit(target.board, request.user):
         raise ApiError("You can't add cards to that board.", 403)
     from .copying import copy_card

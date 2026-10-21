@@ -3,7 +3,7 @@ Dashboard): header, share dialog, menu drawer and the card dialog."""
 from django.shortcuts import get_object_or_404
 
 from . import ai, permissions
-from .models import Board, BoardMember, CustomField, Label
+from .models import Board, BoardMember, CustomField, Label, Comment
 from .services import board_people, cards_qs
 
 VIEW_TABS = [
@@ -19,6 +19,10 @@ VIEW_TABS = [
 def board_context(request, board_id, view):
     board = get_object_or_404(Board.objects.select_related("workspace"), pk=board_id, is_archived=False)
     permissions.require(permissions.can_view, board, request.user)
+    recent = list(request.user.recent_boards or [])
+    if recent[:1] != [board.pk]:
+        request.user.recent_boards = [board.pk] + [b for b in recent if b != board.pk][:7]
+        request.user.save(update_fields=["recent_boards"])
     return board, {
         "board": board,
         "view": view,
@@ -28,12 +32,15 @@ def board_context(request, board_id, view):
         "me": BoardMember.objects.filter(board=board, user=request.user).first(),
         "can_edit": permissions.can_edit(board, request.user),
         "can_manage": permissions.can_manage(board, request.user),
+        "can_manage_members": permissions.can_manage_members(board, request.user),
         "roles": BoardMember.ROLES,
         "label_colours": Label.COLOURS,
         "field_kinds": CustomField.KINDS,
         "archived_cards": cards_qs().filter(list__board=board, is_archived=True)[:50],
         "archived_lists": board.lists.filter(is_archived=True),
         "activity": board.activity.select_related("actor", "card")[:40],
+        "recent_comments": Comment.objects.filter(card__list__board=board, card__is_archived=False)
+                           .select_related("author", "card").order_by("-created_at")[:40],
         "open_card": request.GET.get("card"),
         "my_workspaces": _my_workspaces(request.user),
         "ai_enabled": ai.enabled(),

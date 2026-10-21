@@ -18,7 +18,10 @@ def _qs(user):
 
 @login_required
 def notifications_api(request):
-    items = list(_qs(request.user)[:20])
+    qs = _qs(request.user)
+    if request.user.only_unread:
+        qs = qs.filter(read_at__isnull=True)
+    items = list(qs[:20])
     unread = Notification.objects.filter(recipient=request.user, read_at__isnull=True).count()
     data = {"unread": unread}
     if request.GET.get("html"):

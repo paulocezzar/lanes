@@ -44,6 +44,11 @@
     setInterval(() => { if (!document.hidden) refresh(!panel.hidden); }, 30000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(false); });
   }
+  bell?.querySelector('[data-only-unread]')?.addEventListener('change', async e => {
+    const fd = new FormData(); fd.append('only_unread', e.target.checked ? '1' : '0');
+    await fetch('/account/theme/', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRFToken': csrf } });
+    refresh(true);
+  });
   document.querySelectorAll('[data-bell-readall]').forEach(b => b.addEventListener('click', async () => {
     await markRead();
     document.querySelectorAll('.notif.unread').forEach(n => n.classList.remove('unread'));

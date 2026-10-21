@@ -36,41 +36,55 @@ EXAMPLES = {
          {"trigger": "checklist_done", "actions": [{"type": "move", "list": "done"}]}),
     ],
     "due": [
-        ("When a card is <b>due within 1 day</b>, <b>notify its members</b> and <b>move it to the top</b>.",
-         {"trigger": "card_due_soon", "trigger_hours": 24, "actions": [{"type": "notify"}, {"type": "move_top"}]}),
-        ("When a card <b>becomes overdue</b>, <b>add the red label</b> and <b>post a comment</b> “This is late”.",
-         {"trigger": "card_overdue",
-          "actions": [{"type": "add_label", "label": "red"}, {"type": "comment", "text": "This is late — can we catch up?"}]}),
-        ("When a card is <b>due within 1 week</b>, <b>add the ⏰ sticker</b>.",
-         {"trigger": "card_due_soon", "trigger_hours": 168, "actions": [{"type": "add_sticker", "sticker": "⏰"}]}),
+        ("<b>The moment a card is due</b>, <b>move it to the top</b> of its list and <b>notify its members</b>.",
+         {"trigger": "card_overdue", "trigger_hours": 0, "actions": [{"type": "move_top"}, {"type": "notify"}]}),
+        ("2 hours <b>before a card is due</b>, <b>add the red label</b>.",
+         {"trigger": "card_due_soon", "trigger_hours": 2, "actions": [{"type": "add_label", "label": "red"}]}),
+        ("3 days <b>after a card is due</b>, <b>post a comment</b> “This card was due 3 days ago”.",
+         {"trigger": "card_overdue", "trigger_hours": 72,
+          "actions": [{"type": "comment", "text": "This card was due 3 days ago — can we catch up?"}]}),
+        ("1 day <b>before a card is due</b>, <b>notify its members</b> and <b>add the ⏰ sticker</b>.",
+         {"trigger": "card_due_soon", "trigger_hours": 24, "actions": [{"type": "notify"}, {"type": "add_sticker", "sticker": "⏰"}]}),
     ],
     "scheduled": [
-        ("<b>Every Monday</b> at 07:00, <b>create a card</b> “Weekly deep clean” in the first list with a checklist.",
+        ("<b>Every weekday</b> at 06:00, <b>sort</b> the first list <b>by due date</b>.",
+         {"kind": "actions", "frequency": "weekdays", "hour": 6, "actions": [{"type": "sort_due", "list": "first"}]}),
+        ("<b>Every third Wednesday</b> of the month, <b>create a card</b> “Planning meeting” in the first list.",
+         {"kind": "card", "frequency": "month_nth", "nth": 3, "weekday": 2, "hour": 8, "title": "Planning meeting",
+          "target_list": "first"}),
+        ("<b>Every year on 14 February</b>, <b>create a list</b> called “Valentine's Day ideas”.",
+         {"kind": "actions", "frequency": "yearly", "month": 2, "month_day": 14, "hour": 7,
+          "actions": [{"type": "create_list", "text": "Valentine's Day ideas"}]}),
+        ("<b>Every Monday</b> at 07:00, <b>create a card</b> “Weekly deep clean” with a checklist.",
          {"kind": "card", "frequency": "weekly", "weekday": 0, "hour": 7, "title": "Weekly deep clean",
           "target_list": "first", "checklist": "Ovens\nProving cabinets\nFloor drains"}),
         ("<b>Every Friday</b> at 17:00, <b>move every card</b> from “Done” to the last list.",
          {"kind": "actions", "frequency": "weekly", "weekday": 4, "hour": 17,
           "actions": [{"type": "move_all", "from_list": "done", "list": "last"}]}),
-        ("<b>Every weekday</b> at 06:00, <b>sort</b> the first list <b>by due date</b>.",
-         {"kind": "actions", "frequency": "weekdays", "hour": 6,
-          "actions": [{"type": "sort_due", "list": "first"}]}),
-        ("<b>On the 1st of every month</b>, <b>archive every complete card</b>.",
-         {"kind": "actions", "frequency": "monthly", "month_day": 1, "hour": 6,
-          "actions": [{"type": "archive_done"}]}),
     ],
     "card-buttons": [
-        ("A <b>“Delivered”</b> button that <b>moves the card</b> to “Done”, <b>marks it complete</b> and "
-         "<b>posts a comment</b>.",
+        ("<b>Assign to me:</b> join the card, add the “In progress” label and an empty “To do” checklist.",
+         {"name": "Assign to me", "icon": "👋", "actions": [{"type": "add_me"}, {"type": "add_label", "label": "progress"},
+                                                            {"type": "add_checklist", "title": "To do"}]}),
+        ("<b>Completed:</b> move the card to “Done” and remove its due date.",
+         {"name": "Completed", "icon": "✅", "actions": [{"type": "move", "list": "done"}, {"type": "clear_due"}]}),
+        ("<b>Send to review:</b> add the “For review” label and post “Ready for review!”.",
+         {"name": "Send to review", "icon": "📌", "actions": [{"type": "add_label", "label": "review"},
+                                                             {"type": "comment", "text": "Ready for review!"}]}),
+        ("<b>Delivered:</b> move to “Done”, mark complete and post a comment.",
          {"name": "Delivered", "icon": "🚚", "actions": [{"type": "move", "list": "done"}, {"type": "complete"},
                                                          {"type": "comment", "text": "Delivered ✅"}]}),
-        ("A <b>“Take it”</b> button that <b>adds whoever pressed it</b> and <b>sets the due date</b> in 2 working days.",
-         {"name": "Take it", "icon": "👋", "actions": [{"type": "add_me"}, {"type": "set_due_workdays", "days": 2}]}),
     ],
     "board-buttons": [
-        ("A <b>“New week”</b> button that <b>moves every card</b> from “Done” to the last list.",
-         {"name": "New week", "icon": "🧹", "actions": [{"type": "move_all", "from_list": "done", "list": "last"}]}),
-        ("A <b>“Tidy up”</b> button that <b>archives every complete card</b> and <b>sorts</b> the first list by due date.",
-         {"name": "Tidy up", "icon": "📦", "actions": [{"type": "archive_done"}, {"type": "sort_due", "list": "first"}]}),
+        ("<b>Monday setup:</b> archive every card in “This week”, then move everything from “Next week” to “This week”.",
+         {"name": "Monday setup", "icon": "🧹", "actions": [{"type": "archive_list", "list": "this week"},
+                                                            {"type": "move_all", "from_list": "next week", "list": "this week"}]}),
+        ("<b>Prioritise:</b> sort the first list by a custom field, high to low.",
+         {"name": "Prioritise", "icon": "🔥", "actions": [{"type": "sort_field", "list": "first", "order": "desc"}]}),
+        ("<b>Shuffle pick:</b> move 2 random cards from the first list to the second.",
+         {"name": "Shuffle pick", "icon": "⭐", "actions": [{"type": "move_random", "count": 2, "from_list": "first", "list": "second"}]}),
+        ("<b>Tidy up:</b> archive every complete card.",
+         {"name": "Tidy up", "icon": "📦", "actions": [{"type": "archive_done"}]}),
     ],
 }
 
@@ -115,14 +129,18 @@ def automation_page(request, board_id):
         "schedules": schedules,
         "triggers": Rule.TRIGGERS,
         "trigger_hours": Rule.HOURS,
+        "trigger_after": Rule.AFTER,
         "actions": Rule.ACTIONS,
         "action_slots": range(MAX_ACTIONS),
         "lists": board.lists.filter(is_archived=False),
         "frequencies": Schedule.FREQUENCIES,
         "weekdays": list(enumerate(automation.WEEKDAYS)),
         "hours": range(0, 24),
-        "month_days": range(1, 29),
+        "month_days": range(1, 32),
+        "nths": Schedule.NTH,
+        "months": Schedule.MONTHS,
         "stickers": STICKERS,
+        "fields": board.custom_fields.all(),
     })
     return render(request, "boards/automation.html", ctx)
 
@@ -173,6 +191,13 @@ def rule_create(request, board_id):
         if rule.trigger_hours not in dict(Rule.HOURS):
             messages.error(request, "Pick how soon before the due date the rule should run.")
             return back
+    if trigger == Rule.OVERDUE:
+        try:
+            rule.trigger_hours = int(p.get("trigger_hours") or 0)
+        except ValueError:
+            rule.trigger_hours = 0
+        if rule.trigger_hours not in dict(Rule.AFTER):
+            rule.trigger_hours = 0
     if trigger == Rule.LABEL_ADDED:
         rule.trigger_label = Label.objects.filter(pk=p.get("trigger_label") or 0, board=board).first()
         if not rule.trigger_label:
@@ -212,7 +237,28 @@ def parse_actions(p, board, prefix="", extra=()):
                 return [], "Pick the list to move cards from."
             a["from_list"] = src.pk
             need = "list"
-        if t in ("create_card", "sort_due"):
+        if t == "move_random":
+            src = List.objects.filter(pk=p.get(f"{prefix}from_list_{i}") or 0, board=board).first()
+            if not src:
+                return [], "Pick the list to move cards from."
+            a["from_list"] = src.pk
+            try:
+                a["count"] = max(1, min(int(p.get(f"{prefix}count_{i}") or 1), 50))
+            except ValueError:
+                a["count"] = 1
+        if t == "sort_field":
+            from .models import CustomField
+            f = CustomField.objects.filter(pk=p.get(f"{prefix}field_{i}") or 0, board=board).first()
+            if not f:
+                return [], "Pick the custom field to sort by (add one in Menu → Fields first)."
+            a["field"] = f.pk
+            a["order"] = "desc" if p.get(f"{prefix}order_{i}") == "desc" else "asc"
+        if t == "create_list":
+            name = (p.get(f"{prefix}text_{i}") or "").strip()[:120]
+            if not name:
+                return [], "Name the new list."
+            a["text"] = name
+        if t in ("create_card", "sort_due", "archive_list", "move_random", "sort_field"):
             need = "list"
         if need == "list":
             lst = List.objects.filter(pk=p.get(f"{prefix}list_{i}") or 0, board=board).first()
@@ -344,7 +390,8 @@ def schedule_create(request, board_id):
     s = Schedule(
         board=board, kind=kind, actions=actions, target_list=lst, title=title, created_by=request.user,
         frequency=p.get("frequency") if p.get("frequency") in dict(Schedule.FREQUENCIES) else Schedule.WEEKLY,
-        weekday=num("weekday", 0, 6, 0), month_day=num("month_day", 1, 28, 1), hour=num("hour", 0, 23, 7),
+        weekday=num("weekday", 0, 6, 0), month_day=num("month_day", 1, 31, 1), hour=num("hour", 0, 23, 7),
+        nth=num("nth", 1, 5, 1), month=num("month", 1, 12, 1),
         checklist=(p.get("checklist") or "")[:5000],
         due_in_days=num("due_in_days", 0, 365, None) if p.get("due_in_days") not in (None, "") else None,
     )

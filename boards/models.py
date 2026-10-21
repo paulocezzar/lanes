@@ -93,6 +93,15 @@ class Board(models.Model):
     voting = models.BooleanField(default=False)       # 👍 votes on cards
     card_aging = models.BooleanField(default=False)   # untouched cards slowly fade
     public_token = models.CharField(max_length=40, blank=True, db_index=True)  # read-only share link when set
+    COMMENTS = [("disabled", "Disabled — nobody can comment or react"),
+                ("members", "Members — admins and board members"),
+                ("observers", "Members and observers"),
+                ("workspace", "Anyone in the department who can see the board")]
+    comment_permission = models.CharField(max_length=10, choices=COMMENTS, default="observers")
+    MEMBER_PERMS = [("admins", "Admins only"), ("members", "Admins and members")]
+    member_permission = models.CharField(max_length=10, choices=MEMBER_PERMS, default="admins")
+    show_complete = models.BooleanField(default=True)    # ✓ complete status on card fronts
+    covers_enabled = models.BooleanField(default=True)   # show image/colour covers on card fronts
 
     class Meta:
         ordering = ["title"]
@@ -171,6 +180,7 @@ class Card(models.Model):
     is_template = models.BooleanField(default=False)
     cover = models.ForeignKey("Attachment", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     cover_colour = models.CharField(max_length=10, blank=True)      # colour cover when there's no image
+    cover_full = models.BooleanField(default=False)    # cover fills the whole card front, title on top
     stickers = models.JSONField(default=empty_list, blank=True)     # up to 6 emoji
     labels = models.ManyToManyField(Label, blank=True, related_name="cards")
     members = models.ManyToManyField(User, blank=True, related_name="assigned_cards")
@@ -428,13 +438,15 @@ class Rule(models.Model):
         (CHECKLIST_DONE, "all checklist items on a card are done"),
         (LABEL_ADDED, "label … is added to a card"),
         (DUE_SOON, "a card is due within…"),
-        (OVERDUE, "a card becomes overdue"),
+        (OVERDUE, "a card's due date passes…"),
         ("member_added", "someone is added to a card"),
     ]
     MEMBER_ADDED = "member_added"
     BY_WHOM = [("anyone", "by anyone"), ("me", "by me"), ("others", "by anyone except me")]
     TIME_TRIGGERS = (DUE_SOON, OVERDUE)
-    HOURS = [(1, "1 hour"), (3, "3 hours"), (12, "12 hours"), (24, "1 day"), (48, "2 days"), (72, "3 days"),
+    AFTER = [(0, "the moment it's due"), (1, "1 hour after"), (3, "3 hours after"), (24, "1 day after"),
+             (72, "3 days after"), (168, "1 week after")]
+    HOURS = [(1, "1 hour"), (2, "2 hours"), (3, "3 hours"), (12, "12 hours"), (24, "1 day"), (48, "2 days"), (72, "3 days"),
              (168, "1 week")]
     ACTIONS = [
         ("move", "move it to list…"),
@@ -491,8 +503,13 @@ class Schedule(models.Model):
     """Recurring card: on a schedule, create a card (with optional checklist)."""
 
     DAILY, WEEKDAYS, WEEKLY, MONTHLY = "daily", "weekdays", "weekly", "monthly"
+    MONTHLY_NTH, YEARLY = "month_nth", "yearly"
     FREQUENCIES = [(DAILY, "Every day"), (WEEKDAYS, "Every weekday (Mon–Fri)"),
-                   (WEEKLY, "Every week on…"), (MONTHLY, "Every month on day…")]
+                   (WEEKLY, "Every week on…"), (MONTHLY, "Every month on day…"),
+                   (MONTHLY_NTH, "Every month on the…"), (YEARLY, "Every year on…")]
+    NTH = [(1, "first"), (2, "second"), (3, "third"), (4, "fourth"), (5, "last")]
+    MONTHS = [(i, n) for i, n in enumerate(["January", "February", "March", "April", "May", "June", "July",
+                                             "August", "September", "October", "November", "December"], start=1)]
 
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="schedules")
     CARD, ACTIONS = "card", "actions"
@@ -503,6 +520,8 @@ class Schedule(models.Model):
     weekday = models.PositiveSmallIntegerField(default=0)      # 0 = Monday, for weekly
     month_day = models.PositiveSmallIntegerField(default=1)    # 1–28, for monthly
     hour = models.PositiveSmallIntegerField(default=7)         # local time
+    nth = models.PositiveSmallIntegerField(default=1)          # month_nth: 1–4, or 5 = last
+    month = models.PositiveSmallIntegerField(default=1)        # yearly: 1–12 (with month_day)
     target_list = models.ForeignKey(List, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
     title = models.CharField(max_length=250, blank=True)
     checklist = models.TextField(blank=True)                   # one item per line
@@ -663,6 +682,10 @@ class Button(models.Model):
         ("move_all", "move every card from list… to list…"),
         ("archive_done", "archive every complete card"),
         ("sort_due", "sort list… by due date"),
+        ("sort_field", "sort list… by custom field…"),
+        ("archive_list", "archive every card in list…"),
+        ("move_random", "move … random cards from list… to list…"),
+        ("create_list", "create a list called…"),
     ]
 
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="buttons")

@@ -9,7 +9,8 @@
   <button class="icon-btn" data-member-remove="{{ m.user.pk }}" title="Remove from board">{% include "boards/_icon.html" with i="close" %}</button>
   {% else %}
   <span class="role-pill">{{ m.get_role_display }}</span>
-  {% if m.user == request.user %}<button class="btn ghost sm" data-member-remove="{{ m.user.pk }}">Leave</button>{% endif %}
+  {% if m.user == request.user %}<button class="btn ghost sm" data-member-remove="{{ m.user.pk }}">Leave</button>
+  {% elif can_manage_members and m.role != "admin" %}<button class="icon-btn" data-member-remove="{{ m.user.pk }}" title="Remove from board">{% include "boards/_icon.html" with i="close" %}</button>{% endif %}
   {% endif %}
 </div>
 {% endfor %}

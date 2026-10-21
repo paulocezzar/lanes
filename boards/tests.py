@@ -2,6 +2,7 @@ import json
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
+from django.utils import timezone
 from django.urls import reverse
 
 from . import positions
@@ -1977,3 +1978,154 @@ class AutomationV2Tests(TestCase):
         r = self.c.get(f"/b/{self.board.pk}/automation/")
         self.assertContains(r, "data-example=")
         self.assertContains(r, "When I am added to a card")
+
+
+class TrelloTouches2Tests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery T2")
+        self.admin = User.objects.create_user("t2a@x.com", "pw", first_name="Ada")
+        self.mem = User.objects.create_user("t2m@x.com", "pw", first_name="Mo")
+        self.obs = User.objects.create_user("t2o@x.com", "pw", first_name="Obi")
+        self.new = User.objects.create_user("t2n@x.com", "pw", first_name="Nia")
+        for u in (self.admin, self.mem, self.obs, self.new):
+            WorkspaceMember.objects.create(workspace=self.ws, user=u)
+        self.board = Board.objects.create(workspace=self.ws, title="Orders")
+        BoardMember.objects.create(board=self.board, user=self.admin, role="admin")
+        BoardMember.objects.create(board=self.board, user=self.mem, role="member")
+        BoardMember.objects.create(board=self.board, user=self.obs, role="observer")
+        self.lst = List.objects.create(board=self.board, title="To do", position=1)
+        self.done = List.objects.create(board=self.board, title="Done", position=2)
+        self.card = Card.objects.create(list=self.lst, title="Sourdough")
+        self.ca, self.cm, self.co = Client(), Client(), Client()
+        self.ca.force_login(self.admin); self.cm.force_login(self.mem); self.co.force_login(self.obs)
+
+    def j(self, c, url, data):
+        return c.post(url, json.dumps(data), content_type="application/json")
+
+    def test_comment_and_member_permissions(self):
+        from . import permissions
+        self.assertTrue(permissions.can_comment(self.board, self.obs))
+        self.j(self.ca, f"/api/boards/{self.board.pk}/update/", {"comment_permission": "members"})
+        self.board.refresh_from_db()
+        self.assertFalse(permissions.can_comment(self.board, self.obs))
+        self.assertTrue(permissions.can_comment(self.board, self.mem))
+        self.j(self.ca, f"/api/boards/{self.board.pk}/update/", {"comment_permission": "disabled"})
+        self.board.refresh_from_db()
+        self.assertFalse(permissions.can_comment(self.board, self.admin))
+        # members can't add people until the board allows it
+        r = self.j(self.cm, f"/api/boards/{self.board.pk}/share/", {"email": "t2n@x.com"})
+        self.assertEqual(r.status_code, 403)
+        self.j(self.ca, f"/api/boards/{self.board.pk}/update/", {"member_permission": "members"})
+        r = self.j(self.cm, f"/api/boards/{self.board.pk}/share/", {"email": "t2n@x.com", "role": "admin"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(BoardMember.objects.get(board=self.board, user=self.new).role, "member")  # not admin
+        # …and remove non-admins, but not admins
+        self.assertEqual(self.j(self.cm, f"/api/boards/{self.board.pk}/members/{self.new.pk}/", {"remove": True}).status_code, 200)
+        self.assertEqual(self.j(self.cm, f"/api/boards/{self.board.pk}/members/{self.admin.pk}/", {"remove": True}).status_code, 403)
+        self.assertEqual(self.j(self.co, f"/api/boards/{self.board.pk}/share/", {"email": "t2n@x.com"}).status_code, 403)
+
+    def test_leave_board_and_card_front_flags(self):
+        self.card.is_complete = True; self.card.cover_colour = "red"; self.card.save()
+        page = self.ca.get(f"/b/{self.board.pk}/")
+        self.assertContains(page, 'class="done-dot"')
+        self.assertContains(page, "tile-cover colour lc-red")
+        self.j(self.ca, f"/api/boards/{self.board.pk}/update/", {"show_complete": False, "covers_enabled": False})
+        page = self.ca.get(f"/b/{self.board.pk}/")
+        self.assertNotContains(page, 'class="done-dot"')
+        self.assertNotContains(page, "tile-cover colour lc-red")
+        self.j(self.ca, f"/api/boards/{self.board.pk}/update/", {"covers_enabled": True})
+        self.j(self.ca, f"/api/cards/{self.card.pk}/update/", {"cover_full": True})
+        self.assertContains(self.ca.get(f"/b/{self.board.pk}/"), "cover-full-colour lc-red")
+        self.assertContains(page, "data-leave-board")
+        self.assertEqual(self.j(self.co, f"/api/boards/{self.board.pk}/members/{self.obs.pk}/", {"remove": True}).status_code, 200)
+        self.assertFalse(BoardMember.objects.filter(board=self.board, user=self.obs).exists())
+
+    def test_prefs_recent_and_comments_tab(self):
+        r = self.ca.post("/account/theme/", {"colourblind": "1", "only_unread": "1"})
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.colourblind and self.admin.only_unread)
+        self.assertContains(self.ca.get("/"), 'class="cb"')
+        Notification.objects.create(recipient=self.admin, kind="assigned", text="old", read_at=timezone.now())
+        Notification.objects.create(recipient=self.admin, kind="assigned", text="fresh")
+        html = self.ca.get("/api/notifications/?html=1").json()["html"]
+        self.assertIn("fresh", html); self.assertNotIn("old", html)
+        other = Board.objects.create(workspace=self.ws, title="Wholesale")
+        BoardMember.objects.create(board=other, user=self.admin, role="admin")
+        self.ca.get(f"/b/{self.board.pk}/"); self.ca.get(f"/b/{other.pk}/")
+        titles = [b["title"] for b in self.ca.get("/api/boards/recent/").json()["boards"]]
+        self.assertEqual(titles[:2], ["Wholesale", "Orders"])
+        from .models import Comment
+        Comment.objects.create(card=self.card, author=self.mem, body="Needs more starter")
+        self.assertContains(self.ca.get(f"/b/{self.board.pk}/"), "Needs more starter")
+
+    def test_copy_card_to_other_board(self):
+        other = Board.objects.create(workspace=self.ws, title="Wholesale")
+        BoardMember.objects.create(board=other, user=self.admin, role="admin")
+        ol = List.objects.create(board=other, title="Inbox")
+        r = self.j(self.ca, f"/api/cards/{self.card.pk}/copy/", {"list_id": ol.pk})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertTrue(ol.cards.filter(title="Sourdough").exists())
+        hidden = Board.objects.create(workspace=self.ws, title="Secret", visibility="private")
+        hl = List.objects.create(board=hidden, title="X")
+        self.assertEqual(self.j(self.ca, f"/api/cards/{self.card.pk}/copy/", {"list_id": hl.pk}).status_code, 404)
+
+
+class ScheduleAndActionTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery S")
+        self.u = User.objects.create_user("s3@x.com", "pw")
+        self.board = Board.objects.create(workspace=self.ws, title="Orders")
+        BoardMember.objects.create(board=self.board, user=self.u, role="admin")
+        self.a = List.objects.create(board=self.board, title="Backlog", position=1)
+        self.b = List.objects.create(board=self.board, title="Doing", position=2)
+
+    def test_nth_weekday_and_yearly(self):
+        from datetime import datetime
+        from django.utils import timezone
+        from . import automation
+        from .models import Schedule
+        tz = timezone.get_current_timezone()
+        start = timezone.make_aware(datetime(2026, 10, 21, 12), tz)
+        third_wed = Schedule(board=self.board, frequency="month_nth", nth=3, weekday=2, hour=8)
+        self.assertEqual(automation.next_run(third_wed, start).date().isoformat(), "2026-11-18")
+        last_fri = Schedule(board=self.board, frequency="month_nth", nth=5, weekday=4, hour=8)
+        self.assertEqual(automation.next_run(last_fri, start).date().isoformat(), "2026-10-30")
+        vday = Schedule(board=self.board, frequency="yearly", month=2, month_day=14, hour=7)
+        self.assertEqual(automation.next_run(vday, start).date().isoformat(), "2027-02-14")
+        self.assertEqual(automation.describe_schedule(third_wed), "Every third Wednesday of the month at 08:00")
+
+    def test_new_board_actions(self):
+        from . import automation
+        from .models import CardFieldValue, CustomField
+        prio = CustomField.objects.create(board=self.board, name="Priority", kind="number")
+        for i, (t, p) in enumerate([("Low", 1), ("High", 9), ("Mid", 5), ("None", None)]):
+            c = Card.objects.create(list=self.a, title=t, position=(i + 1) * 1000)
+            if p is not None:
+                CardFieldValue.objects.create(card=c, field=prio, value=p)
+        automation.run_board_actions(self.board, [{"type": "sort_field", "list": self.a.pk, "field": prio.pk,
+                                                   "order": "desc"}], self.u)
+        self.assertEqual([c.title for c in self.a.cards.order_by("position")], ["High", "Mid", "Low", "None"])
+        done = automation.run_board_actions(self.board, [{"type": "move_random", "from_list": self.a.pk,
+                                                          "list": self.b.pk, "count": 2}], self.u)
+        self.assertEqual(self.b.cards.count(), 2)
+        self.assertIn("moved 2 random cards", done[0])
+        automation.run_board_actions(self.board, [{"type": "archive_list", "list": self.a.pk},
+                                                  {"type": "create_list", "text": "Valentine's ideas"}], self.u)
+        self.assertEqual(self.a.cards.filter(is_archived=False).count(), 0)
+        self.assertTrue(self.board.lists.filter(title="Valentine's ideas").exists())
+
+    def test_overdue_after_offset(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from . import automation
+        from .models import Rule
+        rule = Rule.objects.create(board=self.board, trigger="card_overdue", trigger_hours=72, created_by=self.u,
+                                   actions=[{"type": "comment", "text": "late"}])
+        Rule.objects.filter(pk=rule.pk).update(created_at=timezone.now() - timedelta(days=10))
+        c1 = Card.objects.create(list=self.a, title="2 days late", due_at=timezone.now() - timedelta(days=2))
+        c2 = Card.objects.create(list=self.a, title="4 days late", due_at=timezone.now() - timedelta(days=4))
+        automation.run_due_rules()
+        self.assertFalse(c1.comments.exists())
+        self.assertTrue(c2.comments.filter(body="late").exists())
+        rule.refresh_from_db()
+        self.assertEqual(automation.describe_rule(rule)[0], "When a card is 3 days overdue")

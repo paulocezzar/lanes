@@ -493,6 +493,8 @@
     }
     const cc = t.closest('[data-cover-colour]');
     if (cc) return cardPost('update', { cover_colour: cc.dataset.coverColour });
+    const cf = t.closest('[data-cover-full]');
+    if (cf) return cardPost('update', { cover_full: cf.dataset.coverFull === '1' });
     const st = t.closest('[data-sticker]');
     if (st) return cardPost('update', { sticker: st.dataset.sticker });
     const tplBtn = t.closest('[data-template-toggle]');
@@ -682,6 +684,19 @@
 
   // Drawer (menu): activity, archived, settings
   const drawer = document.getElementById('drawer') || document.createElement('aside');
+  drawer.addEventListener('click', async e => {
+    const t = e.target.closest('[data-act-tab]');
+    if (t) {
+      $$('[data-act-tab]', drawer).forEach(b => b.classList.toggle('on', b === t));
+      $$('[data-act-list]', drawer).forEach(l => { l.hidden = l.dataset.actList !== t.dataset.actTab; });
+      return;
+    }
+    if (e.target.closest('[data-leave-board]')) {
+      if (!await LanesUI.confirm('Leave this board? You can be added back by a board admin.', { ok: 'Leave', danger: true })) return;
+      try { await post(`/api/boards/${boardId}/members/${boardEl.dataset.userId}/`, { remove: true }); location.href = '/'; }
+      catch (err) { toast(err.message || 'Could not leave the board.'); }
+    }
+  });
   // Activity and Archived can change after the page loaded: refresh them each time the menu opens.
   async function refreshDrawer() {
     try {
@@ -786,6 +801,10 @@
   $$('[data-board-flag]', drawer).forEach(cb => cb.addEventListener('change', async () => {
     await post(`/api/boards/${boardId}/update/`, { [cb.dataset.boardFlag]: cb.checked });
     location.reload();
+  }));
+  $$('[data-board-select]', drawer).forEach(sel => sel.addEventListener('change', async () => {
+    await post(`/api/boards/${boardId}/update/`, { [sel.dataset.boardSelect]: sel.value });
+    toast('Saved.');
   }));
   $('[data-board-template]', drawer)?.addEventListener('change', e =>
     post(`/api/boards/${boardId}/update/`, { is_template: e.target.checked })
@@ -1078,28 +1097,32 @@
     if (!filterForm) return null;
     const fd = new FormData(filterForm);
     return { q: (fd.get('q') || '').trim().toLowerCase(), m: fd.getAll('m'), d: fd.getAll('d'),
-             l: fd.getAll('l'), hide_done: !!fd.get('hide_done') };
+             l: fd.getAll('l'), s: fd.getAll('s'), a: fd.getAll('a'), match: fd.get('match') || 'any' };
   }
   function applyFilter() {
     const f = readFilter();
     if (!f) return;
     const me = boardEl.dataset.userId;
     const now = Date.now() / 1000;
-    const active = f.q || f.m.length || f.d.length || f.l.length || f.hide_done;
+    const active = f.q || f.m.length || f.d.length || f.l.length || f.s.length || f.a.length;
     let shown = 0;
     $$('.card-tile', listsEl).forEach(t => {
       const members = (t.dataset.members || '').trim().split(/\s+/).filter(Boolean);
       const labels = (t.dataset.labels || '').trim().split(/\s+/).filter(Boolean);
       const due = t.dataset.dueTs ? +t.dataset.dueTs : null;
       const done = t.dataset.complete === '1';
-      const ok = (!f.q || t.textContent.toLowerCase().includes(f.q))
-        && (!f.m.length || f.m.some(v => v === 'me' ? members.includes(me) : v === 'none' ? !members.length : members.includes(v)))
-        && (!f.l.length || f.l.some(v => labels.includes(v)))
-        && (!f.d.length || f.d.some(v => v === 'none' ? due === null
+      const updated = +(t.dataset.updatedTs || 0);
+      const within = days => due !== null && due >= now && due <= now + days * 86400;
+      const groups = [];
+      if (f.m.length) groups.push(f.m.some(v => v === 'me' ? members.includes(me) : v === 'none' ? !members.length : members.includes(v)));
+      if (f.l.length) groups.push(f.l.some(v => v === 'none' ? !labels.length : labels.includes(v)));
+      if (f.d.length) groups.push(f.d.some(v => v === 'none' ? due === null
               : v === 'overdue' ? (due !== null && due < now && !done)
-              : v === 'day' ? (due !== null && due >= now && due <= now + 86400)
-              : (due !== null && due >= now && due <= now + 7 * 86400)))
-        && !(f.hide_done && done);
+              : within({ day: 1, week: 7, month: 31 }[v] || 7)));
+      if (f.s.length) groups.push(f.s.some(v => v === 'done' ? done : !done));
+      if (f.a.length) groups.push(f.a.some(v => +v > 0 ? updated >= now - +v * 86400 : updated < now + +v * 86400));
+      const ok = (!f.q || t.textContent.toLowerCase().includes(f.q))
+        && (!groups.length || (f.match === 'all' ? groups.every(Boolean) : groups.some(Boolean)));
       t.hidden = !ok;
       if (ok) shown++;
     });
@@ -1113,8 +1136,9 @@
       if (saved) {
         filterForm.q.value = saved.q || '';
         $$('input[type=checkbox]', filterForm).forEach(cb => {
-          cb.checked = cb.name === 'hide_done' ? !!saved.hide_done : (saved[cb.name] || []).includes(cb.value);
+          cb.checked = (saved[cb.name] || []).includes(cb.value);
         });
+        if (saved.match) filterForm.match.value = saved.match;
       }
     } catch { /* ignore */ }
     filterForm.addEventListener('input', applyFilter);
@@ -1257,6 +1281,55 @@
       return;
     }
     return openWithPop(id, k);
+  });
+
+  // ---------- Ctrl/⌘ + C / X / V: copy or cut a card under the mouse, paste onto the list under the mouse ----------
+  // Works between boards (the clip lives in localStorage). Pasting ordinary text onto a list makes cards from it.
+  const CLIP = 'lanes-card-clip';
+  let hoverList = null;
+  listsEl.addEventListener('mouseover', e => { hoverList = e.target.closest('.list') || hoverList; });
+  listsEl.addEventListener('mouseleave', () => { hoverList = null; });
+  const editing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  document.addEventListener('keydown', async e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || editing(document.activeElement)) return;
+    if (dialog.open || String(window.getSelection() || '')) return;
+    const key = e.key.toLowerCase();
+    if ((key === 'c' || key === 'x') && kbTile && document.body.contains(kbTile) && kbTile.matches(':hover, :focus, .kb-current')) {
+      if (key === 'x' && boardEl.dataset.canEdit !== '1') return;
+      e.preventDefault();
+      const marker = `${location.origin}/b/${boardId}/?card=${kbTile.dataset.cardId}`;
+      try { localStorage.setItem(CLIP, JSON.stringify({ id: kbTile.dataset.cardId, mode: key === 'x' ? 'move' : 'copy', marker, at: Date.now() })); } catch {}
+      try { await navigator.clipboard.writeText(marker); } catch { /* clipboard blocked: the local clip still works */ }
+      const title = kbTile.dataset.title || 'Card';
+      toast(`${key === 'x' ? 'Cut' : 'Copied'} “${title.slice(0, 40)}”. Point at a list and press ${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+V.`);
+    }
+  });
+  document.addEventListener('paste', async e => {
+    if (editing(e.target) || editing(document.activeElement) || dialog.open || !hoverList) return;
+    if (boardEl.dataset.canEdit !== '1') return;
+    const text = (e.clipboardData?.getData('text/plain') || '').trim();
+    let clip = null;
+    try { clip = JSON.parse(localStorage.getItem(CLIP) || 'null'); } catch {}
+    const listId = hoverList.dataset.listId;
+    if (!listId) return;
+    e.preventDefault();
+    try {
+      if (clip && (!text || text === clip.marker) && Date.now() - clip.at < 6 * 3600e3) {
+        if (clip.mode === 'move') {
+          await post(`/api/cards/${clip.id}/move/`, { list_id: +listId });
+          localStorage.removeItem(CLIP);
+          toast('Card moved.');
+        } else {
+          await post(`/api/cards/${clip.id}/copy/`, { list_id: +listId });
+          toast('Card copied.');
+        }
+      } else if (text) {
+        const lines = text.split(/\r?\n/).map(s => s.replace(/^[-*•\d.)\s]+/, '').trim()).filter(Boolean).slice(0, 20);
+        for (const title of lines) await post(`/api/lists/${listId}/cards/`, { title: title.slice(0, 250) });
+        toast(lines.length === 1 ? 'Card added from your clipboard.' : `${lines.length} cards added from your clipboard.`);
+      } else return;
+      forceRefresh();
+    } catch (err) { toast(err.message || 'Could not paste there.'); }
   });
 
   // ---------- keyboard shortcuts (press ? for the list) ----------
