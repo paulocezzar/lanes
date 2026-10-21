@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static lanes_extras %}
 {% block title %}{{ board.title }}{% if view != "board" %} · {{ view|capfirst }}{% endif %} · Lanes{% endblock %}
 {% block body_class %}board-page{% endblock %}
 {% block content %}
@@ -79,7 +79,7 @@
     <div class="row"><button class="btn primary sm" type="button" data-invite-guest>Invite as guest</button><button class="btn ghost sm" type="button" data-guest-cancel>Cancel</button></div>
   </div>
   <div class="new-account" id="guest-account" hidden></div>
-  <p class="hint">Admins manage the board and its members. Members add and change cards. Observers can only view and comment. Guests can be members or observers.</p>
+  <p class="hint">Admins manage the board and its members. Members add and change cards. Observers can only view and comment.{% if can_guests %} To add someone outside the company, type their email — they'll join as a guest.{% endif %}</p>
   {% endif %}
   <h4 class="section-label">Board members <span class="count" id="member-count">{{ people|length }}</span></h4>
   <div id="share-members">{% include "boards/_share_members.html" with memberships=board.memberships.all %}</div>
@@ -177,8 +177,10 @@
     <label class="check-inline dark"><input type="checkbox" data-board-flag="voting" {% if board.voting %}checked{% endif %}> 👍 Voting — people can vote on cards</label>
     <label class="check-inline dark"><input type="checkbox" data-board-flag="card_aging" {% if board.card_aging %}checked{% endif %}> 🍂 Card ageing — cards fade after 1, 2 and 4 weeks untouched</label>
     <h4 class="section-label">Public link</h4>
-    <label class="check-inline dark"><input type="checkbox" data-public-toggle {% if board.public_token %}checked{% endif %}> Anyone with the link can view this board (read-only, no sign-in)</label>
-    <div class="public-link" data-public-link {% if not board.public_token %}hidden{% endif %}>
+    {% if public_off %}<p class="muted small">Public links are switched off for the company.</p>{% else %}
+    <label class="check-inline dark"><input type="checkbox" data-public-toggle {% if board.public_token %}checked{% endif %} {% if not can_public and not board.public_token %}disabled{% endif %}> Anyone with the link can view this board (read-only, no sign-in)</label>
+    {% if not can_public %}<p class="muted small">Your company only lets {{ "public_links"|who_can }} turn this on.</p>{% endif %}{% endif %}
+    <div class="public-link" data-public-link {% if not board.public_token or public_off %}hidden{% endif %}>
       <input readonly value="{% if board.public_token %}{{ request.scheme }}://{{ request.get_host }}{% url 'public_board' board.public_token %}{% endif %}" data-public-url aria-label="Public link">
       <button class="btn sm" type="button" data-copy-public>Copy</button>
     </div>
@@ -192,7 +194,7 @@
     </div>
     <h4 class="section-label">Visibility</h4>
     <select data-visibility>
-      {% for key, name in board.VISIBILITY %}<option value="{{ key }}" {% if key == board.visibility %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      {% for key, name in board.VISIBILITY %}<option value="{{ key }}" {% if key == board.visibility %}selected{% endif %} {% if key == "private" and not can_private and board.visibility != "private" %}disabled{% endif %}>{{ name }}{% if key == "private" and not can_private and board.visibility != "private" %} (only {{ "private_boards"|who_can }}){% endif %}</option>{% endfor %}
     </select>
     <h4 class="section-label">Archive board</h4>
     <button class="btn danger" data-archive-board>Archive this board</button>

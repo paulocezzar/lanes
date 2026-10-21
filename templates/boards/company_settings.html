@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Settings · Company · Lanes{% endblock %}
+{% block content %}
+<main class="home company">
+  {% include "boards/_company_tabs.html" %}
+  <form method="post" class="dash-card settings-form">
+    {% csrf_token %}
+    {% for f in fields %}
+    <div class="setting">
+      <label for="s-{{ f.name }}"><b>{{ f.label }}</b></label>
+      <select id="s-{{ f.name }}" name="{{ f.name }}">{% for k, v in f.choices %}<option value="{{ k }}" {% if k == f.value %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      {% if f.help %}<small class="muted">{{ f.help }}</small>{% endif %}
+    </div>
+    {% endfor %}
+    <div class="row"><button class="btn primary">Save settings</button>{% if cs.updated_by %}<small class="muted">Last changed by {{ cs.updated_by.display_name }}, {{ cs.updated_at|timesince }} ago</small>{% endif %}</div>
+  </form>
+</main>
+{% endblock %}

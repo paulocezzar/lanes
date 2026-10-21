@@ -693,6 +693,13 @@ class AuditEvent(models.Model):
         "board_public_off": "turned off the public link for {board}",
         "board_archived": "archived the board {board}",
         "board_restored": "restored the board {board}",
+        "account_off": "switched off the account of {name}",
+        "account_on": "switched the account of {name} back on",
+        "two_step_on": "turned on two-step sign-in",
+        "two_step_off": "turned off two-step sign-in",
+        "two_step_failed": "entered a wrong two-step code",
+        "two_step_reset": "reset two-step sign-in for {name}",
+        "settings_changed": "changed company settings: {changes}",
         "board_created": "created the board {board}",
     }
 
@@ -718,3 +725,35 @@ class AuditEvent(models.Model):
 class _Blank(dict):
     def __missing__(self, key):
         return "?"
+
+
+class CompanySettings(models.Model):
+    """One row (pk=1): company-wide rules set by company admins on Company → Settings."""
+
+    BOARD_ADMINS, DEPT_ADMINS, COMPANY_ADMINS, NOBODY, EVERYONE = (
+        "board_admins", "dept_admins", "company_admins", "nobody", "everyone")
+    PUBLIC_CHOICES = [(BOARD_ADMINS, "Board admins"), (DEPT_ADMINS, "Department admins"),
+                      (COMPANY_ADMINS, "Company admins only"), (NOBODY, "Nobody — public links are switched off")]
+    GUEST_CHOICES = [(BOARD_ADMINS, "Board admins"), (DEPT_ADMINS, "Department admins"),
+                     (COMPANY_ADMINS, "Company admins only"), (NOBODY, "Nobody — no new guests")]
+    CREATE_CHOICES = [(EVERYONE, "Everyone in the department"), (DEPT_ADMINS, "Department admins"),
+                      (COMPANY_ADMINS, "Company admins only")]
+    PRIVATE_CHOICES = [(BOARD_ADMINS, "Board admins"), (DEPT_ADMINS, "Department admins"),
+                       (COMPANY_ADMINS, "Company admins only")]
+    TWO_STEP_CHOICES = [("off", "Optional — people can turn it on themselves"),
+                        ("admins", "Required for company and department admins"),
+                        ("staff", "Required for everyone except guests"),
+                        ("everyone", "Required for everyone, guests included")]
+
+    public_links = models.CharField(max_length=20, choices=PUBLIC_CHOICES, default=BOARD_ADMINS)
+    invite_guests = models.CharField(max_length=20, choices=GUEST_CHOICES, default=BOARD_ADMINS)
+    create_boards = models.CharField(max_length=20, choices=CREATE_CHOICES, default=EVERYONE)
+    private_boards = models.CharField(max_length=20, choices=PRIVATE_CHOICES, default=BOARD_ADMINS)
+    require_two_step = models.CharField(max_length=10, choices=TWO_STEP_CHOICES, default="off")
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

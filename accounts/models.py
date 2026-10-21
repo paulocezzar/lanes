@@ -34,6 +34,11 @@ class User(AbstractUser):
     theme = models.CharField(max_length=10, choices=THEMES, default="system")
     # Guests (suppliers, contractors…) only ever see the boards they're added to.
     is_guest = models.BooleanField(default=False)
+    # Two-step sign-in (authenticator app). Secret is only kept once confirmed.
+    totp_secret = models.CharField(max_length=64, blank=True)
+    totp_enabled = models.BooleanField(default=False)
+    totp_last_step = models.BigIntegerField(default=0)        # stops the same code being used twice
+    recovery_codes = models.JSONField(default=list, blank=True)  # hashed, one-time
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]

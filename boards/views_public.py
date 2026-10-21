@@ -10,7 +10,8 @@ from .services import cards_qs
 
 
 def _board(token):
-    if not token or len(token) < 16:
+    from . import permissions
+    if not token or len(token) < 16 or permissions.public_links_off():
         raise Http404
     return get_object_or_404(Board.objects.select_related("workspace"), public_token=token, is_archived=False)
 

@@ -87,6 +87,8 @@ def audit_log(request):
     kind = request.GET.get("kind", "")
     groups = {
         "signin": ["login", "login_failed"],
+        "security": ["two_step_on", "two_step_off", "two_step_failed", "two_step_reset", "account_off", "account_on",
+                     "settings_changed"],
         "people": ["dept_created", "dept_member_added", "dept_account_created", "dept_member_removed",
                    "dept_member_left", "dept_role_changed", "password_reset"],
         "sharing": ["board_shared", "guest_invited", "board_member_removed", "board_role_changed",
@@ -120,4 +122,83 @@ def audit_log(request):
         "depts": Workspace.objects.all(), "query": params.urlencode(),
         "failed24": AuditEvent.objects.filter(verb="login_failed",
                                               created_at__gte=timezone.now() - timedelta(hours=24)).count(),
+    })
+
+
+@login_required
+def people(request):
+    """Everyone with an account: departments, last sign-in, two-step status.
+    Company admins can switch accounts off (leavers) and reset two-step."""
+    _admin_only(request)
+    from django.contrib import messages
+    from django.shortcuts import redirect
+    from . import audit
+    if request.method == "POST":
+        person = User.objects.filter(pk=request.POST.get("user_id")).first()
+        action = request.POST.get("action")
+        if person and person != request.user and action in ("deactivate", "activate"):
+            person.is_active = action == "activate"
+            person.save(update_fields=["is_active"])
+            audit.record(request, "account_on" if person.is_active else "account_off", target=person)
+            messages.success(request, f"{person.display_name} can {'sign in again' if person.is_active else 'no longer sign in'}.")
+        return redirect(request.get_full_path())
+    q = (request.GET.get("q") or "").strip()
+    show = request.GET.get("show", "active")
+    qs = User.objects.prefetch_related("workspace_memberships__workspace").order_by("first_name", "last_name", "email")
+    if show == "off":
+        qs = qs.filter(is_active=False)
+    elif show == "guests":
+        qs = qs.filter(is_active=True, is_guest=True)
+    elif show == "no2fa":
+        qs = qs.filter(is_active=True, totp_enabled=False)
+    else:
+        qs = qs.filter(is_active=True)
+    if q:
+        qs = qs.filter(Q(email__icontains=q) | Q(first_name__icontains=q) | Q(last_name__icontains=q))
+    page = Paginator(qs, 100).get_page(request.GET.get("page"))
+    from accounts.twofactor import required_for
+    active = User.objects.filter(is_active=True)
+    return render(request, "boards/company_people.html", {
+        "tab": "people", "page": page, "q": q, "show": show,
+        "rows": [{"u": u, "depts": [m.workspace.name for m in u.workspace_memberships.all()],
+                  "needs_2fa": required_for(u) and not u.totp_enabled} for u in page],
+        "with_2fa": active.filter(totp_enabled=True).count(), "active_count": active.count(),
+    })
+
+
+@login_required
+def settings_page(request):
+    _admin_only(request)
+    from django.contrib import messages
+    from django.shortcuts import redirect
+    from . import audit
+    from .models import CompanySettings
+    cs = CompanySettings.get()
+    fields = [
+        ("require_two_step", "Two-step sign-in", CompanySettings.TWO_STEP_CHOICES,
+         "People who must use it are asked to set it up the next time they open Lanes."),
+        ("public_links", "Who can turn on a board's public link", CompanySettings.PUBLIC_CHOICES,
+         "Choosing “Nobody” also switches off every public link that's already out there."),
+        ("invite_guests", "Who can invite guests (people outside the company)", CompanySettings.GUEST_CHOICES,
+         "Guests already on boards keep their access. Remove them from the board or switch their account off."),
+        ("create_boards", "Who can create boards", CompanySettings.CREATE_CHOICES, ""),
+        ("private_boards", "Who can make a board private (hidden from its department)", CompanySettings.PRIVATE_CHOICES,
+         "Company admins can always see every board."),
+    ]
+    if request.method == "POST":
+        changes = []
+        for name, label, choices, _ in fields:
+            value = request.POST.get(name)
+            if value in dict(choices) and value != getattr(cs, name):
+                setattr(cs, name, value)
+                changes.append(f"{label.split(' (')[0].lower()} → {dict(choices)[value].split(' —')[0].lower()}")
+        if changes:
+            cs.updated_by = request.user
+            cs.save()
+            audit.record(request, "settings_changed", changes="; ".join(changes))
+            messages.success(request, "Company settings saved.")
+        return redirect("company_settings")
+    return render(request, "boards/company_settings.html", {
+        "tab": "settings", "cs": cs,
+        "fields": [{"name": n, "label": l, "choices": c, "help": h, "value": getattr(cs, n)} for n, l, c, h in fields],
     })

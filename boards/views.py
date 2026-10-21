@@ -36,7 +36,7 @@ def home(request):
         for b in ws_boards:
             if b.collection_id:
                 cols.setdefault(b.collection, []).append(b)
-        groups.append({"workspace": ws, "boards": loose,
+        groups.append({"workspace": ws, "boards": loose, "can_create": permissions.can_create_board(ws, user),
                        "collections": [{"collection": c, "boards": bs} for c, bs in cols.items()]})
     # Boards the user was invited to as a guest from another department
     ws_ids = {ws.pk for ws in workspaces}
@@ -53,7 +53,7 @@ def home(request):
         "starred": [b for b in boards if b.pk in starred],
         "starred_ids": starred,
         "backgrounds": Board.BACKGROUNDS,
-        "create_workspaces": workspaces,
+        "create_workspaces": [ws for ws in workspaces if permissions.can_create_board(ws, user)],
         "templates": templates,
     })
 
@@ -65,6 +65,9 @@ def board_create(request):
     if not (request.user.is_superuser or permissions.is_workspace_member(ws, request.user)):
         messages.error(request, "You're not a member of that department.")
         return redirect("home")
+    if not permissions.can_create_board(ws, request.user):
+        messages.error(request, f"Only {permissions.who_can('create_boards')} can create boards in {ws.name}.")
+        return redirect("home")
     title = (request.POST.get("title") or "").strip()[:120]
     if not title:
         messages.error(request, "Give the board a title.")
@@ -75,6 +78,9 @@ def board_create(request):
         background=bg if bg in dict(Board.BACKGROUNDS) else "dusk",
         visibility=request.POST.get("visibility") if request.POST.get("visibility") in dict(Board.VISIBILITY) else Board.WORKSPACE,
     )
+    if board.visibility == Board.PRIVATE and not permissions.can_make_private(board, request.user):
+        board.visibility = Board.WORKSPACE      # creator is board admin; company rule may still say no
+        board.save(update_fields=["visibility"])
     BoardMember.objects.create(board=board, user=request.user, role=BoardMember.ADMIN)
     Label.objects.bulk_create([Label(board=board, colour=c) for c in DEFAULT_LABELS])
     for i, t in enumerate(["To do", "Doing", "Done"], start=1):

@@ -1,5 +1,7 @@
 <h1 class="page-title">Company</h1>
 <nav class="row company-tabs">
   <a class="btn sm {% if tab == 'usage' %}primary{% else %}ghost{% endif %}" href="{% url 'company_usage' %}">Usage</a>
+  <a class="btn sm {% if tab == 'people' %}primary{% else %}ghost{% endif %}" href="{% url 'company_people' %}">People</a>
+  <a class="btn sm {% if tab == 'settings' %}primary{% else %}ghost{% endif %}" href="{% url 'company_settings' %}">Settings</a>
   <a class="btn sm {% if tab == 'audit' %}primary{% else %}ghost{% endif %}" href="{% url 'company_audit' %}">Audit log</a>
 </nav>

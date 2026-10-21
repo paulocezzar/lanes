@@ -46,7 +46,7 @@
     {% if g.collections and g.boards %}<h3 class="collection-h">Other boards</h3>{% endif %}
     <div class="tile-grid">
       {% for b in g.boards %}{% include "boards/_board_tile.html" %}{% endfor %}
-      <button class="board-tile new" data-new-board="{{ g.workspace.pk }}">Create new board</button>
+      {% if g.can_create %}<button class="board-tile new" data-new-board="{{ g.workspace.pk }}">Create new board</button>{% endif %}
     </div>
   </section>
   {% empty %}

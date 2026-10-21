@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}People · Company · Lanes{% endblock %}
+{% block content %}
+<main class="home company">
+  {% include "boards/_company_tabs.html" %}
+  <p class="muted">{{ active_count }} active account{{ active_count|pluralize }} · {{ with_2fa }} with two-step sign-in on.</p>
+  <form class="row audit-filters" method="get">
+    <select name="show" onchange="this.form.submit()" aria-label="Show">
+      <option value="active" {% if show == 'active' %}selected{% endif %}>Active accounts</option>
+      <option value="no2fa" {% if show == 'no2fa' %}selected{% endif %}>Without two-step sign-in</option>
+      <option value="guests" {% if show == 'guests' %}selected{% endif %}>Guests</option>
+      <option value="off" {% if show == 'off' %}selected{% endif %}>Switched off</option>
+    </select>
+    <input type="search" name="q" value="{{ q }}" placeholder="Name or email…" aria-label="Search people">
+    <button class="btn sm">Search</button>
+  </form>
+  <section class="dash-card">
+    <div class="table-scroll">
+    <table class="company-table">
+      <thead><tr><th>Person</th><th>Departments</th><th>Last sign-in</th><th>Two-step</th><th></th></tr></thead>
+      <tbody>
+      {% for r in rows %}{% with u=r.u %}
+      <tr>
+        <td><b>{{ u.display_name }}</b>{% if u.is_guest %} <span class="guest-pill">Guest</span>{% endif %}{% if u.is_superuser %} <span class="ok-pill">Company admin</span>{% endif %}<br><small class="muted">{{ u.email }}</small></td>
+        <td>{{ r.depts|join:", "|default:"—" }}</td>
+        <td>{% if u.last_login %}{{ u.last_login|timesince }} ago{% else %}<span class="muted">Never</span>{% endif %}</td>
+        <td>{% if u.totp_enabled %}<span class="ok-pill">On</span>{% elif r.needs_2fa %}<span class="guest-pill">Needs setting up</span>{% else %}<span class="muted">Off</span>{% endif %}</td>
+        <td><div class="row-actions">
+          {% if u.totp_enabled %}
+          <form method="post" action="{% url 'two_step_reset' u.pk %}" onsubmit="return confirm('Reset two-step sign-in for {{ u.display_name|escapejs }}? Use this if they lost their phone.')">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn ghost sm">Reset two-step</button></form>
+          {% endif %}
+          {% if u != user %}
+          <form method="post" {% if u.is_active %}onsubmit="return confirm('Switch off {{ u.display_name|escapejs }}? They won\'t be able to sign in. Their cards and comments stay.')"{% endif %}>{% csrf_token %}
+            <input type="hidden" name="user_id" value="{{ u.pk }}">
+            {% if u.is_active %}<input type="hidden" name="action" value="deactivate"><button class="btn ghost sm danger-text">Switch off</button>
+            {% else %}<input type="hidden" name="action" value="activate"><button class="btn ghost sm">Switch back on</button>{% endif %}
+          </form>
+          {% endif %}
+        </div></td>
+      </tr>
+      {% endwith %}{% empty %}<tr><td colspan="5" class="muted">Nobody matches.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% if page.has_other_pages %}
+  <nav class="row pager">
+    {% if page.has_previous %}<a class="btn ghost sm" href="?show={{ show }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">← Previous</a>{% endif %}
+    <span class="muted small">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a class="btn ghost sm" href="?show={{ show }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">Next →</a>{% endif %}
+  </nav>
+  {% endif %}
+</main>
+{% endblock %}

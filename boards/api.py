@@ -417,6 +417,11 @@ def board_share(request, board_id):
     person = User.objects.filter(email__iexact=email, is_active=True).first()
     new_account = None
     if not person:
+        if not permissions.can_invite_guests(board, request.user):
+            who = permissions.who_can("invite_guests")
+            raise ApiError(f"No Lanes account for {email or 'that address'}. " + (
+                "Inviting guests is switched off for the company." if who == "nobody"
+                else f"Only {who} can invite guests — ask one of them, or a department admin to add them."))
         if not request.data.get("invite_guest"):
             return {"needs_guest": True, "email": email}
         if "@" not in email or "." not in email.split("@")[-1]:
@@ -499,6 +504,12 @@ def board_update(request, board_id):
         board.title = _text(d["title"], 120, "title")
     if d.get("background") in dict(Board.BACKGROUNDS):
         board.background = d["background"]
+    if d.get("visibility") == Board.PRIVATE and board.visibility != Board.PRIVATE \
+            and not permissions.can_make_private(board, request.user):
+        raise ApiError(f"Only {permissions.who_can('private_boards')} can make boards private.", 403)
+    if d.get("public") and not permissions.can_public_link(board, request.user):
+        raise ApiError("Public links are switched off for the company." if permissions.public_links_off()
+                       else f"Only {permissions.who_can('public_links')} can turn on public links.", 403)
     if d.get("visibility") in dict(Board.VISIBILITY) and d["visibility"] != board.visibility:
         board.visibility = d["visibility"]
         audit.record(request, "board_visibility", board=board, value=board.get_visibility_display())

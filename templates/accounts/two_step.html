@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Two-step sign-in · Lanes{% endblock %}
+{% block content %}
+<main class="home narrow two-step">
+  {% if not required or enabled %}<a class="back-link" href="{% url 'home' %}">← Boards</a>{% endif %}
+  <h1 class="page-title">Two-step sign-in {% if enabled %}<span class="ok-pill">On</span>{% endif %}</h1>
+
+  {% if codes %}
+  <section class="panel recovery">
+    <h3>Your recovery codes</h3>
+    <p>If you lose your phone, each of these lets you sign in once. <b>Save them now</b> — print them or keep them in a password manager. They won't be shown again.</p>
+    <div class="code-grid">{% for c in codes %}<code>{{ c }}</code>{% endfor %}</div>
+    <div class="row"><button class="btn sm" type="button" onclick="navigator.clipboard.writeText('{{ codes|join:'\n' }}').then(()=>this.textContent='Copied')">Copy</button><button class="btn ghost sm" type="button" onclick="print()">Print</button></div>
+  </section>
+  {% endif %}
+
+  {% if enabled %}
+  <section class="panel stack">
+    <p>When you sign in, Lanes asks for a code from your authenticator app as well as your password. Even if someone learns your password, they can't get in without your phone.</p>
+    <p class="muted">{{ codes_left }} recovery code{{ codes_left|pluralize }} left.</p>
+    <form method="post" action="{% url 'two_step_new_codes' %}" class="row inline-code">{% csrf_token %}
+      <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="Code from your app" required maxlength="12">
+      <button class="btn sm">Make new recovery codes</button>
+    </form>
+    {% if required %}
+    <p class="muted small">Your company requires two-step sign-in, so it can't be turned off. If you get a new phone, ask a company admin to reset it and set it up again.</p>
+    {% else %}
+    <form method="post" action="{% url 'two_step_disable' %}" class="row inline-code" onsubmit="return confirm('Turn off two-step sign-in?')">{% csrf_token %}
+      <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="Code from your app" required maxlength="12">
+      <button class="btn ghost sm danger-text">Turn off</button>
+    </form>
+    {% endif %}
+  </section>
+  {% else %}
+  {% if required %}<p class="warn-note">Your company requires two-step sign-in. Set it up to carry on using Lanes — it takes about a minute.</p>{% endif %}
+  <section class="panel setup-steps">
+    <ol>
+      <li><b>Get an authenticator app</b> on your phone if you don't have one — Microsoft Authenticator, Google Authenticator or 1Password all work.</li>
+      <li><b>Scan this code</b> with the app (tap “+” or “Add account”).
+        <div class="qr">{{ qr|safe }}</div>
+        <p class="muted small">Can't scan? Choose “enter a setup key” and type: <code class="secret">{{ secret_spaced }}</code></p>
+      </li>
+      <li><b>Type the 6-digit code</b> the app shows for Lanes:
+        <form method="post" class="row inline-code">{% csrf_token %}
+          {% if error %}<p class="form-error">{{ error }}</p>{% endif %}
+          <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" required maxlength="8" autofocus class="code-input">
+          <button class="btn primary">Turn on</button>
+        </form>
+      </li>
+    </ol>
+  </section>
+  {% endif %}
+  {% if required and not enabled %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link-btn">Log out</button></form>{% endif %}
+</main>
+{% endblock %}

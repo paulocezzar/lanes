@@ -38,6 +38,10 @@ def board_context(request, board_id, view):
         "my_workspaces": _my_workspaces(request.user),
         "ai_enabled": ai.enabled(),
         "board_buttons": board.buttons.filter(kind="board"),
+        "can_public": permissions.can_public_link(board, request.user),
+        "public_off": permissions.public_links_off(),
+        "can_private": permissions.can_make_private(board, request.user),
+        "can_guests": permissions.can_invite_guests(board, request.user),
         "watching_board": board.watches.filter(user=request.user, card__isnull=True).exists(),
     }
 

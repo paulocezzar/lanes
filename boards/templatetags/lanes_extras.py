@@ -110,3 +110,9 @@ def render_md(text):
 @register.filter
 def md(text):
     return mark_safe(render_md(text))
+
+
+@register.filter
+def who_can(setting):
+    from boards.permissions import who_can as _who
+    return _who(setting)

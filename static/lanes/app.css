@@ -921,3 +921,22 @@ a.hbar-label:hover { text-decoration: underline; }
 .archived-boards summary h2 { display: inline-flex; color: var(--text-2); }
 .archived-boards .archived-row { margin-bottom: 6px; max-width: 640px; }
 [data-move-board] { width: 100%; }
+
+/* ---------- two-step sign-in ---------- */
+.ok-pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: rgb(75 206 151 / .18); color: var(--ok); vertical-align: middle; margin-left: 4px; }
+.two-step .panel { padding: 18px 20px; }
+.setup-steps ol { margin: 0; padding-left: 20px; display: grid; gap: 16px; }
+.qr { margin: 10px 0 6px; width: max-content; padding: 6px; background: #fff; border-radius: 10px; }
+.qr svg { display: block; width: 200px; height: 200px; }
+.secret { font-size: 14px; letter-spacing: .04em; user-select: all; }
+.code-input { font-size: 22px; letter-spacing: .25em; font-variant-numeric: tabular-nums; max-width: 200px; }
+.inline-code { align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.inline-code input { max-width: 220px; }
+.recovery { margin-bottom: 14px; border: 1px solid var(--warn); }
+.code-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 10px 0; }
+.code-grid code { font-size: 16px; padding: 6px 10px; background: var(--surface-2); border-radius: 6px; text-align: center; }
+.settings-form { display: grid; gap: 18px; max-width: 720px; }
+.setting { display: grid; gap: 6px; }
+.setting select { max-width: 520px; }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.row-actions form { margin: 0; }

@@ -1370,3 +1370,108 @@ class ArchiveMoveDeleteTests(TestCase):
         r = self.c.post(f"/boards/{self.b2.pk}/restore/")
         self.assertEqual(r.status_code, 302)
         self.b2.refresh_from_db(); self.assertFalse(self.b2.is_archived)
+
+
+class TwoStepTests(TestCase):
+    def setUp(self):
+        self.u = User.objects.create_user("ts@x.com", "pw-12345", first_name="Tia")
+        self.c = Client()
+
+    def test_setup_login_and_recovery(self):
+        import time
+        from accounts import twofactor
+        self.c.force_login(self.u)
+        r = self.c.get("/account/two-step/")
+        self.assertContains(r, "<svg")
+        secret = self.c.session["2s_setup_secret"]
+        code = twofactor._code(secret, int(time.time() // 30))
+        r = self.c.post("/account/two-step/", {"code": code}, follow=True)
+        self.assertContains(r, "recovery codes")
+        self.u.refresh_from_db()
+        self.assertTrue(self.u.totp_enabled)
+        recovery = self.c.session.get("2s_fresh_codes") or []
+        # sign in again: password, then code page
+        c2 = Client()
+        r = c2.post("/login/", {"username": "ts@x.com", "password": "pw-12345"})
+        self.assertRedirects(r, "/login/code/", fetch_redirect_response=False)
+        self.assertEqual(c2.get("/").status_code, 302)             # not signed in yet
+        r = c2.post("/login/code/", {"code": code})                 # same code can't be replayed
+        self.assertContains(r, "didn")
+        r = c2.post("/login/code/", {"code": twofactor._code(secret, int(time.time() // 30) + 1)})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(c2.get("/").status_code, 200)
+        # recovery code works once (codes were shown on the confirmation page)
+        page = self.c.get("/account/two-step/")
+        c3 = Client(); c3.post("/login/", {"username": "ts@x.com", "password": "pw-12345"})
+        self.u.refresh_from_db()
+        from accounts.twofactor import new_recovery_codes
+        codes, hashes = new_recovery_codes(); self.u.recovery_codes = hashes; self.u.save()
+        self.assertEqual(c3.post("/login/code/", {"code": codes[0]}).status_code, 302)
+        self.u.refresh_from_db(); self.assertEqual(len(self.u.recovery_codes), 7)
+
+    def test_too_many_tries_and_required(self):
+        from .models import CompanySettings
+        from accounts import twofactor
+        self.u.totp_secret, self.u.totp_enabled = twofactor.new_secret(), True
+        self.u.save()
+        self.c.post("/login/", {"username": "ts@x.com", "password": "pw-12345"})
+        for _ in range(5):
+            r = self.c.post("/login/code/", {"code": "000000"})
+        self.assertRedirects(r, "/login/", fetch_redirect_response=False)
+        # company requires it: someone without it is sent to setup
+        other = User.objects.create_user("no2@x.com", "pw", first_name="No")
+        cs = CompanySettings.get(); cs.require_two_step = "everyone"; cs.save()
+        c = Client(); c.force_login(other)
+        self.assertRedirects(c.get("/"), "/account/two-step/", fetch_redirect_response=False)
+        self.assertEqual(c.post("/api/inbox/add/", "{}", content_type="application/json").status_code, 403)
+
+
+class CompanySettingsTests(TestCase):
+    def setUp(self):
+        from .models import CompanySettings
+        self.boss = User.objects.create_superuser("boss2@x.com", "pw", first_name="Bo")
+        self.u = User.objects.create_user("m@x.com", "pw", first_name="Mo")
+        self.ws = Workspace.objects.create(name="Kitchen")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.board = Board.objects.create(workspace=self.ws, title="Prep")
+        BoardMember.objects.create(board=self.board, user=self.u, role="admin")
+        self.c = Client(); self.c.force_login(self.u)
+        self.cs = CompanySettings.get()
+
+    def j(self, url, data):
+        return self.c.post(url, json.dumps(data), content_type="application/json")
+
+    def test_rules_apply(self):
+        b = Client(); b.force_login(self.boss)
+        r = b.post("/company/settings/", {"public_links": "company_admins", "invite_guests": "nobody",
+                                          "create_boards": "dept_admins", "private_boards": "dept_admins",
+                                          "require_two_step": "off"})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.j(f"/api/boards/{self.board.pk}/update/", {"public": True}).status_code, 403)
+        self.assertEqual(self.j(f"/api/boards/{self.board.pk}/update/", {"visibility": "private"}).status_code, 403)
+        r = self.j(f"/api/boards/{self.board.pk}/share/", {"email": "new@out.com"})
+        self.assertIn("switched off", r.json()["error"])
+        self.c.post("/boards/new/", {"workspace": self.ws.pk, "title": "Nope"})
+        self.assertFalse(Board.objects.filter(title="Nope").exists())
+        self.assertNotContains(self.c.get("/"), "Create new board")
+        self.assertContains(b.get("/company/audit/"), "changed company settings")
+        # company admin can still do it; "nobody" kills existing links
+        token = b.post(f"/api/boards/{self.board.pk}/update/", json.dumps({"public": True}),
+                       content_type="application/json").json()["public_token"]
+        self.assertEqual(Client().get(f"/p/{token}/").status_code, 200)
+        self.cs.refresh_from_db(); self.cs.public_links = "nobody"; self.cs.save()
+        self.assertEqual(Client().get(f"/p/{token}/").status_code, 404)
+
+    def test_people_page_switch_off(self):
+        b = Client(); b.force_login(self.boss)
+        self.assertContains(b.get("/company/people/"), "m@x.com")
+        b.post("/company/people/", {"user_id": self.u.pk, "action": "deactivate"})
+        self.u.refresh_from_db(); self.assertFalse(self.u.is_active)
+        self.assertFalse(Client().login(username="m@x.com", password="pw"))
+
+
+class AdminLoginTests(TestCase):
+    def test_admin_login_goes_through_lanes_login(self):
+        r = Client().get("/admin/login/?next=/admin/")
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(r["Location"].startswith("/login/?next=/admin/"))

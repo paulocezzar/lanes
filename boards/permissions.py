@@ -83,3 +83,50 @@ def can_edit_card(card, user):
 
 def can_comment_card(card, user):
     return any(can_comment(b, user) for b in card_boards(card))
+
+
+# ---------- company-wide settings (Company → Settings) ----------
+
+def _settings():
+    from .models import CompanySettings
+    return CompanySettings.get()
+
+
+def _allowed(level, workspace, user, board=None):
+    if user.is_superuser:
+        return level != "nobody"
+    if level == "nobody" or level == "company_admins":
+        return False
+    if level == "dept_admins":
+        return is_workspace_admin(workspace, user)
+    if level == "board_admins":
+        return board is not None and can_manage(board, user)
+    if level == "everyone":
+        return is_workspace_member(workspace, user)
+    return False
+
+
+def can_public_link(board, user):
+    return _allowed(_settings().public_links, board.workspace, user, board)
+
+
+def public_links_off():
+    return _settings().public_links == "nobody"
+
+
+def can_invite_guests(board, user):
+    return _allowed(_settings().invite_guests, board.workspace, user, board)
+
+
+def can_make_private(board, user):
+    return _allowed(_settings().private_boards, board.workspace, user, board)
+
+
+def can_create_board(workspace, user):
+    return _allowed(_settings().create_boards, workspace, user)
+
+
+def who_can(setting):
+    """Plain words for an error message, e.g. 'department admins'."""
+    return {"board_admins": "board admins", "dept_admins": "department admins", "company_admins": "company admins",
+            "everyone": "everyone in the department", "nobody": "nobody"}[getattr(_settings(), setting)]
