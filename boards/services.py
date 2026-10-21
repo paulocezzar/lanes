@@ -88,6 +88,11 @@ def render_modal(card, request):
         "voters": [v.user.display_name for v in card.votes.select_related("user")],
         "watching": card.watches.filter(user=user).exists(),
         "watching_board": board.watches.filter(user=user, card__isnull=True).exists(),
+        "recent_board_links": [{"url": f"{settings.SITE_URL}/b/{b.pk}/", "title": b.title} for b in
+                               permissions.visible_boards(user).filter(pk__in=(user.recent_boards or [])[:6])],
+        "copyable_checklists": (Checklist.objects.filter(card__list__board=board, card__is_archived=False)
+                                .exclude(card=card).select_related("card").order_by("card__title", "title")[:60]
+                                if can_edit else []),
     }
     return render_to_string("boards/_card_modal.html", ctx, request=request)
 

@@ -70,11 +70,8 @@ input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
   background: var(--bg); border-bottom: 1px solid var(--border); position: relative; z-index: 40; }
 .brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 17px; text-decoration: none; letter-spacing: -.01em; }
 .brand.big { font-size: 28px; }
-.brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); display: inline-flex; gap: 3px; padding: 4px; }
-.brand.big .brand-mark { width: 32px; height: 32px; padding: 6px; gap: 4px; }
-.brand-mark i { flex: 1; background: #fff; border-radius: 2px; }
-.brand-mark i:first-child { height: 100%; }
-.brand-mark i:last-child { height: 62%; }
+.brand-mark { width: 24px; height: 24px; flex: none; display: block; }
+.brand.big .brand-mark { width: 36px; height: 36px; }
 .topnav { display: flex; gap: 4px; }
 .topnav a { white-space: nowrap; text-decoration: none; padding: 6px 10px; border-radius: 6px; color: var(--text-2); font-weight: 600; }
 .topnav a:hover, .topnav a.on { background: var(--surface-2); color: var(--text); }
@@ -1123,3 +1120,14 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .sd-row small { color: var(--text-2); font-size: 12px; }
 .sd-thumb { width: 32px; height: 26px; border-radius: 4px; flex: none; }
 .sd-foot { border-top: 1px solid var(--border); margin-top: 4px; padding: 8px; font-size: 12px; color: var(--text-2); }
+.pop-search { width: 100%; margin: 0 0 8px; }
+.pop-rule { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
+.pop .file-btn { display: inline-flex; cursor: pointer; }
+.field-suggest { display: grid; gap: 6px; margin-bottom: 8px; }
+.field-suggest .btn { justify-content: space-between; display: flex; }
+.field-suggest .btn b { font-weight: 600; opacity: .7; }
+.list.pinned { position: sticky; left: 0; z-index: 6; box-shadow: 6px 0 14px -6px rgba(0,0,0,.45); }
+.list.pinned .list-title::before { content: "📌 "; font-size: .85em; }
+.menu-label { display: block; padding: 8px 12px 2px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
+.view-add { position: relative; }
+.view-add-pop { left: 0; right: auto; width: 280px; display: grid; gap: 8px; z-index: 30; }

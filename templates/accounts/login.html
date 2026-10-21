@@ -4,7 +4,7 @@
 {% block content %}
 <main class="login">
   <div class="login-card">
-    <div class="brand big"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span>Lanes</div>
+    <div class="brand big">{% include "_logo.html" %}Lanes</div>
     <p class="muted">Boards for every department.</p>
     {% if ms_mode != "off" %}
     <a class="ms-btn" href="{% url 'ms_login' %}{% if next %}?next={{ next|urlencode }}{% endif %}"><span class="ms-logo" aria-hidden="true"><i style="background:#f25022"></i><i style="background:#7fba00"></i><i style="background:#00a4ef"></i><i style="background:#ffb900"></i></span>Sign in with Microsoft</a>

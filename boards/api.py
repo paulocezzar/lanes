@@ -4,6 +4,7 @@ rebuild a card itself."""
 import json
 from functools import wraps
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -99,6 +100,8 @@ def list_update(request, list_id):
         lst.title = _text(d["title"], 120, "title")
     if "colour" in d:
         lst.colour = d["colour"] if d["colour"] in COLOURS else ""
+    if "is_pinned" in d:
+        lst.is_pinned = bool(d["is_pinned"])
     if "card_limit" in d:
         try:
             lst.card_limit = max(1, min(int(d["card_limit"]), 500)) if d["card_limit"] not in (None, "", 0) else None
@@ -199,6 +202,14 @@ def card_update(request, card_id):
             log(board, user, "due_removed", card=card)
     if "start_date" in d:
         card.start_date = parse_date(d["start_date"]) if d["start_date"] else None
+    if "recur" in d and d["recur"] in dict(Card.RECUR):
+        card.recur = d["recur"]
+    if "reminder_minutes" in d:
+        try:
+            r = int(d["reminder_minutes"])
+        except (TypeError, ValueError):
+            r = 1440
+        card.reminder_minutes = r if r in dict(Card.REMINDERS) else 1440
     if "is_template" in d:
         card.is_template = bool(d["is_template"])
     if "cover_colour" in d:
@@ -223,7 +234,13 @@ def card_update(request, card_id):
     just_completed = "is_complete" in d and card.is_complete and not Card.objects.get(pk=card.pk).is_complete
     card.save()
     if just_completed:
+        from .recurring import spawn_next
+        nxt = spawn_next(card, request.user)
         automation.fire(card, Rule.COMPLETED, actor=request.user)
+        if nxt:
+            data = card_response(card.pk, request)
+            data["next_card"] = {"id": nxt.pk, "due": timezone.localtime(nxt.due_at).strftime("%a %-d %b")}
+            return data
     return card_response(card.pk, request)
 
 
@@ -291,9 +308,31 @@ def checklist_create(request, card_id):
     title = _text(request.data.get("title") or "Checklist", 120, "title")
     cl = Checklist.objects.create(card=card, title=title, position=positions.end_position(card.checklists.all()))
     items = [str(t).strip()[:250] for t in (request.data.get("items") or []) if str(t).strip()][:50]
+    if request.data.get("copy_from"):     # "Copy items from…" another checklist the person can see
+        src = Checklist.objects.filter(pk=request.data["copy_from"]).select_related("card__list__board").first()
+        if src and permissions.can_view_card(src.card, request.user):
+            items += [i.text for i in src.items.order_by("position")][:100]
     for i, text in enumerate(items, start=1):
         ChecklistItem.objects.create(checklist=cl, text=text, position=i * positions.GAP)
     log(card.list.board, request.user, "checklist_added", card=card, title=title)
+    return card_response(card.pk, request)
+
+
+@api
+def attachment_link(request, card_id):
+    """Attach a link (Trello's "Search or paste a link")."""
+    from urllib.parse import urlparse
+    from .models import Attachment
+    card = _card(request, card_id)
+    url = (request.data.get("url") or "").strip()
+    if url.startswith("/"):
+        url = settings.SITE_URL + url
+    parts = urlparse(url)
+    if parts.scheme not in ("http", "https") or not parts.netloc or len(url) > 1000:
+        raise ApiError("Paste a full web address starting with https://")
+    name = (request.data.get("name") or "").strip()[:200] or (parts.netloc.removeprefix("www.") + parts.path).rstrip("/")[:200]
+    Attachment.objects.create(card=card, url=url, name=name, content_type="text/uri-list", uploaded_by=request.user)
+    log(card.list.board, request.user, "attachment_added", card=card, name=name)
     return card_response(card.pk, request)
 
 

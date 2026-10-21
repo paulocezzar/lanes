@@ -4,7 +4,7 @@
 {% block content %}
 <main class="login">
   <div class="login-card">
-    <div class="brand big"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span>Lanes</div>
+    <div class="brand big">{% include "_logo.html" %}Lanes</div>
     <p class="muted">Enter the 6-digit code from your authenticator app for <b>{{ email }}</b>.</p>
     <form method="post">
       {% csrf_token %}

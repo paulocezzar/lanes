@@ -256,5 +256,6 @@ def board_map(request, board_id=None):
                        "done": p["card"].is_complete, "lat": p["lat"], "lng": p["lng"]} for p in pins],
         "unplaced": unplaced,
         "has_location_field": (board.custom_fields.filter(kind=CustomField.LOCATION).exists() if board else True),
+        "location_field": board.custom_fields.filter(kind=CustomField.LOCATION).first() if board else None,
     })
     return render(request, "boards/view_map.html", ctx)

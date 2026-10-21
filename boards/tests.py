@@ -2129,3 +2129,76 @@ class ScheduleAndActionTests(TestCase):
         self.assertTrue(c2.comments.filter(body="late").exists())
         rule.refresh_from_db()
         self.assertEqual(automation.describe_rule(rule)[0], "When a card is 3 days overdue")
+
+
+class TrelloTouches3Tests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery T3")
+        self.u = User.objects.create_user("t3@x.com", "pw", first_name="Tia")
+        self.w = User.objects.create_user("t3w@x.com", "pw", first_name="Wes")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.board = Board.objects.create(workspace=self.ws, title="Orders")
+        BoardMember.objects.create(board=self.board, user=self.u, role="admin")
+        BoardMember.objects.create(board=self.board, user=self.w, role="member")
+        self.lst = List.objects.create(board=self.board, title="To do")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def j(self, url, data):
+        return self.c.post(url, json.dumps(data), content_type="application/json")
+
+    def test_recurring_card_makes_next_one(self):
+        from datetime import timedelta
+        from .models import Checklist, ChecklistItem
+        due = timezone.now() + timedelta(days=1)
+        card = Card.objects.create(list=self.lst, title="Weekly deep clean", due_at=due)
+        cl = Checklist.objects.create(card=card, title="Steps")
+        ChecklistItem.objects.create(checklist=cl, text="Ovens", is_done=True)
+        self.j(f"/api/cards/{card.pk}/update/", {"recur": "weekly", "reminder_minutes": 60})
+        r = self.j(f"/api/cards/{card.pk}/update/", {"is_complete": True}).json()
+        self.assertIn("next_card", r)
+        nxt = Card.objects.get(pk=r["next_card"]["id"])
+        self.assertEqual((nxt.due_at - due).days, 7)
+        self.assertFalse(nxt.is_complete)
+        self.assertEqual((nxt.recur, nxt.reminder_minutes), ("weekly", 60))
+        self.assertFalse(nxt.checklists.get().items.get().is_done)
+        from .recurring import next_due
+        from datetime import datetime
+        jan31 = timezone.make_aware(datetime(2027, 1, 31, 17), timezone.get_current_timezone())
+        self.assertEqual(next_due(jan31, "monthly").date().isoformat(), "2027-02-28")
+
+    def test_reminder_timing_and_watchers(self):
+        from datetime import timedelta
+        from .models import Watch
+        from .notify import send_due_reminders
+        card = Card.objects.create(list=self.lst, title="Collect order", due_at=timezone.now() + timedelta(hours=3),
+                                   reminder_minutes=60)
+        card.members.add(self.u)
+        Watch.objects.create(user=self.w, card=card)
+        self.assertEqual(send_due_reminders(), 0)            # 1 hour before — not yet
+        Card.objects.filter(pk=card.pk).update(due_at=timezone.now() + timedelta(minutes=30))
+        self.assertEqual(send_due_reminders(), 2)            # member + watcher
+        Card.objects.filter(pk=card.pk).update(due_at=timezone.now() + timedelta(minutes=20), reminder_minutes=-1)
+        self.assertEqual(send_due_reminders(), 0)            # "None"
+
+    def test_link_attachment_copy_checklist_pin_and_suggested_field(self):
+        from .models import Attachment, Checklist, ChecklistItem
+        card = Card.objects.create(list=self.lst, title="Wedding cake")
+        r = self.j(f"/api/cards/{card.pk}/links/", {"url": "https://example.com/brief", "name": "Brief"})
+        self.assertEqual(r.status_code, 200, r.content)
+        att = Attachment.objects.get(card=card)
+        self.assertEqual(self.c.get(f"/files/{att.pk}/")["Location"], "https://example.com/brief")
+        self.assertEqual(self.j(f"/api/cards/{card.pk}/links/", {"url": "javascript:alert(1)"}).status_code, 400)
+        other = Card.objects.create(list=self.lst, title="Tiered cake")
+        src = Checklist.objects.create(card=other, title="Bake")
+        for i, t in enumerate(["Sponges", "Buttercream"]):
+            ChecklistItem.objects.create(checklist=src, text=t, position=i)
+        self.assertContains(self.c.get(f"/cards/{card.pk}/"), "Copy items from")
+        self.j(f"/api/cards/{card.pk}/checklists/", {"title": "Bake", "copy_from": src.pk})
+        self.assertEqual([i.text for i in card.checklists.get().items.order_by("position")], ["Sponges", "Buttercream"])
+        self.j(f"/api/lists/{self.lst.pk}/", {"is_pinned": True})
+        self.assertContains(self.c.get(f"/b/{self.board.pk}/"), "list pinned")
+        self.j(f"/api/boards/{self.board.pk}/fields/", {"name": "Priority", "kind": "dropdown",
+                                                         "options": "Highest,High,Medium,Low,Lowest"})
+        self.assertEqual(self.board.custom_fields.get().options[0], "Highest")
+        for v in ("table", "timeline"):
+            self.assertContains(self.c.get(f"/b/{self.board.pk}/{v}/"), "data-view-add-form")

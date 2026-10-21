@@ -11,6 +11,7 @@
   <div class="map-layout">
     <div id="lanes-map" class="map-canvas" aria-label="Map of cards"></div>
     <aside class="map-side">
+      {% include "boards/_view_add.html" %}
       <h3>{{ pins|length }} card{{ pins|length|pluralize }} on the map</h3>
       {% for p in pins %}
       <button class="map-row{% if p.card.is_complete %} done{% endif %}" data-map-focus="{{ p.card.pk }}">
@@ -30,6 +31,7 @@
 </div>
 {% endblock %}
 {% block scripts %}{{ block.super }}
+<script src="{% static 'lanes/views.js' %}"></script>
 <link rel="stylesheet" href="{% static 'lanes/vendor/leaflet/leaflet.css' %}">
 <script src="{% static 'lanes/vendor/leaflet/leaflet.js' %}"></script>
 <script>

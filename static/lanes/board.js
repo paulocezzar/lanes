@@ -181,6 +181,12 @@
       openAddCard(listEl);
     } else if (e.target.closest('[data-cancel]') && e.target.closest('[data-add-card-form]')) {
       closeAddCard(listEl);
+    } else if (e.target.closest('[data-list-pin]')) {
+      const on = e.target.closest('[data-list-pin]').dataset.listPin === '1';
+      await post(`/api/lists/${listEl.dataset.listId}/`, { is_pinned: on });
+      e.target.closest('details')?.removeAttribute('open');
+      toast(on ? '📌 Pinned — this list stays on the left as you scroll.' : 'Unpinned.');
+      forceRefresh();
     } else if (e.target.closest('[data-list-colour]')) {
       await post(`/api/lists/${listEl.dataset.listId}/`, { colour: e.target.closest('[data-list-colour]').dataset.listColour });
       e.target.closest('details')?.removeAttribute('open');
@@ -344,6 +350,10 @@
 
   // Apply a card payload from the server: update the tile and the open dialog.
   function applyCard(data) {
+    if (data.next_card) {
+      toast(`🔁 Next one made — due ${data.next_card.due}.`);
+      setTimeout(forceRefresh, 300);
+    }
     const old = $(`.card-tile[data-card-id="${data.card_id}"]:not([data-mirror-id])`, listsEl);
     // mirrors of this card on this board: update their faces in place
     $$(`.card-tile[data-card-id="${data.card_id}"][data-mirror-id]`, listsEl).forEach(m => {
@@ -537,15 +547,21 @@
 
   dialogBody.addEventListener('submit', e => {
     const f = e.target;
+    if (f.matches('[data-attach-link]')) {
+      e.preventDefault();
+      hidePops();
+      return cardPost('links', { url: f.url.value, name: f.name.value }).catch(err => toast(err.message || 'Could not add that link.'));
+    }
     if (f.matches('[data-dates]')) {
       e.preventDefault();
       hidePops();
-      return cardPost('update', { due_at: f.due_at.value, start_date: f.start_date.value });
+      return cardPost('update', { due_at: f.due_at.value, start_date: f.start_date.value,
+                                  recur: f.recur.value, reminder_minutes: +f.reminder_minutes.value });
     }
     if (f.matches('[data-checklist-new]')) {
       e.preventDefault();
       hidePops();
-      return cardPost('checklists', { title: f.title.value }).then(() => {
+      return cardPost('checklists', { title: f.title.value, copy_from: f.copy_from?.value || '' }).then(() => {
         const inputs = $$('[data-item-new] input', dialogBody);
         inputs[inputs.length - 1]?.focus();   // straight into "Add an item"
       });
@@ -764,6 +780,12 @@
       location.reload();
     });
   }
+  drawer.addEventListener('click', async e => {
+    const sug = e.target.closest('[data-field-suggest]');
+    if (!sug) return;
+    try { await post(`/api/boards/${boardId}/fields/`, JSON.parse(sug.dataset.fieldSuggest)); location.reload(); }
+    catch (err) { toast(err.message || 'Could not add that field.'); }
+  });
   drawer.addEventListener('change', e => {
     const show = e.target.closest('[data-field-show]');
     if (show) post(`/api/boards/${boardId}/fields/`,

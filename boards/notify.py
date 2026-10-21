@@ -140,19 +140,27 @@ def on_activity(activity):
 # ---------- due-date reminders ----------
 
 def send_due_reminders(now=None):
-    """One reminder per card member / item assignee when something is due
-    within 24 hours. Safe to run repeatedly — dedupe keys include the due time."""
+    """Card reminders go to the card's members and watchers at the time chosen on
+    the card (default a day before; "None" switches them off). Checklist items
+    remind their assignee within 24 hours. Safe to run repeatedly — dedupe keys
+    include the due time."""
     now = now or timezone.now()
     soon = now + timedelta(hours=24)
     sent = 0
-    cards = (Card.objects.filter(due_at__gt=now, due_at__lte=soon, is_complete=False, is_archived=False,
-                                 is_template=False, list__is_archived=False, list__board__is_archived=False)
-             .select_related("list__board").prefetch_related("members"))
+    cards = (Card.objects.filter(due_at__gt=now - timedelta(minutes=15), due_at__lte=now + timedelta(days=2),
+                                 is_complete=False, is_archived=False, is_template=False, reminder_minutes__gte=0,
+                                 list__is_archived=False, list__board__is_archived=False)
+             .select_related("list__board").prefetch_related("members", "watches__user"))
     for c in cards:
+        if c.due_at - timedelta(minutes=c.reminder_minutes) > now:
+            continue                                  # not time yet
         key = f"due:{c.pk}:{int(c.due_at.timestamp())}"
         when = timezone.localtime(c.due_at).strftime("%a %-d %b, %H:%M")
-        for u in c.members.all():
-            if send(u, Notification.DUE_SOON, card=c, text=f"{c.title} is due {when}", dedupe_key=key):
+        text = f"{c.title} is due now ({when})" if c.due_at <= now else f"{c.title} is due {when}"
+        people = {u.pk: u for u in c.members.all()}
+        people.update({w.user_id: w.user for w in c.watches.all()})
+        for u in people.values():
+            if send(u, Notification.DUE_SOON, card=c, text=text, dedupe_key=key):
                 sent += 1
     items = (ChecklistItem.objects.filter(due_at__gt=now, due_at__lte=soon, is_done=False, assignee__isnull=False,
                                           checklist__card__is_archived=False, checklist__card__is_template=False)

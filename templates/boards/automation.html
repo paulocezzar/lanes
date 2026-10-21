@@ -208,9 +208,9 @@
     const more = form.querySelector('[data-kind-panel]:not([hidden]) [data-more-actions]') || form.querySelector('[data-more-actions]');
     if (more) more.hidden = !rows.some(r => r.hidden);
   };
-  document.querySelectorAll('[data-example]').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('[data-example]').forEach(btn => btn.addEventListener('click', () => applyExample(JSON.parse(btn.dataset.example))));
+  function applyExample(d) {
     if (!builder) return;
-    const d = JSON.parse(btn.dataset.example);
     builder.hidden = false;
     if (d.trigger) {
       set(builder, 'trigger', d.trigger); showTrig(builder);
@@ -228,10 +228,15 @@
     if (d.name) { set(builder, 'name', d.name); set(builder, 'icon', d.icon); }
     if (d.actions) fillActions(builder, d.actions);
     open();
-  }));
+  }
 
-  // ----- arriving from a list's menu: ?trigger=card_added&list=12 -----
+  // ----- arriving from a list's menu: ?trigger=card_added&list=12, or ?sort_list=12&every=daily|monday -----
   const qs = new URLSearchParams(location.search);
+  if (qs.get('sort_list') && builder?.matches('[data-schedule-form]')) {
+    const monday = qs.get('every') === 'monday';
+    applyExample({ kind: 'actions', frequency: monday ? 'weekly' : 'daily', weekday: 0, hour: 6,
+                   actions: [{ type: 'sort_due', list: Number(qs.get('sort_list')) }] });
+  }
   if (qs.get('trigger') && builder?.matches('[data-rule-form]')) {
     set(builder, 'trigger', qs.get('trigger')); showTrig(builder);
     if (qs.get('list')) pickList(builder.querySelector('[name=trigger_list]'), Number(qs.get('list')));

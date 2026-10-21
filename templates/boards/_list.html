@@ -1,4 +1,4 @@
-{% load lanes_extras %}<section class="list{% if list.colour %} list-c lc-border-{{ list.colour }}{% endif %}" data-list-id="{{ list.pk }}" data-limit="{{ list.card_limit|default:'' }}">
+{% load lanes_extras %}<section class="list{% if list.is_pinned %} pinned{% endif %}{% if list.colour %} list-c lc-border-{{ list.colour }}{% endif %}" data-list-id="{{ list.pk }}" data-limit="{{ list.card_limit|default:'' }}">
   <header class="list-head">
     <h3 class="list-title" {% if can_edit %}contenteditable="plaintext-only" spellcheck="false" data-list-title{% endif %}>{{ list.title }}</h3>
     <span class="list-count{% if list.over_limit %} over{% endif %}" title="{% if list.card_limit %}Limit {{ list.card_limit }}{% endif %}">{{ list.entries|length }}{% if list.card_limit %}/{{ list.card_limit }}{% endif %}</span>
@@ -15,11 +15,16 @@
             {% for c in "green yellow orange red purple blue sky pink grey"|cut_split %}<button class="colour-dot lc-{{ c }}{% if c == list.colour %} on{% endif %}" data-list-colour="{{ c }}" title="{{ c|capfirst }}"></button>{% endfor %}
           </div>
         </div>
+        <button class="menu-item" data-list-pin="{{ list.is_pinned|yesno:'0,1' }}">{% if list.is_pinned %}Unpin list{% else %}📌 Pin list (stays on the left){% endif %}</button>
         <button class="menu-item" data-list-copy>Copy list…</button>
         <button class="menu-item" data-list-move-board>Move list to another board…</button>
         <button class="menu-item" data-list-move-cards>Move all cards in this list…</button>
         <button class="menu-item" data-list-sort>Sort list by…</button>
-        <a class="menu-item" href="/b/{{ list.board_id }}/automation/?trigger=card_added&amp;list={{ list.pk }}">⚡ When a card is added to this list…</a>
+        <span class="menu-label">Automation</span>
+        <a class="menu-item" href="/b/{{ list.board_id }}/automation/?trigger=card_added&amp;list={{ list.pk }}">⚡ When a card is added to the list…</a>
+        <a class="menu-item" href="/b/{{ list.board_id }}/automation/?s=scheduled&amp;sort_list={{ list.pk }}&amp;every=daily">⚡ Every day, sort list by due date</a>
+        <a class="menu-item" href="/b/{{ list.board_id }}/automation/?s=scheduled&amp;sort_list={{ list.pk }}&amp;every=monday">⚡ Every Monday, sort list by due date</a>
+        <a class="menu-item" href="/b/{{ list.board_id }}/automation/?s=rules&amp;new=1">⚡ Create a rule</a>
         <button class="menu-item" data-list-limit>{% if list.card_limit %}Change card limit ({{ list.card_limit }}){% else %}Set a card limit…{% endif %}</button>
         <button class="menu-item" data-archive-cards>Archive all cards in this list</button>
         <button class="menu-item danger" data-archive-list>Archive this list</button>

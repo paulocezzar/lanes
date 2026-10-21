@@ -1,0 +1,13 @@
+{% if board and can_edit %}
+<div class="pop-wrap view-add">
+  <button type="button" class="btn light sm" data-view-add-toggle>+ Add card</button>
+  <form class="pop view-add-pop" data-view-add-form hidden>
+    <div class="pop-head">Add card</div>
+    <label>Title<input name="title" maxlength="250" required placeholder="Enter a title for this card…"></label>
+    <label>List<select name="list">{% for l in add_lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</select></label>
+    {% if location_field %}<label>Location<input name="location" maxlength="200" placeholder="Address or postcode" data-field-id="{{ location_field.pk }}"></label>{% endif %}
+    <label>Due date (optional)<input type="date" name="due"></label>
+    <div class="row"><button class="btn primary sm">Add</button><button type="button" class="btn ghost sm" data-view-add-toggle>Cancel</button></div>
+  </form>
+</div>
+{% endif %}

@@ -33,6 +33,7 @@ def board_context(request, board_id, view):
         "can_edit": permissions.can_edit(board, request.user),
         "can_manage": permissions.can_manage(board, request.user),
         "can_manage_members": permissions.can_manage_members(board, request.user),
+        "add_lists": board.lists.filter(is_archived=False),
         "roles": BoardMember.ROLES,
         "label_colours": Label.COLOURS,
         "field_kinds": CustomField.KINDS,

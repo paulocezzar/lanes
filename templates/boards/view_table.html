@@ -3,6 +3,7 @@
 {% block board_body %}
 <div class="view-wrap table-view" data-table>
   <div class="view-toolbar">
+    {% include "boards/_view_add.html" %}
     <input type="search" class="view-search" placeholder="Filter cards…" data-table-search aria-label="Filter cards">
     <select data-table-list aria-label="{% if board %}List{% else %}Board{% endif %}">
       {% if board %}<option value="">All lists</option>{% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}

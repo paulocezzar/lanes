@@ -53,6 +53,7 @@ urlpatterns = [
     path("b/<int:board_id>/export.json", views_export.board_json, name="board_json"),
     path("export/all.json", views_export.export_all, name="export_all"),
     path("api/cards/<int:card_id>/attachments/", views_files.attachment_upload),
+    path("api/cards/<int:card_id>/links/", api.attachment_link),
     path("api/attachments/<int:attachment_id>/", api.attachment_update),
     path("api/cards/<int:card_id>/copy/", api.card_copy),
     path("api/cards/<int:card_id>/mirrors/", api.mirror_create),

@@ -61,6 +61,29 @@
     });
   }
 
+  // ---------- "+ Add card" on the Table and Timeline views ----------
+  const addForm = $('[data-view-add-form]');
+  if (addForm) {
+    document.addEventListener('click', e => {
+      if (e.target.closest('[data-view-add-toggle]')) {
+        addForm.hidden = !addForm.hidden;
+        if (!addForm.hidden) addForm.title.focus();
+      } else if (!addForm.hidden && !e.target.closest('.view-add')) addForm.hidden = true;
+    });
+    addForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const title = addForm.title.value.trim();
+      if (!title) return;
+      try {
+        const data = await L.post(`/api/lists/${addForm.list.value}/cards/`, { title });
+        if (addForm.due.value) await L.post(`/api/cards/${data.card_id}/update/`, { due_at: `${addForm.due.value}T17:00` });
+        const loc = addForm.location;
+        if (loc && loc.value.trim()) await L.post(`/api/cards/${data.card_id}/fields/`, { field_id: +loc.dataset.fieldId, value: loc.value.trim() });
+        location.reload();
+      } catch (err) { L.toast(err.message || 'Could not add the card.'); }
+    });
+  }
+
   // ---------- Table ----------
   const table = $('[data-table]');
   if (table) {

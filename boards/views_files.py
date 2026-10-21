@@ -58,6 +58,8 @@ def attachment_download(request, attachment_id):
     att = get_object_or_404(Attachment.objects.select_related("card__list__board"), pk=attachment_id)
     if not permissions.can_view_card(att.card, request.user):
         raise Http404
+    if att.url:                                           # a link attachment
+        return HttpResponseRedirect(att.url)
     inline = att.is_image or att.content_type == "application/pdf"
     if settings.ATTACHMENTS_PERSISTENT and "s3" in settings.STORAGES["default"]["BACKEND"]:
         if not att.file.storage.exists(att.file.name):

@@ -108,3 +108,12 @@ document.addEventListener('click', async e => {
   input.addEventListener('keydown', e => { if (e.key === 'Escape') { drop.hidden = true; input.blur(); } });
   document.addEventListener('click', e => { if (!e.target.closest('.top-search')) drop.hidden = true; });
 })();
+
+// Search box inside a popover: <input data-pop-filter=".row-selector"> hides rows that don't match.
+document.addEventListener('input', e => {
+  const f = e.target.closest?.('[data-pop-filter]');
+  if (!f) return;
+  const q = f.value.trim().toLowerCase();
+  const scope = f.closest('.pop, [data-pop-panel]') || f.parentElement;
+  scope.querySelectorAll(f.dataset.popFilter).forEach(row => { row.hidden = !!q && !row.textContent.toLowerCase().includes(q); });
+});

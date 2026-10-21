@@ -149,6 +149,7 @@ class List(models.Model):
     is_archived = models.BooleanField(default=False)
     colour = models.CharField(max_length=10, blank=True)            # one of Label.COLOURS keys, or ""
     card_limit = models.PositiveSmallIntegerField(null=True, blank=True)  # work-in-progress limit
+    is_pinned = models.BooleanField(default=False)   # stays on the left while the board scrolls
 
     class Meta:
         ordering = ["position", "id"]
@@ -175,6 +176,13 @@ class Card(models.Model):
     position = models.FloatField(default=1000)
     start_date = models.DateField(null=True, blank=True)
     due_at = models.DateTimeField(null=True, blank=True)
+    RECUR = [("", "Never"), ("daily", "Daily"), ("weekdays", "Every weekday (Mon–Fri)"), ("weekly", "Weekly"),
+             ("monthly", "Monthly"), ("yearly", "Yearly")]
+    recur = models.CharField(max_length=10, choices=RECUR, blank=True)   # completing it makes the next one
+    REMINDERS = [(-1, "None"), (0, "At time of due date"), (5, "5 minutes before"), (10, "10 minutes before"),
+                 (15, "15 minutes before"), (60, "1 hour before"), (120, "2 hours before"), (1440, "1 day before"),
+                 (2880, "2 days before")]
+    reminder_minutes = models.SmallIntegerField(default=1440)
     is_complete = models.BooleanField(default=False)
     is_archived = models.BooleanField(default=False)
     is_template = models.BooleanField(default=False)
@@ -546,7 +554,8 @@ def attachment_path(instance, filename):
 
 class Attachment(models.Model):
     card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="attachments")
-    file = models.FileField(upload_to=attachment_path, max_length=255)
+    file = models.FileField(upload_to=attachment_path, max_length=255, blank=True)
+    url = models.URLField(max_length=1000, blank=True)     # a link instead of a file
     name = models.CharField(max_length=255)
     size = models.PositiveBigIntegerField(default=0)
     content_type = models.CharField(max_length=120, blank=True)
@@ -557,7 +566,14 @@ class Attachment(models.Model):
         ordering = ["-created_at"]
 
     @property
+    def link_host(self):
+        from urllib.parse import urlparse
+        return urlparse(self.url).netloc.removeprefix("www.") if self.url else ""
+
+    @property
     def is_image(self):
+        if self.url:
+            return False
         return self.content_type in ("image/jpeg", "image/png", "image/gif", "image/webp")
 
     @property

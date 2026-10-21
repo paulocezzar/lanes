@@ -24,6 +24,7 @@
         <div class="pop-wrap"><button class="chip-btn" data-pop="labels">{% include "boards/_icon.html" with i="label" %}Labels</button>
           <div class="pop" data-pop-panel="labels" hidden>
             <div class="pop-head">Labels</div>
+            <input type="search" class="pop-search" placeholder="Search labels…" data-pop-filter=".label-opt" aria-label="Search labels">
             {% for l in board.labels.all %}
             <label class="label-opt"><input type="checkbox" data-label="{{ l.pk }}" {% if l in card.labels.all %}checked{% endif %}><span class="label-swatch lc-{{ l.colour }}">{{ l.name }}</span></label>
             {% endfor %}
@@ -32,6 +33,7 @@
               <div class="colour-row">{% for key, name in label_colours %}<label class="colour-dot lc-{{ key }}" title="{{ name }}"><input type="radio" name="colour" value="{{ key }}" {% if forloop.first %}checked{% endif %}></label>{% endfor %}</div>
               <button class="btn sm">Create label</button>
             </form>
+            <button type="button" class="btn ghost sm block" data-colourblind="{{ user.colourblind|yesno:'0,1' }}">{% if user.colourblind %}Turn off colour-blind friendly mode{% else %}Enable colour-blind friendly mode{% endif %}</button>
           </div>
         </div>
         <div class="pop-wrap"><button class="chip-btn" data-pop="dates">{% include "boards/_icon.html" with i="clock" %}Dates</button>
@@ -40,6 +42,9 @@
             <form data-dates>
               <label>Start date<input type="date" name="start_date" value="{{ card.start_date|date:'Y-m-d' }}"></label>
               <label>Due<input type="datetime-local" name="due_at" value="{% if card.due_at %}{{ card.due_at|date:'Y-m-d\TH:i' }}{% endif %}"></label>
+              <label>Recurring<select name="recur">{% for k, v in card.RECUR %}<option value="{{ k }}" {% if k == card.recur %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+              <label>Due date reminder<select name="reminder_minutes">{% for k, v in card.REMINDERS %}<option value="{{ k }}" {% if k == card.reminder_minutes %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+              <p class="muted small">Reminders go to the card's members and watchers. A recurring card makes the next one when you mark it complete.</p>
               <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-clear-dates>Remove</button></div>
             </form>
           </div>
@@ -55,18 +60,35 @@
         <div class="pop-wrap"><button class="chip-btn" data-pop="checklist">{% include "boards/_icon.html" with i="check" %}Checklist</button>
           <div class="pop" data-pop-panel="checklist" hidden>
             <div class="pop-head">Add checklist</div>
-            <form data-checklist-new><label>Title<input name="title" value="Checklist" maxlength="120"></label><button class="btn primary sm">Add</button></form>
+            <form data-checklist-new><label>Title<input name="title" value="Checklist" maxlength="120"></label>
+              {% if copyable_checklists %}<label>Copy items from…<select name="copy_from"><option value="">(none)</option>
+                {% for cl in copyable_checklists %}<option value="{{ cl.pk }}">{{ cl.card.title|truncatechars:30 }} — {{ cl.title }}</option>{% endfor %}</select></label>{% endif %}
+              <button class="btn primary sm">Add</button></form>
           </div>
         </div>
         <div class="pop-wrap"><button class="chip-btn" data-pop="members">{% include "boards/_icon.html" with i="person" %}Members</button>
           <div class="pop" data-pop-panel="members" hidden>
             <div class="pop-head">Board members</div>
+            <input type="search" class="pop-search" placeholder="Search members" data-pop-filter=".person-opt" aria-label="Search members">
             {% for u in people %}
             <button class="person-opt" data-member="{{ u.pk }}">{% include "boards/_avatar.html" %}<span>{{ u.display_name }}</span>{% if u in card.members.all %}<b class="tick">✓</b>{% endif %}</button>
             {% endfor %}
           </div>
         </div>
-        <label class="chip-btn file-btn">{% include "boards/_icon.html" with i="clip" %}Attach<input type="file" data-attach hidden></label>
+        <div class="pop-wrap"><button class="chip-btn" data-pop="attach">{% include "boards/_icon.html" with i="clip" %}Attach</button>
+          <div class="pop" data-pop-panel="attach" hidden>
+            <div class="pop-head">Attach</div>
+            <p class="small"><b>A file from your computer</b><br><span class="muted">You can also drag and drop files onto the card.</span></p>
+            <label class="btn sm file-btn">Choose a file<input type="file" data-attach hidden></label>
+            <hr class="pop-rule">
+            <form data-attach-link class="stack">
+              <label>Paste a link<input name="url" type="url" required placeholder="https://…" list="recent-board-links"></label>
+              <label>Display text (optional)<input name="name" maxlength="200" placeholder="Text to display"></label>
+              <datalist id="recent-board-links">{% for b in recent_board_links %}<option value="{{ b.url }}">{{ b.title }}</option>{% endfor %}</datalist>
+              <div class="row"><button class="btn primary sm">Insert</button></div>
+            </form>
+          </div>
+        </div>
         {% if can_move and move_targets %}
         <div class="pop-wrap"><button class="chip-btn" data-pop="moveboard" title="Move this card to another board">↗ Move</button>
           <div class="pop" data-pop-panel="moveboard" hidden>
@@ -200,10 +222,10 @@
         <div class="attachments">
           {% for a in card.attachments.all %}
           <div class="att">
-            <a class="att-thumb" href="{% url 'attachment' a.pk %}" target="_blank" rel="noopener">{% if a.is_image %}<img src="{% url 'attachment' a.pk %}" alt="" loading="lazy">{% else %}<span>{{ a.name|slice:"-4:"|upper|cut:"." }}</span>{% endif %}</a>
+            <a class="att-thumb" href="{% url 'attachment' a.pk %}" target="_blank" rel="noopener">{% if a.is_image %}<img src="{% url 'attachment' a.pk %}" alt="" loading="lazy">{% elif a.url %}<span>🔗</span>{% else %}<span>{{ a.name|slice:"-4:"|upper|cut:"." }}</span>{% endif %}</a>
             <div class="att-meta">
               <a href="{% url 'attachment' a.pk %}" target="_blank" rel="noopener"><b>{{ a.name }}</b></a>
-              <small>{{ a.size_label }} · {{ a.created_at|timesince }} ago{% if card.cover_id == a.pk %} · Cover{% endif %}</small>
+              <small>{% if a.url %}{{ a.link_host }}{% else %}{{ a.size_label }}{% endif %} · {{ a.created_at|timesince }} ago{% if card.cover_id == a.pk %} · Cover{% endif %}</small>
               {% if can_edit %}<div class="att-actions">
                 {% if a.is_image %}<button class="link-btn" data-cover="{{ a.pk }}" data-on="{% if card.cover_id == a.pk %}0{% else %}1{% endif %}">{% if card.cover_id == a.pk %}Remove cover{% else %}Make cover{% endif %}</button>{% endif %}
                 <button class="link-btn" data-delete-attachment="{{ a.pk }}">Delete</button>

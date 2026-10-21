@@ -6,6 +6,7 @@
     <a class="btn light sm" href="?start={{ prev }}&{{ query_suffix }}" aria-label="Earlier">‹</a>
     <a class="btn light sm" href="?{{ query_suffix }}">Today</a>
     <a class="btn light sm" href="?start={{ next }}&{{ query_suffix }}" aria-label="Later">›</a>
+    {% include "boards/_view_add.html" %}
     <h2 class="view-heading">{{ days.0|date:"j M" }} – {{ days|last|date:"j M Y" }}</h2>
     <span class="view-hint">Bars run from a card's start date to its due date.{% if undated %} {{ undated }} card{{ undated|pluralize }} without a due date not shown.{% endif %}</span>
   </div>
@@ -42,3 +43,4 @@
   </div>
 </div>
 {% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'lanes/views.js' %}"></script>{% endblock %}
