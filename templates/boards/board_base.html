@@ -4,7 +4,7 @@
 {% block body_class %}board-page{% endblock %}
 {% block content %}
 <main class="board bg-{{ board.background }}" id="board"
-      data-board-id="{{ board.pk }}" data-user-id="{{ user.pk }}" data-view="{{ view }}" data-version="{{ board.version }}" data-can-edit="{{ can_edit|yesno:'1,0' }}" data-open-card="{{ open_card|default:'' }}">
+      data-board-id="{{ board.pk }}" data-user-id="{{ user.pk }}" data-view="{{ view }}" data-version="{{ board.version }}" data-can-edit="{{ can_edit|yesno:'1,0' }}" data-open-card="{{ open_card|default:'' }}" data-label-ids="[{% for l in labels %}{{ l.pk }}{% if not forloop.last %},{% endif %}{% endfor %}]">
   <header class="board-head">
     <h1 class="board-title" {% if can_manage %}contenteditable="plaintext-only" spellcheck="false" data-board-title{% endif %}>{{ board.title }}</h1>
     <span class="board-vis" title="{{ board.get_visibility_display }}">

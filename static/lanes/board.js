@@ -1057,6 +1057,97 @@
   }
   window.LanesBoard.applyFilter = applyFilter;
 
+  // ---------- keyboard shortcuts (press ? for the list) ----------
+  let kbTile = null;                       // the card shortcuts act on when no card is open
+  function setCurrent(tile) {
+    kbTile?.classList.remove('kb-current');
+    kbTile = tile;
+    tile?.classList.add('kb-current');
+  }
+  listsEl.addEventListener('mouseover', e => { const t = e.target.closest('.card-tile'); if (t) setCurrent(t); });
+  listsEl.addEventListener('focusin', e => { const t = e.target.closest('.card-tile'); if (t) setCurrent(t); });
+  const visibleTiles = list => $$('.card-tile', list).filter(t => !t.hidden);
+  function moveCurrent(dx, dy) {
+    const lists = $$('.list', listsEl).filter(l => !l.classList.contains('collapsed') && visibleTiles(l).length);
+    if (!lists.length) return;
+    if (!kbTile || !document.body.contains(kbTile)) { setCurrent(visibleTiles(lists[0])[0]); kbTile.focus(); return; }
+    let li = lists.indexOf(kbTile.closest('.list'));
+    let ti = visibleTiles(lists[li] || lists[0]).indexOf(kbTile);
+    if (li < 0) { li = 0; ti = 0; }
+    if (dx) { li = Math.max(0, Math.min(lists.length - 1, li + dx)); ti = Math.min(ti, visibleTiles(lists[li]).length - 1); }
+    if (dy) ti = Math.max(0, Math.min(visibleTiles(lists[li]).length - 1, ti + dy));
+    const t = visibleTiles(lists[li])[ti];
+    setCurrent(t); t.focus(); t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  const targetCardId = () => (dialog.open ? openCardId : kbTile && document.body.contains(kbTile) ? kbTile.dataset.cardId : null);
+  async function onCard(id, path, payload) {
+    const data = await post(`/api/cards/${id}/${path}/`, payload);
+    applyCard(data);
+    return data;
+  }
+  async function openWithPop(id, pop) {
+    if (!dialog.open || openCardId !== String(id)) await openCard(id);
+    const btn = $(`[data-pop="${pop}"]`, dialogBody);
+    if (btn) { showPop(pop); $(`[data-pop-panel="${pop}"] input, [data-pop-panel="${pop}"] button`, dialogBody)?.focus(); }
+    else toast("You can't change this card.");
+  }
+  document.addEventListener('keydown', async e => {
+    if (e.defaultPrevented || window.LanesKeys?.typing(e)) return;
+    const k = e.key;
+    const otherDialog = [...document.querySelectorAll('dialog[open]')].some(d => d !== dialog);
+    if (otherDialog) return;
+    if (!dialog.open && view === 'board') {
+      const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+                       h: [-1, 0], l: null, j: [0, 1], k: [0, -1] };
+      if (k in arrows && arrows[k]) { e.preventDefault(); return moveCurrent(...arrows[k]); }
+      if (k === 'n' && canEdit) {
+        e.preventDefault();
+        const list = kbTile?.closest('.list') || $('.list', listsEl);
+        return list && openAddCard(list);
+      }
+      if (k === 'f' && $('[data-toggle-filter]')) { e.preventDefault(); return $('[data-toggle-filter]').click(); }
+      if (k === 'q' && filterForm) {
+        e.preventDefault();
+        const me = $('input[name=m][value=me]', filterForm);
+        me.checked = !me.checked; applyFilter();
+        return toast(me.checked ? 'Showing only your cards (q to undo).' : 'Showing everyone\'s cards.');
+      }
+      if (k === 'x' && filterForm) { e.preventDefault(); filterForm.reset(); applyFilter(); return toast('Filters cleared.'); }
+    }
+    const id = targetCardId();
+    if (!id) return;
+    if (k === 'Enter' && !dialog.open && !e.target.closest('.card-tile')) { e.preventDefault(); return openCard(id); }
+    if (k === ' ') {
+      e.preventDefault();
+      try { await onCard(id, 'members', { user_id: +boardEl.dataset.userId }); toast('Updated your membership of the card.'); } catch {}
+      return;
+    }
+    if (k === 'l') { e.preventDefault(); return openWithPop(id, 'labels'); }
+    if (k === 'd') { e.preventDefault(); return openWithPop(id, 'dates'); }
+    if (k === 'm') { e.preventDefault(); return openWithPop(id, 'members'); }
+    if (k === 't') {
+      e.preventDefault();
+      if (!dialog.open || openCardId !== String(id)) await openCard(id);
+      const title = $('[data-card-title]', dialogBody);
+      if (title) { title.focus(); document.getSelection().selectAllChildren(title); }
+      return;
+    }
+    if (k === 'w') { e.preventDefault(); try { await onCard(id, 'watch'); toast('Watch toggled.'); } catch {} return; }
+    if (k === 'v') { e.preventDefault(); try { await onCard(id, 'vote'); } catch {} return; }
+    if (k === 'c' && canEdit) {
+      e.preventDefault();
+      try { await onCard(id, 'update', { archive: true }); if (dialog.open) closeCard(); toast('Card archived. Restore it from the board menu.'); } catch {}
+      return;
+    }
+    if (/^[1-9]$/.test(k)) {
+      const ids = JSON.parse(boardEl.dataset.labelIds || '[]');
+      const lid = ids[+k - 1];
+      if (!lid) return;
+      e.preventDefault();
+      try { await onCard(id, 'labels', { label_id: lid }); } catch {}
+    }
+  });
+
   // Deep link: /b/1/?card=5 opens that card
   if (boardEl.dataset.openCard) openCard(boardEl.dataset.openCard);
 })();

@@ -979,3 +979,10 @@ a.hbar-label:hover { text-decoration: underline; }
 .or-line { display: flex; align-items: center; gap: 10px; color: var(--text-2); font-size: 12px; margin: 14px 0; }
 .or-line::before, .or-line::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 .invite-check { grid-column: 1 / -1; }
+
+/* ---------- keyboard shortcuts ---------- */
+kbd { display: inline-block; min-width: 20px; text-align: center; padding: 1px 6px; margin-right: 3px; border-radius: 4px; border: 1px solid var(--border);
+  border-bottom-width: 2px; background: var(--surface-2); font: 600 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+.keys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px 22px; }
+.keys-grid p { margin: 6px 0; font-size: 13px; }
+.card-tile.kb-current { outline: 2px solid var(--accent); outline-offset: 1px; }

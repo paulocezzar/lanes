@@ -69,7 +69,26 @@
         headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
     }));
   </script>
-  {% if user.is_authenticated %}<script src="{% static 'lanes/notify.js' %}"></script>{% endif %}
+  {% if user.is_authenticated %}<script src="{% static 'lanes/notify.js' %}"></script>
+  <dialog id="shortcuts-dialog" class="dialog wide" aria-label="Keyboard shortcuts">
+    <div class="dialog-head"><h3>Keyboard shortcuts</h3><button class="icon-btn" data-close aria-label="Close">×</button></div>
+    <div class="keys-grid">
+      <section><h4 class="section-label">Anywhere</h4>
+        <p><kbd>?</kbd> This list</p><p><kbd>/</kbd> Search cards</p>
+        <p><kbd>b</kbd> Boards</p><p><kbd>p</kbd> Planner</p><p><kbd>a</kbd> My cards (assigned to me)</p>
+        <p><kbd>Esc</kbd> Close a card or menu</p></section>
+      <section><h4 class="section-label">On a board</h4>
+        <p><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> Move between cards (or <kbd>j</kbd><kbd>k</kbd>)</p>
+        <p><kbd>Enter</kbd> Open the card</p><p><kbd>n</kbd> New card in this list</p>
+        <p><kbd>f</kbd> Filter</p><p><kbd>q</kbd> Only my cards</p><p><kbd>x</kbd> Clear filters</p></section>
+      <section><h4 class="section-label">On the selected or open card</h4>
+        <p><kbd>Space</kbd> Add / remove me</p><p><kbd>l</kbd> Labels</p><p><kbd>1</kbd>–<kbd>9</kbd> Toggle label 1–9</p>
+        <p><kbd>d</kbd> Dates</p><p><kbd>m</kbd> Members</p><p><kbd>t</kbd> Edit title</p>
+        <p><kbd>w</kbd> Watch</p><p><kbd>c</kbd> Archive</p><p><kbd>v</kbd> Vote</p></section>
+    </div>
+    <p class="muted small">Shortcuts pause while you're typing. Point at a card with the mouse to select it.</p>
+  </dialog>
+  <script src="{% static 'lanes/shortcuts.js' %}"></script>{% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>
