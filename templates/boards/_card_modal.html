@@ -1,4 +1,4 @@
-<div class="cm" data-card="{{ card.pk }}">
+{% load lanes_extras %}<div class="cm" data-card="{{ card.pk }}">
   <header class="cm-top">
     {% if can_edit %}
     <label class="list-picker" title="Move to list">
@@ -186,8 +186,9 @@
     <aside class="cm-side">
       <h4 class="cm-h">{% include "boards/_icon.html" with i="comment" %}Comments and activity</h4>
       {% if can_comment %}
-      <form class="comment-new" data-comment-new>
-        <textarea name="body" rows="2" placeholder="Write a comment…" maxlength="5000"></textarea>
+      <form class="comment-new" data-comment-new data-people='[{% for u in people %}{"name": "{{ u.display_name|escapejs }}", "initials": "{{ u.initials }}", "hue": {{ u.avatar_hue }}}{% if not forloop.last %},{% endif %}{% endfor %}]'>
+        <textarea name="body" rows="2" placeholder="Write a comment… type @ to mention someone" maxlength="5000"></textarea>
+        <div class="mention-pop" data-mention-pop hidden></div>
         <button class="btn primary sm" hidden>Save</button>
       </form>
       {% endif %}
@@ -198,7 +199,7 @@
             {% if c.author %}{% include "boards/_avatar.html" with u=c.author %}{% endif %}
             <div class="feed-main">
               <div><b>{{ c.author.display_name|default:"⚡ Automation" }}</b> <time>{{ c.created_at|timesince }} ago{% if c.edited_at %} (edited){% endif %}</time></div>
-              <div class="comment-body">{{ c.body|linebreaksbr }}</div>
+              <div class="comment-body">{{ c.body|mentions }}</div>
               {% if c.author == request.user %}<button class="link-btn" data-delete-comment="{{ c.pk }}">Delete</button>{% endif %}
             </div>
           </div>

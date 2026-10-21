@@ -14,9 +14,9 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from django.views.decorators.http import require_POST
 
-from . import automation, permissions, positions
+from . import automation, notify, permissions, positions
 from .models import (Board, BoardMember, Card, CardFieldValue, Checklist, ChecklistItem, Comment, CustomField, Label,
-                     List, Rule)
+                     List, Notification, Rule)
 from .services import board_people, card_response, log
 
 User = get_user_model()
@@ -220,6 +220,8 @@ def card_toggle_member(request, card_id):
     else:
         card.members.add(person)
         log(board, request.user, "member_joined" if me else "member_added", card=card, name=person.display_name)
+        notify.send(person, Notification.ASSIGNED, actor=request.user, card=card,
+                    text=f"assigned you to {card.title}")
     return card_response(card.pk, request)
 
 
@@ -276,8 +278,12 @@ def item_update(request, item_id):
     if "assignee_id" in request.data:
         uid = request.data["assignee_id"]
         if uid:
-            if not BoardMember.objects.filter(board=card.list.board, user_id=uid).exists():
+            member = BoardMember.objects.filter(board=card.list.board, user_id=uid).select_related("user").first()
+            if not member:
                 raise ApiError("Share the board with them first.")
+            if item.assignee_id != member.user_id:
+                notify.send(member.user, Notification.ITEM_ASSIGNED, actor=request.user, card=card,
+                            text=f"assigned you “{item.text}” on {card.title}")
             item.assignee_id = uid
         else:
             item.assignee = None
@@ -310,7 +316,9 @@ def comment_create(request, card_id):
         raise Http404
     if not permissions.can_comment(board, request.user):
         raise ApiError("Join the board to comment.", 403)
-    Comment.objects.create(card=card, author=request.user, body=_text(request.data.get("body"), 5000, "comment"))
+    comment = Comment.objects.create(card=card, author=request.user,
+                                     body=_text(request.data.get("body"), 5000, "comment"))
+    notify.on_comment(comment, notify.board_people(board))
     return card_response(card.pk, request)
 
 
@@ -350,6 +358,8 @@ def board_share(request, board_id):
     _, created = BoardMember.objects.get_or_create(board=board, user=person, defaults={"role": role})
     if not created:
         raise ApiError(f"{person.display_name} is already on this board.")
+    notify.send(person, Notification.ADDED_TO_BOARD, actor=request.user, board=board,
+                text=f"added you to the board {board.title}")
     log(board, request.user, "board_member_added", name=person.display_name)
     return {"html": _members_html(board, request), "count": board.memberships.count()}
 

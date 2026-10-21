@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Notifications · Lanes{% endblock %}
+{% block content %}
+<main class="home narrow">
+  <h1 class="page-title">Notifications</h1>
+  <div class="row notif-filters">
+    <a class="btn sm {% if show == 'all' %}primary{% else %}ghost{% endif %}" href="?show=all">All</a>
+    <a class="btn sm {% if show == 'unread' %}primary{% else %}ghost{% endif %}" href="?show=unread">Unread</a>
+    <button class="btn ghost sm" data-bell-readall style="margin-left:auto">Mark all read</button>
+  </div>
+  <section class="panel notif-page">{% include "boards/_notifications.html" %}</section>
+</main>
+{% endblock %}

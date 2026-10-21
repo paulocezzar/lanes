@@ -18,6 +18,16 @@
       <a href="{% url 'my_cards' %}" class="{% if request.resolver_match.url_name == 'my_cards' %}on{% endif %}">My cards</a>
     </nav>
     <div class="topbar-right">
+      <div class="bell-wrap" id="bell">
+        <button class="icon-btn bell" data-bell title="Notifications" aria-label="Notifications">
+          {% include "boards/_icon.html" with i="bell" %}<span class="bell-count" data-bell-count {% if not unread_count %}hidden{% endif %}>{{ unread_count }}</span>
+        </button>
+        <div class="bell-panel" data-bell-panel hidden>
+          <div class="bell-head"><b>Notifications</b><button class="link-btn" data-bell-readall>Mark all read</button></div>
+          <div data-bell-list><p class="muted small pad">Loading…</p></div>
+          <a class="bell-foot" href="{% url 'notifications' %}">See all</a>
+        </div>
+      </div>
       {% if user.is_staff %}<a class="btn ghost sm" href="{% url 'admin:index' %}">Admin</a>{% endif %}
       <details class="menu">
         <summary class="avatar lg" style="--h:{{ user.avatar_hue }}" title="{{ user.display_name }}">{{ user.initials }}</summary>
@@ -36,6 +46,7 @@
   {% block content %}{% endblock %}
   <div id="toast" class="toast floating" hidden></div>
   <script>setTimeout(() => document.querySelectorAll('.toasts .toast').forEach(t => t.remove()), 5000);</script>
+  {% if user.is_authenticated %}<script src="{% static 'lanes/notify.js' %}"></script>{% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -89,6 +89,8 @@ def run_action(card, action):
         m = BoardMember.objects.filter(board=board, user_id=action.get("user")).select_related("user").first()
         if m and not card.members.filter(pk=m.user_id).exists():
             card.members.add(m.user)
+            from . import notify
+            notify.send(m.user, "assigned", card=card, text=f"assigned you to {card.title} (automation)")
             return f"added {m.user.display_name}"
     elif t == "clear_members":
         if card.members.exists():
@@ -228,6 +230,8 @@ def create_from_schedule(s, lst):
         bump(lst.board_id)
     if s.member_id and BoardMember.objects.filter(board=lst.board, user_id=s.member_id).exists():
         card.members.add(s.member_id)
+        from . import notify
+        notify.send(s.member, "assigned", card=card, text=f"assigned you to {card.title} (recurring card)")
     if s.label_id:
         card.labels.add(s.label_id)
     if s.due_in_days is not None:
@@ -243,13 +247,15 @@ _last_lazy_run = 0.0
 
 
 def maybe_run_schedules():
-    """Cheap fallback so schedules run even without a cron job: at most once a
-    minute per process, piggybacking on ordinary page loads."""
+    """Cheap fallback so schedules and due reminders run even without a cron
+    job: at most once a minute per process, piggybacking on page loads."""
     global _last_lazy_run
     if time.monotonic() - _last_lazy_run < 60:
         return
     _last_lazy_run = time.monotonic()
     try:
         run_due_schedules()
+        from .notify import send_due_reminders
+        send_due_reminders()
     except Exception:
         log.exception("Lazy schedule run failed")

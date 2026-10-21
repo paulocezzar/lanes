@@ -600,3 +600,79 @@ class CopyTemplateAttachmentTests(TestCase):
                 self.assertFalse(self.card.attachments.exists())
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class NotificationTests(TestCase):
+    def setUp(self):
+        from .models import Notification
+        self.N = Notification
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.paulo = User.objects.create_user("p@x.com", "pw", first_name="Paulo", last_name="Silva")
+        self.charlie = User.objects.create_user("c@x.com", "pw", first_name="Charlie", last_name="Griffin")
+        self.sam = User.objects.create_user("s@x.com", "pw", first_name="Sam", last_name="Bobbett")
+        self.outsider = User.objects.create_user("o@x.com", "pw", first_name="Olly")
+        self.board = Board.objects.create(workspace=self.ws, title="Xmas", visibility=Board.PRIVATE)
+        for u in (self.paulo, self.charlie, self.sam):
+            BoardMember.objects.create(board=self.board, user=u, role="admin")
+        self.card = Card.objects.create(list=List.objects.create(board=self.board, title="To do"), title="Mince pies")
+        self.client.force_login(self.paulo)
+
+    def api(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_assigning_notifies_but_not_yourself(self):
+        self.api(f"/api/cards/{self.card.pk}/members/", {"user_id": self.charlie.pk})
+        self.api(f"/api/cards/{self.card.pk}/members/", {"user_id": self.paulo.pk})
+        self.assertEqual(self.N.objects.filter(recipient=self.charlie, kind="assigned").count(), 1)
+        self.assertFalse(self.N.objects.filter(recipient=self.paulo).exists())
+
+    def test_item_assignment_notifies_once(self):
+        from .models import Checklist, ChecklistItem
+        item = ChecklistItem.objects.create(checklist=Checklist.objects.create(card=self.card), text="Order foils")
+        self.api(f"/api/items/{item.pk}/", {"assignee_id": self.sam.pk})
+        self.api(f"/api/items/{item.pk}/", {"assignee_id": self.sam.pk, "due_at": "2026-12-01T09:00"})
+        self.assertEqual(self.N.objects.filter(recipient=self.sam, kind="item_assigned").count(), 1)
+
+    def test_mentions_and_card_member_comments(self):
+        from .notify import find_mentions
+        people = [self.paulo, self.charlie, self.sam]
+        self.assertEqual(find_mentions("Thanks @Charlie Griffin and @sam!", people), [self.charlie, self.sam])
+        self.assertEqual(find_mentions("email me at bob@charlie.com", people), [])
+        self.card.members.add(self.sam)
+        self.api(f"/api/cards/{self.card.pk}/comments/", {"body": "@Charlie can you check tins?"})
+        self.assertTrue(self.N.objects.filter(recipient=self.charlie, kind="mentioned").exists())
+        self.assertTrue(self.N.objects.filter(recipient=self.sam, kind="commented").exists())
+        self.assertFalse(self.N.objects.filter(recipient=self.paulo).exists())
+
+    def test_no_notification_for_people_who_cannot_see_board(self):
+        from .notify import send
+        self.assertIsNone(send(self.outsider, "mentioned", actor=self.paulo, card=self.card, text="x"))
+
+    def test_due_reminders_deduplicated(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from .notify import send_due_reminders
+        self.card.due_at = timezone.now() + timedelta(hours=3)
+        self.card.save()
+        self.card.members.add(self.charlie)
+        self.assertEqual(send_due_reminders(), 1)
+        self.assertEqual(send_due_reminders(), 0)
+
+    def test_bell_api_and_mark_read(self):
+        self.api(f"/api/cards/{self.card.pk}/members/", {"user_id": self.charlie.pk})
+        self.client.force_login(self.charlie)
+        r = self.client.get("/api/notifications/?html=1").json()
+        self.assertEqual(r["unread"], 1)
+        self.assertIn("Mince pies", r["html"])
+        n = self.N.objects.get(recipient=self.charlie)
+        r = self.client.get(reverse("notification_open", args=[n.pk]))
+        self.assertRedirects(r, f"{reverse('board', args=[self.board.pk])}?card={self.card.pk}", fetch_redirect_response=False)
+        self.assertEqual(self.client.get("/api/notifications/").json()["unread"], 0)
+        self.client.force_login(self.sam)
+        self.assertEqual(self.client.get(reverse("notification_open", args=[n.pk])).status_code, 404)
+
+    def test_comment_mentions_highlighted_and_escaped(self):
+        from .templatetags.lanes_extras import mentions
+        out = mentions("Hi @Charlie <script>")
+        self.assertIn('<span class="mention">@Charlie</span>', out)
+        self.assertIn("&lt;script&gt;", out)

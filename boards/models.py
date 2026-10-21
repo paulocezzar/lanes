@@ -428,3 +428,29 @@ class Attachment(models.Model):
             if n < 1024 or unit == "GB":
                 return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
             n /= 1024
+
+
+class Notification(models.Model):
+    """Something a person should know about: assigned, mentioned, a comment on
+    their card, or a due date coming up."""
+
+    ASSIGNED, ITEM_ASSIGNED, MENTIONED, COMMENTED, DUE_SOON, ITEM_DUE_SOON, ADDED_TO_BOARD = (
+        "assigned", "item_assigned", "mentioned", "commented", "due_soon", "item_due_soon", "added_to_board")
+    KINDS = [(ASSIGNED, "Assigned to a card"), (ITEM_ASSIGNED, "Assigned a checklist item"),
+             (MENTIONED, "Mentioned"), (COMMENTED, "Comment on your card"), (DUE_SOON, "Card due soon"),
+             (ITEM_DUE_SOON, "Checklist item due soon"), (ADDED_TO_BOARD, "Added to a board")]
+
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    kind = models.CharField(max_length=20, choices=KINDS)
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
+    text = models.CharField(max_length=300)          # e.g. "assigned you to Order cake tins"
+    excerpt = models.CharField(max_length=300, blank=True)
+    dedupe_key = models.CharField(max_length=120, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["recipient", "read_at", "-created_at"])]

@@ -1,10 +1,14 @@
 from django.urls import path
 
-from . import api, views, views_automation, views_board, views_files, views_people
+from . import api, views, views_automation, views_board, views_files, views_notify, views_people
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("my-cards/", views.my_cards, name="my_cards"),
+    path("notifications/", views_notify.notifications_page, name="notifications"),
+    path("notifications/<int:pk>/", views_notify.notification_open, name="notification_open"),
+    path("api/notifications/", views_notify.notifications_api, name="notifications_api"),
+    path("api/notifications/read/", views_notify.notifications_read, name="notifications_read"),
     path("boards/new/", views.board_create, name="board_create"),
     path("b/<int:board_id>/", views.board_page, name="board"),
     path("b/<int:board_id>/calendar/", views_board.board_calendar, name="board_calendar"),
