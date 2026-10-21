@@ -200,10 +200,7 @@ def inbox_to_card(request, item_id):
     if item.due_date:
         due = timezone.make_aware(timezone.datetime(item.due_date.year, item.due_date.month, item.due_date.day, 17))
     card = Card(list=lst, title=item.text, description=item.notes, due_at=due, created_by=request.user)
-    positions.place(card, lst.cards.filter(is_archived=False), request.data.get("before_id"),
-                    request.data.get("after_id"))
-    if not request.data.get("before_id") and not request.data.get("after_id"):
-        card.position = positions.end_position(lst.cards.filter(is_archived=False))
+    positions.place_in_list(card, lst, request.data.get("before"), request.data.get("after"))
     card.save()
     if BoardMember.objects.filter(board=lst.board, user=request.user).exists():
         card.members.add(request.user)

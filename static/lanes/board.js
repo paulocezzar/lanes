@@ -54,8 +54,11 @@
     let prev = el.previousElementSibling, next = el.nextElementSibling;
     while (prev && !prev.matches(selector)) prev = prev.previousElementSibling;
     while (next && !next.matches(selector)) next = next.nextElementSibling;
-    return { before_id: prev ? +prev.dataset[selector === '.list' ? 'listId' : 'cardId'] : null,
-             after_id: next ? +next.dataset[selector === '.list' ? 'listId' : 'cardId'] : null };
+    if (selector === '.list') {
+      return { before_id: prev ? +prev.dataset.listId : null, after_id: next ? +next.dataset.listId : null };
+    }
+    // cards: tokens so mirrored cards ('m12') and cards ('c34') can sit side by side
+    return { before: prev ? prev.dataset.token : null, after: next ? next.dataset.token : null };
   }
 
   function refreshCounts() {
@@ -104,8 +107,9 @@
         if (evt.from === evt.to && evt.oldIndex === evt.newIndex) return;
         refreshCounts();
         try {
-          const data = await post(`/api/cards/${tile.dataset.cardId}/move/`,
-            { list_id: +listEl.dataset.listId, ...neighbours(tile, '.card-tile') });
+          const url = tile.dataset.mirrorId ? `/api/mirrors/${tile.dataset.mirrorId}/move/`
+                                            : `/api/cards/${tile.dataset.cardId}/move/`;
+          const data = await post(url, { list_id: +listEl.dataset.listId, ...neighbours(tile, '.card-tile') });
           tile.replaceWith(fromHTML(data.tile));
         } catch {
           location.reload();      // server refused: snap back to the truth
@@ -246,7 +250,17 @@
 
   // Apply a card payload from the server: update the tile and the open dialog.
   function applyCard(data) {
-    const old = $(`.card-tile[data-card-id="${data.card_id}"]`, listsEl);
+    const old = $(`.card-tile[data-card-id="${data.card_id}"]:not([data-mirror-id])`, listsEl);
+    // mirrors of this card on this board: update their faces in place
+    $$(`.card-tile[data-card-id="${data.card_id}"][data-mirror-id]`, listsEl).forEach(m => {
+      const fresh = fromHTML(data.tile);
+      fresh.classList.add('is-mirror');
+      fresh.dataset.mirrorId = m.dataset.mirrorId;
+      fresh.dataset.token = m.dataset.token;
+      const flag = m.querySelector('.mirror-flag');
+      if (flag) fresh.prepend(flag.cloneNode(true));
+      m.replaceWith(fresh);
+    });
     if (data.archived) {
       old?.remove();
     } else {
@@ -341,6 +355,15 @@
     }
     const delItem = t.closest('[data-delete-item]');
     if (delItem) return post(`/api/items/${delItem.dataset.deleteItem}/`, { delete: true }).then(applyCard);
+    const rmMirror = t.closest('[data-remove-mirror]');
+    if (rmMirror) {
+      if (!confirm('Remove the card from that board? The original stays where it is.')) return;
+      return post(`/api/mirrors/${rmMirror.dataset.removeMirror}/`, { delete: true }).then(data => {
+        $(`.card-tile[data-mirror-id="${rmMirror.dataset.removeMirror}"]`, listsEl)?.remove();
+        refreshCounts();
+        applyCard(data);
+      });
+    }
     const tplBtn = t.closest('[data-template-toggle]');
     if (tplBtn) return cardPost('update', { is_template: tplBtn.dataset.templateToggle === '1' });
     const cover = t.closest('[data-cover]');
@@ -392,6 +415,14 @@
       return post(`/api/checklists/${clId}/items/`, { text }).then(data => {
         applyCard(data);
         $(`[data-checklist="${clId}"] [data-item-new] input`, dialogBody)?.focus();
+      });
+    }
+    if (f.matches('[data-mirror-card]')) {
+      e.preventDefault();
+      hidePops();
+      return post(`/api/cards/${openCardId}/mirrors/`, { list_id: +f.list_id.value }).then(data => {
+        applyCard(data);
+        toast('Mirrored. It now shows in both places.');
       });
     }
     if (f.matches('[data-copy-card]')) {

@@ -640,3 +640,11 @@ a.icon-btn { text-decoration: none; }
   .week { grid-template-columns: 1fr; }
   .board.with-inbox .lists, .board.with-inbox .board-head, .board.with-inbox .readonly-note { margin-left: 0; }
 }
+
+/* ---------- mirrors ---------- */
+.card-tile.is-mirror { border: 1px solid rgb(159 143 239 / .6); }
+.mirror-flag { display: block; font-size: 11px; color: #c9bfff; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mirror-list { display: grid; gap: 6px; margin-left: 26px; }
+.mirror-row { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border-radius: 6px; padding: 7px 10px; font-size: 13px; }
+.mirror-row a { text-decoration: none; flex: 1; }
+.mirror-row .link-btn { margin-left: auto; }

@@ -17,7 +17,7 @@ from django.views.decorators.http import require_POST
 from . import automation, notify, permissions, positions
 from .models import (Board, BoardMember, Card, CardFieldValue, Checklist, ChecklistItem, Comment, CustomField, Label,
                      List, Notification, Rule)
-from .services import board_people, card_response, log
+from .services import board_people, card_response, cards_qs, log
 
 User = get_user_model()
 
@@ -55,9 +55,18 @@ def _edit(board, user):
 
 
 def _card(request, card_id):
+    """A card the user may change — through its own board or a board it's mirrored onto."""
     card = get_object_or_404(Card.objects.select_related("list__board"), pk=card_id)
-    _edit(card.list.board, request.user)
+    if not permissions.can_view_card(card, request.user):
+        raise Http404
+    if not permissions.can_edit_card(card, request.user):
+        raise ApiError("You can view this card but not change it.", 403)
     return card
+
+
+def _card_people_ids(card):
+    boards = permissions.card_boards(card)
+    return set(BoardMember.objects.filter(board__in=boards).values_list("user_id", flat=True))
 
 
 def _text(value, limit, field="text"):
@@ -120,11 +129,13 @@ def card_create(request, list_id):
 def card_move(request, card_id):
     card = _card(request, card_id)
     old_list = card.list
+    if not permissions.can_edit(old_list.board, request.user):
+        raise ApiError("Only people on the card's own board can move it. You can move the mirror instead.", 403)
     new_list = get_object_or_404(List, pk=request.data.get("list_id", card.list_id), board=old_list.board,
                                  is_archived=False)
     card.list = new_list
-    positions.place(card, new_list.cards.filter(is_archived=False),
-                    request.data.get("before_id"), request.data.get("after_id"))
+    positions.place_in_list(card, new_list, request.data.get("before", request.data.get("before_id")),
+                            request.data.get("after", request.data.get("after_id")))
     card.save(update_fields=["list", "position", "updated_at"])
     if new_list.pk != old_list.pk:
         log(card.list.board, request.user, "card_moved", card=card, **{"from": old_list.title, "to": new_list.title})
@@ -211,7 +222,7 @@ def card_toggle_member(request, card_id):
     card = _card(request, card_id)
     board = card.list.board
     person = get_object_or_404(User, pk=request.data.get("user_id"))
-    if not BoardMember.objects.filter(board=board, user=person).exists():
+    if person.pk not in _card_people_ids(card):
         raise ApiError("Share the board with them first.")
     me = person == request.user
     if card.members.filter(pk=person.pk).exists():
@@ -278,11 +289,10 @@ def item_update(request, item_id):
     if "assignee_id" in request.data:
         uid = request.data["assignee_id"]
         if uid:
-            member = BoardMember.objects.filter(board=card.list.board, user_id=uid).select_related("user").first()
-            if not member:
+            if int(uid) not in _card_people_ids(card):
                 raise ApiError("Share the board with them first.")
-            if item.assignee_id != member.user_id:
-                notify.send(member.user, Notification.ITEM_ASSIGNED, actor=request.user, card=card,
+            if item.assignee_id != int(uid):
+                notify.send(User.objects.get(pk=uid), Notification.ITEM_ASSIGNED, actor=request.user, card=card,
                             text=f"assigned you “{item.text}” on {card.title}")
             item.assignee_id = uid
         else:
@@ -311,14 +321,14 @@ def item_update(request, item_id):
 @api
 def comment_create(request, card_id):
     card = get_object_or_404(Card.objects.select_related("list__board"), pk=card_id)
-    board = card.list.board
-    if not permissions.can_view(board, request.user):
+    if not permissions.can_view_card(card, request.user):
         raise Http404
-    if not permissions.can_comment(board, request.user):
+    if not permissions.can_comment_card(card, request.user):
         raise ApiError("Join the board to comment.", 403)
     comment = Comment.objects.create(card=card, author=request.user,
                                      body=_text(request.data.get("body"), 5000, "comment"))
-    notify.on_comment(comment, notify.board_people(board))
+    people = list(User.objects.filter(pk__in=_card_people_ids(card)))
+    notify.on_comment(comment, people)
     return card_response(card.pk, request)
 
 
@@ -490,6 +500,8 @@ def card_copy(request, card_id):
     card = _card(request, card_id)
     d = request.data
     target = get_object_or_404(List, pk=d.get("list_id") or card.list_id, board=card.list.board, is_archived=False)
+    if not permissions.can_edit(target.board, request.user):
+        raise ApiError("You can't add cards to that board.", 403)
     from .copying import copy_card
     new = copy_card(card, target, user=request.user, title=(d.get("title") or "").strip() or card.title,
                     keep_labels=d.get("labels", True), keep_members=d.get("members", True),
@@ -514,8 +526,7 @@ def card_from_template(request, list_id):
 def attachment_update(request, attachment_id):
     from .models import Attachment
     att = get_object_or_404(Attachment.objects.select_related("card__list__board"), pk=attachment_id)
-    card = att.card
-    _edit(card.list.board, request.user)
+    card = _card(request, att.card_id)
     if request.data.get("delete"):
         try:
             att.file.delete(save=False)
@@ -530,3 +541,66 @@ def attachment_update(request, attachment_id):
         card.cover = att if request.data["cover"] and att.is_image else None
         card.save(update_fields=["cover", "updated_at"])
     return card_response(card.pk, request)
+
+
+# ---------- mirrors ----------
+
+@api
+def mirror_create(request, card_id):
+    from .models import CardMirror
+    card = _card(request, card_id)
+    target = get_object_or_404(List.objects.select_related("board"), pk=request.data.get("list_id"), is_archived=False)
+    if not permissions.can_view(target.board, request.user):
+        raise Http404
+    if not permissions.can_edit(target.board, request.user):
+        raise ApiError("You can't add cards to that board.", 403)
+    if target.pk == card.list_id:
+        raise ApiError("The card is already in that list.")
+    mirror, created = CardMirror.objects.get_or_create(card=card, list=target, defaults={"created_by": request.user})
+    if not created:
+        raise ApiError("It's already mirrored there.")
+    positions.place_in_list(mirror, target)
+    mirror.save(update_fields=["position"])
+    log(card.list.board, request.user, "mirrored", card=card, to=f"{target.board.title} › {target.title}")
+    if target.board_id != card.list.board_id:
+        log(target.board, request.user, "mirror_added", card=card, source=card.list.board.title, list=target.title)
+    return card_response(card.pk, request)
+
+
+def _mirror(request, mirror_id):
+    from .models import CardMirror
+    m = get_object_or_404(CardMirror.objects.select_related("list__board", "card__list__board"), pk=mirror_id)
+    if not (permissions.can_view(m.list.board, request.user) or permissions.can_view_card(m.card, request.user)):
+        raise Http404
+    if not (permissions.can_edit(m.list.board, request.user) or permissions.can_edit(m.card.list.board, request.user)):
+        raise ApiError("You can't change this mirror.", 403)
+    return m
+
+
+@api
+def mirror_update(request, mirror_id):
+    m = _mirror(request, mirror_id)
+    card_id = m.card_id
+    if request.data.get("delete"):
+        log(m.card.list.board, request.user, "unmirrored", card=m.card, frm=f"{m.list.board.title} › {m.list.title}")
+        m.delete()
+    return card_response(card_id, request)
+
+
+@api
+def mirror_move(request, mirror_id):
+    m = _mirror(request, mirror_id)
+    if not permissions.can_edit(m.list.board, request.user):
+        raise ApiError("You can't rearrange that board.", 403)
+    target = get_object_or_404(List, pk=request.data.get("list_id", m.list_id), board=m.list.board, is_archived=False)
+    if target.pk == m.card.list_id:
+        raise ApiError("The card itself is already in that list.")
+    if target.pk != m.list_id and m.card.mirrors.filter(list=target).exists():
+        raise ApiError("It's already mirrored in that list.")
+    m.list = target
+    positions.place_in_list(m, target, request.data.get("before"), request.data.get("after"))
+    m.save(update_fields=["list", "position"])
+    data = card_response(m.card_id, request)
+    data["tile"] = render_to_string("boards/_card_tile.html", {"card": cards_qs().get(pk=m.card_id), "mirror": m},
+                                    request=request)
+    return data

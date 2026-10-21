@@ -747,3 +747,93 @@ class InboxPlannerTests(TestCase):
         for text in ("My card", "Undated", "My item", "Inbox thing"):
             self.assertContains(r, text)
         self.assertEqual(self.client.get(reverse("planner"), {"start": "garbage"}).status_code, 200)
+
+
+class MirrorTests(TestCase):
+    """A Bakery card mirrored onto Logistics' board."""
+
+    def setUp(self):
+        from .models import CardMirror
+        self.M = CardMirror
+        self.bakery = Workspace.objects.create(name="Bakery")
+        self.logi = Workspace.objects.create(name="Logistics")
+        self.baker = User.objects.create_user("b@x.com", "pw", first_name="Bea")
+        self.driver = User.objects.create_user("d@x.com", "pw", first_name="Dan")
+        self.stranger = User.objects.create_user("s@x.com", "pw", first_name="Stu")
+        WorkspaceMember.objects.create(workspace=self.bakery, user=self.baker)
+        WorkspaceMember.objects.create(workspace=self.logi, user=self.driver)
+        self.xmas = Board.objects.create(workspace=self.bakery, title="Xmas", visibility=Board.PRIVATE)
+        self.deliveries = Board.objects.create(workspace=self.logi, title="Deliveries", visibility=Board.PRIVATE)
+        BoardMember.objects.create(board=self.xmas, user=self.baker, role="admin")
+        BoardMember.objects.create(board=self.deliveries, user=self.driver, role="admin")
+        BoardMember.objects.create(board=self.deliveries, user=self.baker, role="member")  # baker can post there
+        self.todo = List.objects.create(board=self.xmas, title="To do")
+        self.vans = List.objects.create(board=self.deliveries, title="This week")
+        self.card = Card.objects.create(list=self.todo, title="Hampers to Bath")
+
+    def api(self, user, url, data):
+        self.client.force_login(user)
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def mirror(self):
+        r = self.api(self.baker, f"/api/cards/{self.card.pk}/mirrors/", {"list_id": self.vans.pk})
+        self.assertEqual(r.status_code, 200, r.content)
+        return self.M.objects.get()
+
+    def test_mirror_shows_on_other_board_and_driver_can_work_it(self):
+        self.mirror()
+        self.client.force_login(self.driver)
+        self.assertContains(self.client.get(reverse("board", args=[self.deliveries.pk])), "Hampers to Bath")
+        self.assertEqual(self.client.get(reverse("card_modal", args=[self.card.pk])).status_code, 200)
+        # driver can comment and tick, but can't move the original between Bakery lists
+        self.assertEqual(self.api(self.driver, f"/api/cards/{self.card.pk}/comments/", {"body": "Van booked"}).status_code, 200)
+        self.assertEqual(self.api(self.driver, f"/api/cards/{self.card.pk}/update/", {"is_complete": True}).status_code, 200)
+        self.assertEqual(self.api(self.driver, f"/api/cards/{self.card.pk}/move/", {"list_id": self.todo.pk}).status_code, 403)
+        # driver can be assigned (they're on a board the card lives on)
+        self.assertEqual(self.api(self.baker, f"/api/cards/{self.card.pk}/members/", {"user_id": self.driver.pk}).status_code, 200)
+
+    def test_mirroring_needs_edit_rights_on_target(self):
+        r = self.api(self.stranger, f"/api/cards/{self.card.pk}/mirrors/", {"list_id": self.vans.pk})
+        self.assertEqual(r.status_code, 404)
+        BoardMember.objects.filter(board=self.deliveries, user=self.baker).update(role="observer")
+        r = self.api(self.baker, f"/api/cards/{self.card.pk}/mirrors/", {"list_id": self.vans.pk})
+        self.assertEqual(r.status_code, 403)
+
+    def test_stranger_cannot_see_card(self):
+        self.mirror()
+        self.client.force_login(self.stranger)
+        self.assertEqual(self.client.get(reverse("card_modal", args=[self.card.pk])).status_code, 404)
+
+    def test_mixed_ordering_and_mirror_move(self):
+        m = self.mirror()
+        a = Card.objects.create(list=self.vans, title="A", position=1)
+        b = Card.objects.create(list=self.vans, title="B", position=2)
+        m.position = 10
+        m.save()
+        r = self.api(self.driver, f"/api/mirrors/{m.pk}/move/", {"list_id": self.vans.pk, "before": a.token, "after": b.token})
+        self.assertEqual(r.status_code, 200)
+        titles = [e["card"].title for e in List.objects.get(pk=self.vans.pk).entries()]
+        self.assertEqual(titles, ["A", "Hampers to Bath", "B"])
+        # a real card can be dropped between a card and a mirror too
+        c = Card.objects.create(list=self.vans, title="C", position=50)
+        self.api(self.driver, f"/api/cards/{c.pk}/move/", {"list_id": self.vans.pk, "before": a.token, "after": m.token})
+        titles = [e["card"].title for e in List.objects.get(pk=self.vans.pk).entries()]
+        self.assertEqual(titles, ["A", "C", "Hampers to Bath", "B"])
+
+    def test_live_update_bumps_mirror_board(self):
+        self.mirror()
+        before = Board.objects.get(pk=self.deliveries.pk).version
+        self.card.title = "Hampers to Bath (x40)"
+        self.card.save()
+        self.assertGreater(Board.objects.get(pk=self.deliveries.pk).version, before)
+
+    def test_remove_mirror(self):
+        m = self.mirror()
+        self.assertEqual(self.api(self.driver, f"/api/mirrors/{m.pk}/", {"delete": True}).status_code, 200)
+        self.assertFalse(self.M.objects.exists())
+        self.assertTrue(Card.objects.filter(pk=self.card.pk).exists())
+
+    def test_mirrored_card_in_other_board_views(self):
+        self.mirror()
+        self.client.force_login(self.driver)
+        self.assertContains(self.client.get(reverse("board_table", args=[self.deliveries.pk])), "Hampers to Bath")

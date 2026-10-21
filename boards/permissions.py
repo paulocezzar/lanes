@@ -60,3 +60,26 @@ def require(check, board, user):
     """404 rather than 403 so private boards don't reveal they exist."""
     if not check(board, user):
         raise Http404
+
+
+# ---------- card-level checks (a card can be reached through its mirrors) ----------
+
+def card_boards(card):
+    """The card's own board first, then every board it's mirrored onto."""
+    from .models import Board
+    boards = [card.list.board]
+    boards += [b for b in Board.objects.filter(lists__mirrors__card=card, is_archived=False).distinct()
+               if b.pk != boards[0].pk]
+    return boards
+
+
+def can_view_card(card, user):
+    return any(can_view(b, user) for b in card_boards(card))
+
+
+def can_edit_card(card, user):
+    return any(can_edit(b, user) for b in card_boards(card))
+
+
+def can_comment_card(card, user):
+    return any(can_comment(b, user) for b in card_boards(card))

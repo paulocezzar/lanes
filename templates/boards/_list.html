@@ -1,7 +1,7 @@
 <section class="list" data-list-id="{{ list.pk }}">
   <header class="list-head">
     <h3 class="list-title" {% if can_edit %}contenteditable="plaintext-only" spellcheck="false" data-list-title{% endif %}>{{ list.title }}</h3>
-    <span class="list-count">{{ list.cards.all|length }}</span>
+    <span class="list-count">{{ list.entries|length }}</span>
     {% if can_edit %}
     <details class="menu">
       <summary class="icon-btn" title="List actions">{% include "boards/_icon.html" with i="dots" %}</summary>
@@ -13,7 +13,7 @@
     {% endif %}
   </header>
   <div class="list-cards" data-list-cards>
-    {% for card in list.cards.all %}{% include "boards/_card_tile.html" %}{% endfor %}
+    {% for e in list.entries %}{% include "boards/_card_tile.html" with card=e.card mirror=e.mirror %}{% endfor %}
   </div>
   {% if can_edit %}
   <footer class="list-foot">

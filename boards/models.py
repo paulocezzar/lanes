@@ -119,6 +119,13 @@ class List(models.Model):
     def __str__(self):
         return self.title
 
+    def entries(self):
+        """Cards and mirrored cards in this list, in order. Uses prefetched
+        `cards` / `mirrors` when the caller set them up."""
+        items = [(c.position, 0, c.pk, c, None) for c in self.cards.all()]
+        items += [(m.position, 1, m.pk, m.card, m) for m in self.mirrors.all() if not m.card.is_archived]
+        return [{"card": c, "mirror": m} for _, _, _, c, m in sorted(items, key=lambda x: x[:3])]
+
 
 class Card(models.Model):
     list = models.ForeignKey(List, on_delete=models.CASCADE, related_name="cards")
@@ -160,6 +167,10 @@ class Card(models.Model):
         if (self.due_at - now).total_seconds() < 86400:
             return "soon"
         return ""
+
+    @property
+    def token(self):
+        return f"c{self.pk}"
 
     def tile_fields(self):
         """Custom field values to show as badges on the card tile."""
@@ -325,6 +336,9 @@ class Activity(models.Model):
             "board_created": "created this board",
             "board_member_added": f"added {d.get('name', '')} to this board",
             "automation": d.get("summary", "ran an automation"),
+            "mirrored": f"mirrored this card to {d.get('to', '')}",
+            "unmirrored": f"removed the mirror from {d.get('frm', '')}",
+            "mirror_added": f"mirrored a card here from {d.get('source', '')} ({d.get('list', '')})",
             "attachment_added": f"attached {d.get('name', 'a file')}",
         }.get(self.verb, self.verb.replace("_", " "))
 
@@ -482,3 +496,22 @@ class InboxItem(models.Model):
         if self.due_date < today:
             return "overdue"
         return "soon" if self.due_date == today else ""
+
+
+class CardMirror(models.Model):
+    """The same card shown in another list — often on another department's
+    board. It's one card: edits, ticks and comments show everywhere."""
+
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="mirrors")
+    list = models.ForeignKey(List, on_delete=models.CASCADE, related_name="mirrors")
+    position = models.FloatField(default=1000)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["position", "id"]
+        constraints = [models.UniqueConstraint(fields=["card", "list"], name="uniq_card_mirror")]
+
+    @property
+    def token(self):
+        return f"m{self.pk}"

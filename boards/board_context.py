@@ -46,5 +46,10 @@ def _my_workspaces(user):
 
 
 def open_cards(board):
-    """Live cards on live lists, with everything tiles need."""
-    return cards_qs().filter(list__board=board, is_archived=False, list__is_archived=False)
+    """Live cards on live lists — including cards mirrored onto this board."""
+    from django.db.models import Q
+    return cards_qs().filter(
+        Q(list__board=board, list__is_archived=False)
+        | Q(mirrors__list__board=board, mirrors__list__is_archived=False),
+        is_archived=False,
+    ).distinct()

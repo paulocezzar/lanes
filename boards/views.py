@@ -2,14 +2,14 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Prefetch
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from . import automation, permissions, positions
 from .models import Board, BoardMember, ChecklistItem, Label, List, Workspace
-from .services import board_people, cards_qs, log, render_modal
+from .services import board_people, cards_qs, lists_with_entries, log, render_modal
 from .board_context import board_context
 
 DEFAULT_LABELS = ["green", "yellow", "orange", "red", "purple", "blue"]
@@ -72,15 +72,15 @@ def board_create(request):
 @login_required
 def board_page(request, board_id):
     board, ctx = board_context(request, board_id, "board")
-    ctx["lists"] = board.lists.filter(is_archived=False).prefetch_related(
-        Prefetch("cards", queryset=cards_qs().filter(is_archived=False)))
+    ctx["lists"] = lists_with_entries(board)
     return render(request, "boards/board.html", ctx)
 
 
 @login_required
 def card_modal(request, card_id):
     card = get_object_or_404(cards_qs(), pk=card_id)
-    permissions.require(permissions.can_view, card.list.board, request.user)
+    if not permissions.can_view_card(card, request.user):
+        raise Http404
     return HttpResponse(render_modal(card, request))
 
 
@@ -108,8 +108,7 @@ def board_state(request, board_id):
     permissions.require(permissions.can_view, board, request.user)
     data = {"version": board.version, "archived": board.is_archived}
     if request.GET.get("v") != str(board.version) and not request.GET.get("lite"):
-        lists = board.lists.filter(is_archived=False).prefetch_related(
-            Prefetch("cards", queryset=cards_qs().filter(is_archived=False)))
+        lists = lists_with_entries(board)
         can_edit = permissions.can_edit(board, request.user)
         data["lists_html"] = "".join(
             render_to_string("boards/_list.html", {"list": lst, "can_edit": can_edit}, request=request)

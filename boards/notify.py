@@ -13,7 +13,10 @@ def send(recipient, kind, *, actor=None, card=None, board=None, text, excerpt=""
     if recipient is None or (actor is not None and recipient.pk == actor.pk) or not recipient.is_active:
         return None
     board = board or (card.list.board if card else None)
-    if board is not None and not permissions.can_view(board, recipient):
+    if card is not None:
+        if not permissions.can_view_card(card, recipient):
+            return None
+    elif board is not None and not permissions.can_view(board, recipient):
         return None
     if dedupe_key and Notification.objects.filter(recipient=recipient, dedupe_key=dedupe_key).exists():
         return None

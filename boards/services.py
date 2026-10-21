@@ -4,7 +4,12 @@ from django.db.models import Prefetch
 from django.template.loader import render_to_string
 
 from . import permissions
-from .models import Activity, BoardMember, Card, CardFieldValue, Checklist, ChecklistItem, CustomField, Label
+from django.contrib.auth import get_user_model
+
+from .models import (Activity, BoardMember, Card, CardFieldValue, CardMirror, Checklist, ChecklistItem, CustomField,
+                     Label)
+
+User = get_user_model()
 
 
 def log(board, actor, verb, card=None, **data):
@@ -24,24 +29,44 @@ def cards_qs():
     )
 
 
+def lists_with_entries(board):
+    """A board's live lists with cards and mirrored cards prefetched for tiles."""
+    return board.lists.filter(is_archived=False).prefetch_related(
+        Prefetch("cards", queryset=cards_qs().filter(is_archived=False)),
+        Prefetch("mirrors", queryset=CardMirror.objects.prefetch_related(Prefetch("card", queryset=cards_qs()))),
+    )
+
+
 def board_people(board):
     return [m.user for m in BoardMember.objects.filter(board=board).select_related("user").order_by("user__first_name")]
 
 
-def render_tile(card, request):
-    return render_to_string("boards/_card_tile.html", {"card": card}, request=request)
+def render_tile(card, request, mirror=None):
+    return render_to_string("boards/_card_tile.html", {"card": card, "mirror": mirror}, request=request)
 
 
 def render_modal(card, request):
     board = card.list.board
     user = request.user
+    boards = permissions.card_boards(card)
+    people = list(User.objects.filter(board_memberships__board__in=boards, is_active=True).distinct()
+                  .order_by("first_name", "last_name"))
+    can_edit = permissions.can_edit_card(card, user)
+    mirrors = list(card.mirrors.select_related("list__board"))
+    from .views_planner import editable_lists
+    taken = {card.list_id} | {m.list_id for m in mirrors}
+    mirror_targets = [(b, [l for l in ls if l.pk not in taken]) for b, ls in editable_lists(user)] if can_edit else []
     ctx = {
         "card": card,
         "board": board,
         "lists": board.lists.filter(is_archived=False),
-        "people": board_people(board),
-        "can_edit": permissions.can_edit(board, user),
-        "can_comment": permissions.can_comment(board, user),
+        "people": people,
+        "can_edit": can_edit,
+        "can_move": permissions.can_edit(board, user),
+        "can_comment": permissions.can_comment_card(card, user),
+        "can_see_source": permissions.can_view(board, user),
+        "mirrors": mirrors,
+        "mirror_targets": [(b, ls) for b, ls in mirror_targets if ls],
         "feed": _feed(card),
         "label_colours": Label.COLOURS,
         "fields": _field_rows(card, board),

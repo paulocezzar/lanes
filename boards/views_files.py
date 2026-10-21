@@ -23,9 +23,9 @@ BLOCKED_EXT = {"exe", "bat", "cmd", "com", "js", "msi", "scr", "ps1", "vbs", "sh
 def attachment_upload(request, card_id):
     card = get_object_or_404(Card.objects.select_related("list__board"), pk=card_id)
     board = card.list.board
-    if not permissions.can_view(board, request.user):
+    if not permissions.can_view_card(card, request.user):
         raise Http404
-    if not permissions.can_edit(board, request.user):
+    if not permissions.can_edit_card(card, request.user):
         return JsonResponse({"error": "You can view this board but not change it."}, status=403)
     f = request.FILES.get("file")
     if not f:
@@ -56,7 +56,7 @@ def attachment_upload(request, card_id):
 @login_required
 def attachment_download(request, attachment_id):
     att = get_object_or_404(Attachment.objects.select_related("card__list__board"), pk=attachment_id)
-    if not permissions.can_view(att.card.list.board, request.user):
+    if not permissions.can_view_card(att.card, request.user):
         raise Http404
     inline = att.is_image or att.content_type == "application/pdf"
     if settings.ATTACHMENTS_PERSISTENT and "s3" in settings.STORAGES["default"]["BACKEND"]:

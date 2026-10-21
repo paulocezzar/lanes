@@ -1,12 +1,12 @@
 {% load lanes_extras %}<div class="cm" data-card="{{ card.pk }}">
   <header class="cm-top">
-    {% if can_edit %}
+    {% if can_move %}
     <label class="list-picker" title="Move to list">
       <select data-move-list aria-label="List">
         {% for l in lists %}<option value="{{ l.pk }}" {% if l.pk == card.list_id %}selected{% endif %}>{{ l.title }}</option>{% endfor %}
       </select>
     </label>
-    {% else %}<span class="list-picker static">{{ card.list.title }}</span>{% endif %}
+    {% else %}<span class="list-picker static">{{ board.title }} › {{ card.list.title }}</span>{% endif %}
     {% if card.is_archived %}<span class="archived-flag">Archived</span>{% endif %}
     <button class="icon-btn" data-close-card title="Close">{% include "boards/_icon.html" with i="close" %}</button>
   </header>
@@ -58,6 +58,18 @@
           </div>
         </div>
         <label class="chip-btn file-btn">{% include "boards/_icon.html" with i="clip" %}Attach<input type="file" data-attach hidden></label>
+        {% if mirror_targets %}
+        <div class="pop-wrap"><button class="chip-btn" data-pop="mirror" title="Show this same card on another list or board">🔗 Mirror</button>
+          <div class="pop" data-pop-panel="mirror" hidden>
+            <div class="pop-head">Mirror card</div>
+            <p class="muted small">The same card appears in another list — handy when a job involves two departments. Changes show everywhere.</p>
+            <form data-mirror-card>
+              <label>Show it in<select name="list_id">{% for b, ls in mirror_targets %}<optgroup label="{{ b.title }} · {{ b.workspace.name }}">{% for l in ls %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>
+              <button class="btn primary sm">Mirror here</button>
+            </form>
+          </div>
+        </div>
+        {% endif %}
         <div class="pop-wrap"><button class="chip-btn" data-pop="copy">{% include "boards/_icon.html" with i="copy" %}Copy</button>
           <div class="pop" data-pop-panel="copy" hidden>
             <div class="pop-head">Copy card</div>
@@ -118,6 +130,21 @@
         </form>
         {% else %}<div class="desc-read">{{ card.description|default:"No description."|linebreaksbr }}</div>{% endif %}
       </section>
+
+      {% if mirrors %}
+      <section class="cm-section">
+        <h4 class="cm-h">🔗 Also on</h4>
+        <div class="mirror-list">
+          <div class="mirror-row"><b>{{ board.title }}</b> › {{ card.list.title }} <span class="muted small">(original)</span></div>
+          {% for m in mirrors %}
+          <div class="mirror-row">
+            <a href="{% url 'board' m.list.board_id %}?card={{ card.pk }}"><b>{{ m.list.board.title }}</b> › {{ m.list.title }}</a>
+            {% if can_edit %}<button class="link-btn" data-remove-mirror="{{ m.pk }}">Remove</button>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
 
       {% if card.attachments.all %}
       <section class="cm-section">
