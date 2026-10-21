@@ -896,3 +896,28 @@ a.hbar-label:hover { text-decoration: underline; }
 .audit-filters > select, .audit-filters > input, .audit-filters > .btn { width: auto; flex: 0 0 auto; margin: 0; }
 .audit-filters > input[type=search] { flex: 1 1 220px; }
 .company .warn-note { margin: 0; }
+
+/* ---------- small phones ---------- */
+.company > * { min-width: 0; }
+.view-tabs { overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.view-tabs::-webkit-scrollbar { display: none; }
+@media (max-width: 760px) {
+  .topnav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .topnav::-webkit-scrollbar { display: none; }
+  .topbar-right { flex: none; }
+  .board-head { flex-wrap: wrap; }
+  .board-head-right { flex-wrap: wrap; margin-left: 0; row-gap: 6px; }
+  .audit-filters > select { flex: 1 1 140px; }
+}
+@media (max-width: 480px) {
+  .brand { font-size: 0; gap: 0; }
+  .topbar { gap: 6px; padding: 0 8px; }
+  .topnav a { padding: 6px 6px; font-size: 13px; }
+}
+.danger-text { color: var(--danger) !important; }
+.archived-row span { flex: 1; min-width: 0; }
+.archived-boards summary { cursor: pointer; list-style: none; }
+.archived-boards summary::-webkit-details-marker { display: none; }
+.archived-boards summary h2 { display: inline-flex; color: var(--text-2); }
+.archived-boards .archived-row { margin-bottom: 6px; max-width: 640px; }
+[data-move-board] { width: 100%; }

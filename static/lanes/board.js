@@ -438,6 +438,16 @@
     if (t.matches('[data-label]')) return cardPost('labels', { label_id: +t.dataset.label });
     if (t.matches('[data-item]')) return post(`/api/items/${t.dataset.item}/`, { is_done: t.checked }).then(applyCard);
     if (t.matches('[data-move-list]')) return cardPost('move', { list_id: +t.value });
+    if (t.matches('[data-move-board]')) {
+      const opt = t.selectedOptions[0];
+      if (!t.value || !confirm(`Move this card to ${opt.parentElement.label} › ${opt.textContent}?\nLabels and fields that don't exist there are dropped.`)) { t.value = ''; return; }
+      return post(`/api/cards/${openCardId}/move/`, { list_id: +t.value }).then(data => {
+        $$(`.card-tile[data-card-id="${data.card_id}"]:not([data-mirror-id])`, listsEl).forEach(el => el.remove());
+        refreshCounts();
+        closeCard();
+        toast(`Moved to ${opt.parentElement.label}.`);
+      });
+    }
     if (t.matches('[data-attach]') && t.files.length) return uploadFile(t.files[0]);
     if (t.matches('[data-field]')) {
       const value = t.type === 'checkbox' ? t.checked : t.value;
@@ -509,8 +519,9 @@
   if (boardTitle) inlineEdit(boardTitle, v => post(`/api/boards/${boardId}/update/`, { title: v }));
 
   $('[data-star]')?.addEventListener('click', async e => {
+    const btn = e.currentTarget;            // currentTarget is gone after the await
     const data = await post(`/api/boards/${boardId}/star/`);
-    e.currentTarget.classList.toggle('on', data.starred);
+    btn.classList.toggle('on', data.starred);
   });
   $$('[data-press-board]').forEach(b => b.addEventListener('click', async () => {
     b.disabled = true;
@@ -593,7 +604,23 @@
 
   // Drawer (menu): activity, archived, settings
   const drawer = document.getElementById('drawer') || document.createElement('aside');
-  $('[data-open-drawer]')?.addEventListener('click', () => (drawer.hidden = !drawer.hidden));
+  // Activity and Archived can change after the page loaded: refresh them each time the menu opens.
+  async function refreshDrawer() {
+    try {
+      const res = await fetch(location.pathname, { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+      ['activity', 'archived'].forEach(name => {
+        const fresh = doc.querySelector(`#drawer [data-pane="${name}"]`);
+        const mine = $(`[data-pane="${name}"]`, drawer);
+        if (fresh && mine) mine.innerHTML = fresh.innerHTML;
+      });
+    } catch { /* keep what's there */ }
+  }
+  $('[data-open-drawer]')?.addEventListener('click', () => {
+    drawer.hidden = !drawer.hidden;
+    if (!drawer.hidden) refreshDrawer();
+  });
   $('[data-close-drawer]')?.addEventListener('click', () => (drawer.hidden = true));
   $$('[data-tab]', drawer).forEach(tab => tab.addEventListener('click', () => {
     $$('[data-tab]', drawer).forEach(t => t.classList.toggle('on', t === tab));
@@ -602,6 +629,18 @@
   drawer.addEventListener('click', async e => {
     const link = e.target.closest('[data-card-link]');
     if (link) { e.preventDefault(); return openCard(link.dataset.cardLink); }
+    const restoreList = e.target.closest('[data-restore-list]');
+    if (restoreList) {
+      await post(`/api/lists/${restoreList.dataset.restoreList}/`, { archive: false });
+      return location.reload();
+    }
+    const del = e.target.closest('[data-delete-card]');
+    if (del) {
+      if (!confirm('Delete this card for good? Its comments, checklists and attachments go too. This can\'t be undone.')) return;
+      await post(`/api/cards/${del.dataset.deleteCard}/delete/`);
+      del.closest('.archived-row').remove();
+      return toast('Card deleted.');
+    }
     const restore = e.target.closest('[data-restore]');
     if (restore) {
       await post(`/api/cards/${restore.dataset.restore}/update/`, { archive: false });
@@ -800,7 +839,7 @@
   function modalIsBusy() {
     const a = document.activeElement;
     return !!(a && dialogBody.contains(a) && (a.isContentEditable || a.matches('input, textarea')))
-      || openPop !== null || !!dialogBody.querySelector('details.item-more[open]');
+      || openPop !== null || !!dialogBody.querySelector('details[open]');
   }
 
   async function poll() {

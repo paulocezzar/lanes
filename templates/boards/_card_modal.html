@@ -67,6 +67,15 @@
           </div>
         </div>
         <label class="chip-btn file-btn">{% include "boards/_icon.html" with i="clip" %}Attach<input type="file" data-attach hidden></label>
+        {% if can_move and move_targets %}
+        <div class="pop-wrap"><button class="chip-btn" data-pop="moveboard" title="Move this card to another board">↗ Move</button>
+          <div class="pop" data-pop-panel="moveboard" hidden>
+            <div class="pop-head">Move to another board</div>
+            <p class="muted small">Comments, checklists and attachments come too. Labels and custom fields are matched by name.</p>
+            <select data-move-board aria-label="Board and list"><option value="">Choose a list…</option>{% for b, ls in move_targets %}<optgroup label="{{ b.title }}">{% for l in ls %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</optgroup>{% endfor %}</select>
+          </div>
+        </div>
+        {% endif %}
         {% if mirror_targets %}
         <div class="pop-wrap"><button class="chip-btn" data-pop="mirror" title="Show this same card on another list or board">🔗 Mirror</button>
           <div class="pop" data-pop-panel="mirror" hidden>

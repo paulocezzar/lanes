@@ -71,6 +71,8 @@ def render_modal(card, request):
         "can_see_source": permissions.can_view(board, user),
         "mirrors": mirrors,
         "mirror_targets": [(b, ls) for b, ls in mirror_targets if ls],
+        "move_targets": ([(b, ls) for b, ls in editable_lists(user) if b.pk != board.pk]
+                         if permissions.can_edit(board, user) else []),
         "feed": _feed(card, user),
         "label_colours": Label.COLOURS,
         "fields": _field_rows(card, board),

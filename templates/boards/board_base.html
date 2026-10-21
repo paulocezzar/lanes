@@ -120,8 +120,12 @@
     {% empty %}<p class="muted">Nothing yet.</p>{% endfor %}
   </div>
   <div class="drawer-pane" data-pane="archived" hidden>
+    {% if archived_lists %}<h4 class="section-label">Lists</h4>
+    {% for l in archived_lists %}
+    <div class="archived-row"><span>{{ l.title }}</span>{% if can_edit %}<button class="btn ghost sm" data-restore-list="{{ l.pk }}">Restore</button>{% endif %}</div>
+    {% endfor %}<h4 class="section-label">Cards</h4>{% endif %}
     {% for card in archived_cards %}
-    <div class="archived-row"><span>{{ card.title }}</span>{% if can_edit %}<button class="btn ghost sm" data-restore="{{ card.pk }}">Restore</button>{% endif %}</div>
+    <div class="archived-row"><span>{{ card.title }}</span>{% if can_edit %}<button class="btn ghost sm" data-restore="{{ card.pk }}">Restore</button><button class="btn ghost sm danger-text" data-delete-card="{{ card.pk }}" title="Delete for good">Delete</button>{% endif %}</div>
     {% empty %}<p class="muted">No archived cards.</p>{% endfor %}
   </div>
   {% if can_manage %}

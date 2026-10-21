@@ -32,6 +32,7 @@ def board_context(request, board_id, view):
         "label_colours": Label.COLOURS,
         "field_kinds": CustomField.KINDS,
         "archived_cards": cards_qs().filter(list__board=board, is_archived=True)[:50],
+        "archived_lists": board.lists.filter(is_archived=True),
         "activity": board.activity.select_related("actor", "card")[:40],
         "open_card": request.GET.get("card"),
         "my_workspaces": _my_workspaces(request.user),

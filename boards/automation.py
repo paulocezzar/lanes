@@ -281,7 +281,12 @@ def maybe_run_schedules():
 # ---------- buttons ----------
 
 def press_card_button(button, card, user):
-    """Run a card button's actions. Returns the list of things that changed."""
+    """Run a card button's actions. Returns the list of things that changed.
+    A press counts as the person's own action, so board rules then react to it
+    (rules themselves never trigger further rules)."""
+    before_list, before_done = card.list_id, card.is_complete
+    before_labels = set(card.labels.values_list("pk", flat=True))
+    before_checks = checklists_all_done(card)
     done = []
     for a in button.actions:
         if a.get("type") == "add_me":
@@ -294,6 +299,17 @@ def press_card_button(button, card, user):
         if d:
             done.append(d)
     _after_press(button, user, done, card=card)
+    card.refresh_from_db()
+    if card.is_archived:
+        return done
+    if card.list_id != before_list:
+        fire(card, Rule.MOVED, list_=card.list)
+    if card.is_complete and not before_done:
+        fire(card, Rule.COMPLETED)
+    for label in card.labels.exclude(pk__in=before_labels):
+        fire(card, Rule.LABEL_ADDED, label=label)
+    if not before_checks and checklists_all_done(card):
+        fire(card, Rule.CHECKLIST_DONE)
     return done
 
 

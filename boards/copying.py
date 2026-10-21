@@ -95,3 +95,43 @@ def copy_board(board, *, workspace, title, user, keep_cards=True, visibility=Non
                             actions=actions, is_enabled=rule.is_enabled, created_by=user)
     log(new, user, "board_created")
     return new
+
+
+@transaction.atomic
+def transfer_card(card, target_list, *, user):
+    """Move a card (with its comments, attachments, checklists and history) to a
+    list on another board. Labels and custom fields are per board, so they're
+    matched by name; anything with no match on the new board is dropped.
+    Members and checklist assignees who aren't on the new board are removed."""
+    from .models import Activity, CardMirror, Watch
+    old_board, new_board = card.list.board, target_list.board
+    labels = {(lab.name.lower(), lab.colour): lab for lab in new_board.labels.all()}
+    by_name = {lab.name.lower(): lab for lab in new_board.labels.all() if lab.name}
+    keep = []
+    for lab in card.labels.all():
+        match = labels.get((lab.name.lower(), lab.colour)) or (by_name.get(lab.name.lower()) if lab.name else None)
+        if match:
+            keep.append(match)
+    card.labels.set(keep)
+    allowed = set(BoardMember.objects.filter(board=new_board).values_list("user_id", flat=True))
+    card.members.set([u for u in card.members.all() if u.pk in allowed])
+    ChecklistItem.objects.filter(checklist__card=card).exclude(assignee_id__in=allowed).update(assignee=None)
+    fields = {(f.name.lower(), f.kind): f for f in new_board.custom_fields.all()}
+    for v in list(card.field_values.select_related("field")):
+        f = fields.get((v.field.name.lower(), v.field.kind))
+        if f and not (f.kind == CustomField.DROPDOWN and v.value not in f.options):
+            if not CardFieldValue.objects.filter(card=card, field=f).exists():
+                v.field = f
+                v.save(update_fields=["field"])
+                continue
+        v.delete()
+    CardMirror.objects.filter(card=card, list=target_list).delete()
+    card.list = target_list
+    card.is_template = False
+    card.position = positions.end_position(target_list.cards.filter(is_archived=False))
+    card.save(update_fields=["list", "position", "is_template", "updated_at"])
+    Activity.objects.filter(card=card).update(board=new_board)    # history travels with the card
+    Watch.objects.filter(card=card).exclude(user_id__in=allowed).exclude(user__is_superuser=True).delete()
+    log(old_board, user, "card_moved_out", card=None, title=card.title, to=f"{new_board.title} › {target_list.title}")
+    log(new_board, user, "card_moved_board", card=card, frm=old_board.title, to=target_list.title)
+    return card

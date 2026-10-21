@@ -104,8 +104,11 @@ def list_update(request, list_id):
             lst.card_limit = max(1, min(int(d["card_limit"]), 500)) if d["card_limit"] not in (None, "", 0) else None
         except (TypeError, ValueError):
             raise ApiError("The limit must be a number.")
-    if d.get("archive"):
-        lst.is_archived = True
+    if "archive" in d and bool(d["archive"]) != lst.is_archived:
+        lst.is_archived = bool(d["archive"])
+        if not lst.is_archived:          # comes back at the end of the board
+            lst.position = positions.end_position(lst.board.lists.filter(is_archived=False))
+        log(lst.board, request.user, "list_archived" if lst.is_archived else "list_restored", title=lst.title)
     lst.save()
     return {"ok": True}
 
@@ -140,8 +143,19 @@ def card_move(request, card_id):
     old_list = card.list
     if not permissions.can_edit(old_list.board, request.user):
         raise ApiError("Only people on the card's own board can move it. You can move the mirror instead.", 403)
-    new_list = get_object_or_404(List, pk=request.data.get("list_id", card.list_id), board=old_list.board,
-                                 is_archived=False)
+    new_list = get_object_or_404(List.objects.select_related("board"), pk=request.data.get("list_id", card.list_id),
+                                 is_archived=False, board__is_archived=False)
+    if new_list.board_id != old_list.board_id:
+        if not permissions.can_view(new_list.board, request.user):
+            raise Http404
+        if not permissions.can_edit(new_list.board, request.user):
+            raise ApiError("You can't add cards to that board.", 403)
+        from .copying import transfer_card
+        transfer_card(card, new_list, user=request.user)
+        automation.fire(card, Rule.ADDED, list_=new_list)
+        data = card_response(card.pk, request)
+        data["moved_board"] = new_list.board_id
+        return data
     card.list = new_list
     positions.place_in_list(card, new_list, request.data.get("before", request.data.get("before_id")),
                             request.data.get("after", request.data.get("after_id")))
@@ -510,9 +524,9 @@ def board_update(request, board_id):
             board.collection, _ = Collection.objects.get_or_create(workspace=board.workspace, name=name)
         else:
             board.collection = get_object_or_404(Collection, pk=value, workspace=board.workspace)
-    if d.get("archive"):
-        board.is_archived = True
-        audit.record(request, "board_archived", board=board)
+    if "archive" in d and bool(d["archive"]) != board.is_archived:
+        board.is_archived = bool(d["archive"])
+        audit.record(request, "board_archived" if board.is_archived else "board_restored", board=board)
     board.save()
     return {"ok": True, "public_token": board.public_token}
 
@@ -784,3 +798,22 @@ def card_vote(request, card_id):
     from .signals import bump
     bump(card.list.board_id, card.pk)
     return card_response(card.pk, request)
+
+
+@api
+def card_delete(request, card_id):
+    """Delete for good. Only archived cards, so nothing disappears by one mis-click."""
+    card = _card(request, card_id)
+    if not permissions.can_edit(card.list.board, request.user):
+        raise ApiError("Only people on the card's own board can delete it.", 403)
+    if not card.is_archived:
+        raise ApiError("Archive the card first, then delete it from the board menu.")
+    log(card.list.board, request.user, "card_deleted", title=card.title)
+    from .models import Attachment
+    for att in Attachment.objects.filter(card=card):
+        try:
+            att.file.delete(save=False)
+        except Exception:
+            pass
+    card.delete()
+    return {"ok": True, "deleted": card_id}

@@ -5,7 +5,8 @@ Boards for every department at The Newt — a Trello-style Kanban app built in D
 ## What's in Lanes
 
 **Boards** — departments (workspaces) with boards, collections to group them, department or private visibility,
-board and card templates, copy board/card, archive, export to CSV/JSON.
+board and card templates, copy board/card, move a card to another board, archive and restore boards, lists
+and cards (archived cards can be deleted for good), export to CSV/JSON.
 
 **Cards** — drag-and-drop lists and cards (desktop and iPad), labels, start/due dates, checklists with per-item
 assignee and due date, members, description, custom fields (text, number, date, checkbox, dropdown, location),

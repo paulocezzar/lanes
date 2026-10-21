@@ -99,7 +99,7 @@ def watchers(card=None, board=None):
 WATCH_VERBS = {"card_created", "card_moved", "card_completed", "card_reopened", "card_archived", "card_restored",
                "card_renamed", "due_set", "due_removed", "member_added", "member_joined", "member_removed",
                "member_left", "checklist_added", "item_done", "item_undone", "list_created", "attachment_added",
-               "mirrored", "automation", "button"}
+               "mirrored", "automation", "button", "card_moved_board"}
 
 
 def on_activity(activity):

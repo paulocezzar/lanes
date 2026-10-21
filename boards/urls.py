@@ -95,4 +95,6 @@ urlpatterns = [
     path("api/comments/<int:comment_id>/", api.comment_update),
     path("api/comments/<int:comment_id>/react/", api.comment_react),
     path("api/cards/<int:card_id>/vote/", api.card_vote),
+    path("api/cards/<int:card_id>/delete/", api.card_delete),
+    path("boards/<int:board_id>/restore/", views.board_restore, name="board_restore"),
 ]

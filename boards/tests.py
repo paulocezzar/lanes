@@ -105,7 +105,9 @@ class BoardFlowTests(TestCase):
         foreign = List.objects.create(board=other, title="L")
         card = Card.objects.create(list=self.todo, title="x")
         r = self.api(self.member, f"/api/cards/{card.pk}/move/", {"list_id": foreign.pk})
-        self.assertEqual(r.status_code, 404)
+        self.assertIn(r.status_code, (403, 404))   # can see "Other" but isn't on it, so can't add cards there
+        card.refresh_from_db()
+        self.assertEqual(card.list, self.todo)
 
     def test_checklist_and_complete(self):
         card = Card.objects.create(list=self.todo, title="x")
@@ -1275,3 +1277,96 @@ class CompanyTests(TestCase):
         self.c.force_login(self.staff)
         self.assertEqual(self.c.get("/company/").status_code, 404)
         self.assertEqual(self.c.get("/company/audit/").status_code, 404)
+
+
+class ButtonTriggersRuleTests(TestCase):
+    def test_button_complete_fires_rule(self):
+        from .models import Button, Comment, Rule
+        ws = Workspace.objects.create(name="Bakery BR")
+        u = User.objects.create_user("br@x.com", "pw", first_name="Bo")
+        WorkspaceMember.objects.create(workspace=ws, user=u)
+        board = Board.objects.create(workspace=ws, title="B")
+        BoardMember.objects.create(board=board, user=u, role="admin")
+        lst = List.objects.create(board=board, title="L")
+        card = Card.objects.create(list=lst, title="C")
+        Rule.objects.create(board=board, trigger=Rule.COMPLETED, actions=[{"type": "comment", "text": "Nice work"}])
+        b = Button.objects.create(board=board, kind="card", name="Done", actions=[{"type": "complete"}])
+        c = Client(); c.force_login(u)
+        r = c.post(f"/api/cards/{card.pk}/buttons/{b.pk}/", "{}", content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(Comment.objects.filter(card=card, body="Nice work").exists())
+
+
+class ArchiveMoveDeleteTests(TestCase):
+    def setUp(self):
+        from .models import CustomField
+        self.ws = Workspace.objects.create(name="Bakery A")
+        self.u = User.objects.create_user("am@x.com", "pw", first_name="Al")
+        self.other = User.objects.create_user("o@x.com", "pw", first_name="Ot")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u, role="admin")
+        self.b1 = Board.objects.create(workspace=self.ws, title="Production")
+        self.b2 = Board.objects.create(workspace=self.ws, title="Despatch")
+        for b in (self.b1, self.b2):
+            BoardMember.objects.create(board=b, user=self.u, role="admin")
+        BoardMember.objects.create(board=self.b1, user=self.other)
+        self.l1 = List.objects.create(board=self.b1, title="Doing")
+        self.l2 = List.objects.create(board=self.b2, title="Inbound")
+        self.card = Card.objects.create(list=self.l1, title="Pallet")
+        self.card.members.add(self.u, self.other)
+        lab1 = Label.objects.create(board=self.b1, name="Urgent", colour="red")
+        Label.objects.create(board=self.b2, name="Urgent", colour="orange")
+        Label.objects.create(board=self.b1, name="Only here", colour="blue")
+        self.card.labels.add(lab1, *Label.objects.filter(name="Only here"))
+        f1 = CustomField.objects.create(board=self.b1, name="Qty", kind="number")
+        CustomField.objects.create(board=self.b2, name="Qty", kind="number")
+        from .models import CardFieldValue, Comment
+        CardFieldValue.objects.create(card=self.card, field=f1, value=12)
+        Comment.objects.create(card=self.card, author=self.u, body="hello")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def j(self, url, data=None):
+        return self.c.post(url, json.dumps(data or {}), content_type="application/json")
+
+    def test_move_to_other_board(self):
+        r = self.j(f"/api/cards/{self.card.pk}/move/", {"list_id": self.l2.pk})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.list, self.l2)
+        self.assertEqual([l.name for l in self.card.labels.all()], ["Urgent"])   # matched by name, other dropped
+        self.assertEqual(self.card.labels.get().board, self.b2)
+        self.assertEqual(list(self.card.members.all()), [self.u])               # not on Despatch → removed
+        self.assertEqual(self.card.field_values.get().field.board, self.b2)
+        self.assertEqual(self.card.comments.count(), 1)
+        self.assertTrue(Activity.objects.filter(board=self.b1, verb="card_moved_out").exists())
+        self.assertContains(self.c.get(f"/b/{self.b2.pk}/"), "Pallet")
+        self.assertNotContains(self.c.get(f"/b/{self.b1.pk}/"), ">Pallet<")
+
+    def test_cannot_move_to_board_you_cant_edit(self):
+        b3 = Board.objects.create(workspace=self.ws, title="Locked", visibility="private")
+        l3 = List.objects.create(board=b3, title="x")
+        BoardMember.objects.filter(user=self.u).delete()
+        WorkspaceMember.objects.filter(user=self.u).update(role="member")
+        BoardMember.objects.create(board=self.b1, user=self.u, role="admin")
+        self.assertEqual(self.j(f"/api/cards/{self.card.pk}/move/", {"list_id": l3.pk}).status_code, 404)  # private: hidden
+        b4 = Board.objects.create(workspace=self.ws, title="Visible")                                        # visible, not a member
+        l4 = List.objects.create(board=b4, title="y")
+        self.assertEqual(self.j(f"/api/cards/{self.card.pk}/move/", {"list_id": l4.pk}).status_code, 403)
+        self.card.refresh_from_db(); self.assertEqual(self.card.list, self.l1)
+        o = Client(); o.force_login(self.other)
+        r = o.post(f"/api/cards/{self.card.pk}/move/", json.dumps({"list_id": self.l2.pk}), content_type="application/json")
+        self.assertEqual(r.status_code, 404)
+
+    def test_restore_list_and_board_delete_card(self):
+        self.j(f"/api/lists/{self.l1.pk}/", {"archive": True})
+        self.assertContains(self.c.get(f"/b/{self.b1.pk}/"), "data-restore-list")
+        self.j(f"/api/lists/{self.l1.pk}/", {"archive": False})
+        self.l1.refresh_from_db(); self.assertFalse(self.l1.is_archived)
+        self.assertEqual(self.j(f"/api/cards/{self.card.pk}/delete/").status_code, 400)  # must archive first
+        self.j(f"/api/cards/{self.card.pk}/update/", {"archive": True})
+        self.assertEqual(self.j(f"/api/cards/{self.card.pk}/delete/").status_code, 200)
+        self.assertFalse(Card.objects.filter(pk=self.card.pk).exists())
+        self.j(f"/api/boards/{self.b2.pk}/update/", {"archive": True})
+        self.assertContains(self.c.get("/"), "Archived boards")
+        r = self.c.post(f"/boards/{self.b2.pk}/restore/")
+        self.assertEqual(r.status_code, 302)
+        self.b2.refresh_from_db(); self.assertFalse(self.b2.is_archived)

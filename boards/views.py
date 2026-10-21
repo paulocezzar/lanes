@@ -1,7 +1,7 @@
 """Page views: home (all boards by department), board page, card modal, create board."""
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
@@ -41,7 +41,13 @@ def home(request):
     # Boards the user was invited to as a guest from another department
     ws_ids = {ws.pk for ws in workspaces}
     guest = [b for b in boards if b.workspace_id not in ws_ids]
+    archived = Board.objects.filter(is_archived=True).select_related("workspace").order_by("title")
+    if not user.is_superuser:
+        archived = [b for b in archived.filter(Q(memberships__user=user, memberships__role=BoardMember.ADMIN)
+                                               | Q(workspace__memberships__user=user,
+                                                   workspace__memberships__role="admin")).distinct()]
     return render(request, "boards/home.html", {
+        "archived_boards": archived,
         "groups": groups,
         "guest_boards": guest,
         "starred": [b for b in boards if b.pk in starred],
@@ -124,3 +130,17 @@ def board_state(request, board_id):
             render_to_string("boards/_list.html", {"list": lst, "can_edit": can_edit}, request=request)
             for lst in lists)
     return JsonResponse(data)
+
+
+@login_required
+@require_POST
+def board_restore(request, board_id):
+    board = get_object_or_404(Board, pk=board_id, is_archived=True)
+    if not permissions.can_manage(board, request.user):
+        raise Http404
+    board.is_archived = False
+    board.save(update_fields=["is_archived"])
+    from . import audit
+    audit.record(request, "board_restored", board=board)
+    messages.success(request, f"{board.title} is back.")
+    return redirect("board", board_id=board.pk)

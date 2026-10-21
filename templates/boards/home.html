@@ -74,6 +74,20 @@
   </section>
   {% endif %}
 
+  {% if archived_boards %}
+  <section class="home-section">
+    <details class="archived-boards">
+      <summary><h2>Archived boards <span class="count">{{ archived_boards|length }}</span></h2></summary>
+      {% for b in archived_boards %}
+      <form method="post" action="{% url 'board_restore' b.pk %}" class="archived-row">{% csrf_token %}
+        <span>{{ b.title }} <small class="muted">· {{ b.workspace.name }}</small></span>
+        <button class="btn ghost sm">Restore</button>
+      </form>
+      {% endfor %}
+    </details>
+  </section>
+  {% endif %}
+
   {% if guest_boards %}
   <section class="home-section">
     <h2>Shared with you from other departments</h2>
