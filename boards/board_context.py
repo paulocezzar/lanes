@@ -2,7 +2,7 @@
 Dashboard): header, share dialog, menu drawer and the card dialog."""
 from django.shortcuts import get_object_or_404
 
-from . import permissions
+from . import ai, permissions
 from .models import Board, BoardMember, CustomField, Label
 from .services import board_people, cards_qs
 
@@ -34,6 +34,7 @@ def board_context(request, board_id, view):
         "activity": board.activity.select_related("actor", "card")[:40],
         "open_card": request.GET.get("card"),
         "my_workspaces": _my_workspaces(request.user),
+        "ai_enabled": ai.enabled(),
     }
 
 

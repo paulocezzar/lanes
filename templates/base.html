@@ -15,6 +15,7 @@
     </a>
     <nav class="topnav">
       <a href="{% url 'home' %}" class="{% if request.resolver_match.url_name == 'home' %}on{% endif %}">Boards</a>
+      <a href="{% url 'planner' %}" class="{% if request.resolver_match.url_name == 'planner' %}on{% endif %}">Planner</a>
       <a href="{% url 'my_cards' %}" class="{% if request.resolver_match.url_name == 'my_cards' %}on{% endif %}">My cards</a>
     </nav>
     <div class="topbar-right">

@@ -118,6 +118,10 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# AI features (inbox capture, suggest steps). Off unless a key is set.
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
+
 # Send errors (with tracebacks) to the console so they appear in Render's logs.
 LOGGING = {
     "version": 1,

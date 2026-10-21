@@ -641,6 +641,53 @@
   setInterval(poll, 4000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
+  // ---------- inbox panel (drag inbox items onto a list) ----------
+  const inboxDrawer = document.getElementById('inbox-drawer');
+  if (inboxDrawer && window.LanesInbox) {
+    let loaded = false;
+    const wireInbox = box => {
+      const items = box.querySelector('[data-inbox-items]');
+      if (!items) return;
+      items.querySelectorAll('[draggable]').forEach(el => el.removeAttribute('draggable'));
+      Sortable.create(items, {
+        group: { name: 'cards', pull: true, put: false },
+        sort: false, animation: 150, forceFallback: true, fallbackOnBody: true, fallbackTolerance: 4,
+        delay: 120, delayOnTouchOnly: true, draggable: '.inbox-item:not(.done)',
+        filter: 'input, details, .inbox-done', preventOnFilter: false,
+        onStart: () => (dragging = true),
+        onEnd: async evt => {
+          dragging = false;
+          const el = evt.item;
+          const target = evt.to.closest('.list');
+          if (!target || evt.to === evt.from) return;
+          try {
+            const data = await post(`/api/inbox/${el.dataset.inboxId}/to-card/`,
+              { list_id: +target.dataset.listId, ...neighbours(el, '.card-tile') });
+            el.replaceWith(fromHTML(data.tile));
+            inbox.setHtml(data.inbox_html);
+            refreshCounts();
+            toast('Card created from your inbox.');
+          } catch { location.reload(); }
+        },
+      });
+    };
+    const inbox = LanesInbox.init(inboxDrawer.querySelector('[data-inbox-panel]'), {
+      onChange: wireInbox,
+      sendToBoard: () => toast('Drag the item onto a list to put it on this board.'),
+    });
+    $('[data-toggle-inbox]').addEventListener('click', async () => {
+      inboxDrawer.hidden = !inboxDrawer.hidden;
+      boardEl.classList.toggle('with-inbox', !inboxDrawer.hidden);
+      if (!inboxDrawer.hidden && !loaded) {
+        const res = await fetch('/api/inbox/', { credentials: 'same-origin' });
+        if (res.ok) { inbox.setHtml((await res.json()).html); loaded = true; }
+      }
+    });
+    $('[data-close-inbox]', inboxDrawer).addEventListener('click', () => {
+      inboxDrawer.hidden = true; boardEl.classList.remove('with-inbox');
+    });
+  }
+
   // Any element with data-card-open="<id>" opens that card (used by the other views)
   document.addEventListener('click', e => {
     const el = e.target.closest('[data-card-open]');

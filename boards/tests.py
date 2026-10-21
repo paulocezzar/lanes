@@ -676,3 +676,74 @@ class NotificationTests(TestCase):
         out = mentions("Hi @Charlie <script>")
         self.assertIn('<span class="mention">@Charlie</span>', out)
         self.assertIn("&lt;script&gt;", out)
+
+
+class InboxPlannerTests(TestCase):
+    def setUp(self):
+        from .models import InboxItem
+        self.I = InboxItem
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.user = User.objects.create_user("u@x.com", "pw", first_name="Una")
+        self.other = User.objects.create_user("o@x.com", "pw", first_name="Oz")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.user)
+        self.board = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=self.board, user=self.user, role="member")
+        self.lst = List.objects.create(board=self.board, title="To do")
+        self.client.force_login(self.user)
+
+    def api(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_paste_list_makes_one_item_per_line(self):
+        r = self.api("/api/inbox/add/", {"text": "- Order foils\n• Call Kingsmill\n\n  Book van  "})
+        self.assertEqual(r.json()["added"], 3)
+        self.assertEqual(list(self.I.objects.values_list("text", flat=True)), ["Order foils", "Call Kingsmill", "Book van"])
+
+    def test_inbox_is_private(self):
+        item = self.I.objects.create(owner=self.other, text="Secret")
+        self.assertEqual(self.api(f"/api/inbox/{item.pk}/", {"is_done": True}).status_code, 404)
+        self.assertNotIn("Secret", self.client.get("/api/inbox/").json()["html"])
+
+    def test_inbox_to_card(self):
+        from datetime import date
+        item = self.I.objects.create(owner=self.user, text="Order foils", notes="6 boxes", due_date=date(2026, 11, 2))
+        r = self.api(f"/api/inbox/{item.pk}/to-card/", {"list_id": self.lst.pk})
+        self.assertEqual(r.status_code, 200)
+        card = Card.objects.get(title="Order foils")
+        self.assertEqual(card.description, "6 boxes")
+        self.assertIn(self.user, card.members.all())
+        self.assertFalse(self.I.objects.exists())
+
+    def test_inbox_to_card_needs_edit_rights(self):
+        other_board = Board.objects.create(workspace=self.ws, title="Other")
+        lst = List.objects.create(board=other_board, title="L")
+        item = self.I.objects.create(owner=self.user, text="x")
+        self.assertEqual(self.api(f"/api/inbox/{item.pk}/to-card/", {"list_id": lst.pk}).status_code, 400)
+
+    def test_ai_capture(self):
+        from unittest import mock
+        from datetime import date
+        with self.settings(ANTHROPIC_API_KEY=""):
+            self.assertEqual(self.api("/api/inbox/capture/", {"text": "Hi, please order tins by Friday"}).status_code, 503)
+        reply = '{"items": [{"text": "Order cake tins", "due": "2026-10-23", "notes": "Asked by Sandra"}, {"text": ""}]}'
+        with self.settings(ANTHROPIC_API_KEY="k"), mock.patch("boards.ai._call", return_value=reply):
+            r = self.api("/api/inbox/capture/", {"text": "Hi, please order tins by Friday. Sandra"})
+        self.assertEqual(r.json()["added"], 1)
+        item = self.I.objects.get()
+        self.assertEqual((item.text, item.due_date, item.source), ("Order cake tins", date(2026, 10, 23), "ai"))
+
+    def test_planner_shows_cards_items_and_inbox(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from .models import Checklist, ChecklistItem
+        now = timezone.now()
+        card = Card.objects.create(list=self.lst, title="My card", due_at=now)
+        card.members.add(self.user)
+        Card.objects.create(list=self.lst, title="Undated", ).members.add(self.user)
+        ChecklistItem.objects.create(checklist=Checklist.objects.create(card=card), text="My item",
+                                     assignee=self.user, due_at=now)
+        self.I.objects.create(owner=self.user, text="Inbox thing", due_date=timezone.localdate())
+        r = self.client.get(reverse("planner"))
+        for text in ("My card", "Undated", "My item", "Inbox thing"):
+            self.assertContains(r, text)
+        self.assertEqual(self.client.get(reverse("planner"), {"start": "garbage"}).status_code, 200)

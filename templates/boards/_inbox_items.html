@@ -1,0 +1,28 @@
+<div class="inbox-items" data-inbox-items>
+  {% for i in items %}
+  <div class="inbox-item due-{{ i.due_state|default:'none' }}" data-inbox-id="{{ i.pk }}" draggable="true" title="Drag onto a day or a list">
+    <input type="checkbox" data-inbox-done aria-label="Done">
+    <div class="inbox-main">
+      <span class="inbox-text">{% if i.source == "ai" %}<span class="ai-dot" title="Captured by AI">✨</span>{% endif %}{{ i.text }}</span>
+      {% if i.notes %}<small class="inbox-notes">{{ i.notes|truncatechars:140 }}</small>{% endif %}
+      {% if i.due_date %}<span class="badge sm due-{{ i.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ i.due_date|date:"D j M" }}</span>{% endif %}
+    </div>
+    <details class="inbox-more">
+      <summary class="icon-btn xs" title="More">{% include "boards/_icon.html" with i="dots" %}</summary>
+      <div class="menu-panel right inbox-pop">
+        <label>Date<input type="date" data-inbox-date value="{{ i.due_date|date:'Y-m-d' }}"></label>
+        <button class="menu-item" data-inbox-send>Send to a board…</button>
+        <button class="menu-item danger" data-inbox-delete>Delete</button>
+      </div>
+    </details>
+  </div>
+  {% empty %}
+  <p class="muted small inbox-empty">Nothing in your inbox. Add things to do here, then drag them onto a day or a board.</p>
+  {% endfor %}
+  {% if done %}
+  <details class="inbox-done">
+    <summary>Done ({{ done|length }})</summary>
+    {% for i in done %}<div class="inbox-item done" data-inbox-id="{{ i.pk }}"><input type="checkbox" data-inbox-done checked aria-label="Not done"><span class="inbox-text">{{ i.text }}</span></div>{% endfor %}
+  </details>
+  {% endif %}
+</div>

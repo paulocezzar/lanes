@@ -1,0 +1,16 @@
+{% if e.kind == "card" %}{% with c=e.obj %}
+<a class="plan-chip card due-{{ c.due_state|default:'none' }}{% if c.is_complete %} done{% endif %}" href="{% url 'board' c.list.board_id %}?card={{ c.pk }}"
+   draggable="true" data-plan-kind="card" data-plan-id="{{ c.pk }}" data-time="{% if c.due_at %}{{ c.due_at|date:'H:i' }}{% endif %}">
+  {% with l=c.labels.all|first %}{% if l %}<i class="chip-bar lc-{{ l.colour }}"></i>{% endif %}{% endwith %}
+  <span class="plan-text">{% if c.is_complete %}✓ {% endif %}{{ c.title }}<small>{{ c.list.board.title }} · {{ c.list.title }}</small></span>
+</a>
+{% endwith %}{% elif e.kind == "item" %}{% with it=e.obj %}
+<a class="plan-chip item due-{{ it.due_state|default:'none' }}" href="{% url 'board' it.checklist.card.list.board_id %}?card={{ it.checklist.card_id }}"
+   draggable="true" data-plan-kind="item" data-plan-id="{{ it.pk }}" data-time="{% if it.due_at %}{{ it.due_at|date:'H:i' }}{% endif %}">
+  <span class="plan-text">☐ {{ it.text }}<small>{{ it.checklist.card.title }}</small></span>
+</a>
+{% endwith %}{% else %}{% with i=e.obj %}
+<div class="plan-chip inbox due-{{ i.due_state|default:'none' }}" draggable="true" data-plan-kind="inbox" data-plan-id="{{ i.pk }}">
+  <span class="plan-text">{{ i.text }}<small>Inbox</small></span>
+</div>
+{% endwith %}{% endif %}

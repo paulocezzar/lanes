@@ -1,0 +1,9 @@
+<div class="inbox-panel" data-inbox-panel data-ai="{{ ai_enabled|yesno:'1,0' }}">
+  <form class="inbox-add" data-inbox-add>
+    <textarea name="text" rows="2" placeholder="Add a to-do… (paste a list and each line becomes an item)" maxlength="12000"></textarea>
+    <div class="row"><button class="btn primary sm">Add</button>
+      {% if ai_enabled %}<button type="button" class="btn sm ai-btn" data-inbox-ai title="Paste an email or message and let AI pull out the to-dos">✨ Capture from message</button>{% endif %}
+    </div>
+  </form>
+  <div data-inbox-list>{{ inbox_html }}</div>
+</div>

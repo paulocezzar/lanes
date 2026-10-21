@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Planner · Lanes{% endblock %}
+{% block body_class %}planner-page{% endblock %}
+{% block content %}
+<main class="planner" id="planner">
+  <aside class="planner-side">
+    <h2 class="side-h">Inbox <small class="muted">only you can see this</small></h2>
+    {% include "boards/_inbox_panel.html" %}
+    {% if unscheduled %}
+    <h3 class="side-h sm">No due date <span class="count">{{ unscheduled|length }}</span></h3>
+    <div class="plan-tray" data-plan-day="">{% for e in unscheduled %}{% include "boards/_plan_entry.html" %}{% endfor %}</div>
+    {% endif %}
+    {% if overdue %}
+    <h3 class="side-h sm bad">Overdue <span class="count">{{ overdue|length }}</span></h3>
+    <div class="plan-tray">{% for e in overdue %}{% include "boards/_plan_entry.html" %}{% endfor %}</div>
+    {% endif %}
+  </aside>
+  <section class="planner-main">
+    <div class="view-toolbar">
+      <a class="btn sm" href="?start={{ prev }}" aria-label="Previous week">‹</a>
+      <a class="btn sm" href="?">This week</a>
+      <a class="btn sm" href="?start={{ next }}" aria-label="Next week">›</a>
+      <h2 class="planner-h">{{ start|date:"j M" }} – {{ end|date:"j M Y" }}</h2>
+      <span class="muted small">Drag anything onto a day to set its date. Your cards, checklist items and inbox in one place.</span>
+    </div>
+    <div class="week">
+      {% for d in days %}
+      <div class="day{% if d.today %} today{% endif %}{% if d.past %} past{% endif %}" data-plan-day="{{ d.date|date:'Y-m-d' }}">
+        <div class="day-head"><b>{{ d.date|date:"D" }}</b> <span>{{ d.date|date:"j M" }}</span></div>
+        <div class="day-body">{% for e in d.entries %}{% include "boards/_plan_entry.html" %}{% empty %}<p class="day-empty">Nothing planned</p>{% endfor %}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</main>
+
+<dialog id="send-dialog" class="dialog">
+  <form data-send-form>
+    <h3>Send to a board</h3>
+    <p class="muted small" data-send-what></p>
+    <label>List
+      <select name="list_id" required>
+        {% for board, lists in list_groups %}<optgroup label="{{ board.title }} · {{ board.workspace.name }}">{% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</optgroup>{% endfor %}
+      </select>
+    </label>
+    <div class="dialog-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary">Create card</button></div>
+  </form>
+</dialog>
+
+<dialog id="ai-dialog" class="dialog wide">
+  <form data-ai-form>
+    <h3>✨ Capture to-dos from a message</h3>
+    <p class="muted small">Paste an email, Teams message or meeting notes. AI picks out the things you need to do, with dates, and adds them to your inbox. The text is sent to Anthropic's AI service to do this.</p>
+    <textarea name="text" rows="10" required maxlength="8000" placeholder="Paste here…"></textarea>
+    <div class="dialog-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary">Capture</button></div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="{% static 'lanes/inbox.js' %}"></script><script src="{% static 'lanes/planner.js' %}"></script>{% endblock %}

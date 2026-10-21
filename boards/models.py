@@ -454,3 +454,31 @@ class Notification(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["recipient", "read_at", "-created_at"])]
+
+
+class InboxItem(models.Model):
+    """A private to-do for one person, until it's scheduled or turned into a card."""
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="inbox_items")
+    text = models.CharField(max_length=250)
+    notes = models.TextField(blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    is_done = models.BooleanField(default=False)
+    position = models.FloatField(default=1000)
+    source = models.CharField(max_length=20, blank=True)   # "typed", "list", "ai"
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["is_done", "position", "id"]
+
+    def __str__(self):
+        return self.text
+
+    @property
+    def due_state(self):
+        if not self.due_date or self.is_done:
+            return ""
+        today = timezone.localdate()
+        if self.due_date < today:
+            return "overdue"
+        return "soon" if self.due_date == today else ""
