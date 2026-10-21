@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Add people · Company · Lanes{% endblock %}
+{% block content %}
+<main class="home company">
+  {% include "boards/_company_tabs.html" %}
+  <a class="back-link" href="{% url 'company_people' %}">← People</a>
+
+  {% if done %}
+  <section class="dash-card stack">
+    <h3>Done ✓</h3>
+    <p><b>{{ created|length }}</b> new account{{ created|length|pluralize }} created and <b>{{ added }}</b> department membership{{ added|pluralize }} added.{% if new_depts %} New departments: {{ new_depts|join:", " }}.{% endif %}</p>
+    {% if created %}
+    <div class="warn-note">Download the sign-in details now — the temporary passwords are only available once. Everyone can change their password from their profile menu after signing in.</div>
+    <div class="row"><a class="btn primary" href="?download=1">⬇ Download new accounts and passwords (CSV)</a></div>
+    {% endif %}
+  </section>
+
+  {% elif items %}
+  <section class="dash-card stack">
+    <h3>Check before adding — {{ filename }}</h3>
+    <div class="import-summary">
+      {% if n_new %}<span class="ok-pill">{{ n_new }} new account{{ n_new|pluralize }}</span>{% endif %}
+      {% if n_add %}<span class="ok-pill">{{ n_add }} existing account{{ n_add|pluralize }} added to a department</span>{% endif %}
+      {% if n_already %}<span class="muted small">{{ n_already }} already there — skipped</span>{% endif %}
+      {% if n_problem %}<span class="guest-pill">{{ n_problem }} row{{ n_problem|pluralize }} with problems — skipped</span>{% endif %}
+    </div>
+    {% if new_depts %}<p class="muted small">These departments will be created: {{ new_depts|join:", " }}.</p>{% endif %}
+    <div class="table-scroll import-table">
+      <table class="company-table">
+        <thead><tr><th>Row</th><th>Name</th><th>Email</th><th>Department</th><th>Role</th><th>What happens</th></tr></thead>
+        <tbody>
+        {% for i in items %}
+        <tr class="{% if i.problem %}bad-row{% elif i.action == 'already' %}muted{% endif %}">
+          <td>{{ i.line }}</td><td>{{ i.first }} {{ i.last }}</td><td>{{ i.email }}</td><td>{{ i.dept }}</td>
+          <td>{{ i.role|capfirst }}</td>
+          <td>{% if i.problem %}⚠️ {{ i.problem }}{% elif i.action == 'new' %}New account{% elif i.action == 'add' %}Added to {{ i.dept }}{% else %}Already in {{ i.dept }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if n_new or n_add %}
+    <form method="post" class="row">{% csrf_token %}<input type="hidden" name="step" value="confirm">
+      <button class="btn primary">Add {{ n_new|add:n_add }} {% if n_new|add:n_add == 1 %}person{% else %}people{% endif %}</button>
+      <a class="btn ghost" href="{% url 'people_import' %}">Start again</a>
+    </form>
+    {% else %}<p>Nothing to add. Fix the problems in the spreadsheet and upload it again.</p><a class="btn" href="{% url 'people_import' %}">Upload again</a>{% endif %}
+  </section>
+
+  {% else %}
+  <section class="dash-card stack">
+    <h3>Add people from a spreadsheet</h3>
+    <p>Upload an Excel (.xlsx) or CSV file with a heading row. Columns can be in any order:</p>
+    <ul class="muted">
+      <li><b>First name</b>, <b>Last name</b> (or one <b>Name</b> column)</li>
+      <li><b>Email</b> — required; it's what they sign in with</li>
+      <li><b>Department</b> — required, e.g. Bakery</li>
+      <li><b>Role</b> — Member or Admin (optional; Member if blank)</li>
+    </ul>
+    <p class="muted small">People who already have an account are just added to the department. You'll see exactly what will happen before anything changes. <a href="?template=1">Download a template</a>.</p>
+    {% if error %}<p class="form-error">{{ error }}</p>{% endif %}
+    <form method="post" enctype="multipart/form-data" class="stack">{% csrf_token %}
+      <input type="file" name="file" accept=".csv,.xlsx,.xlsm,.txt" required>
+      <label class="check-inline dark"><input type="checkbox" name="create_departments"> Create departments that don't exist yet</label>
+      <div><button class="btn primary">Check the file</button></div>
+    </form>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

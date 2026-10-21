@@ -1569,3 +1569,57 @@ class AIFeatureTests(TestCase):
         # without a key the buttons don't show and the API says so
         self.assertNotContains(self.c.get(f"/cards/{self.card.pk}/"), "data-summarise")
         self.assertEqual(self.j(f"/api/cards/{self.card.pk}/summarise/").status_code, 503)
+
+
+class PeopleImportTests(TestCase):
+    def setUp(self):
+        self.boss = User.objects.create_superuser("boss3@x.com", "pw", first_name="Bo")
+        self.ws = Workspace.objects.create(name="Bakery")
+        self.existing = User.objects.create_user("old@x.com", "pw", first_name="Old")
+        self.c = Client(); self.c.force_login(self.boss)
+
+    def upload(self, content, name="people.csv", **extra):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return self.c.post("/company/people/import/", {"file": SimpleUploadedFile(name, content), **extra})
+
+    def test_csv_preview_then_confirm(self):
+        csv_bytes = ("First name,Last name,Email,Department,Role\n"
+                     "Ann,Lee,ann@x.com,Bakery,Admin\n"
+                     "Old,One,OLD@x.com,Bakery,\n"
+                     ",,bad-email,Bakery,\n"
+                     "Kit,Chen,kit@x.com,Kitchen,\n").encode()
+        r = self.upload(csv_bytes)
+        self.assertContains(r, "1 new account")
+        self.assertContains(r, "No department called")          # Kitchen missing, box not ticked
+        self.assertContains(r, "Email missing or not valid")
+        self.assertFalse(User.objects.filter(email="ann@x.com").exists())   # nothing changed yet
+        r = self.c.post("/company/people/import/", {"step": "confirm"})
+        self.assertContains(r, "1</b> new account")
+        ann = User.objects.get(email="ann@x.com")
+        self.assertEqual(WorkspaceMember.objects.get(user=ann, workspace=self.ws).role, "admin")
+        self.assertTrue(WorkspaceMember.objects.filter(user=self.existing, workspace=self.ws).exists())
+        dl = self.c.get("/company/people/import/?download=1")
+        self.assertIn("ann@x.com", dl.content.decode())
+        pw = dl.content.decode().splitlines()[1].split(",")[3]
+        self.assertTrue(Client().login(username="ann@x.com", password=pw))
+        self.assertEqual(self.c.get("/company/people/import/?download=1").status_code, 302)   # only once
+
+    def test_excel_with_name_column_and_new_departments(self):
+        import io
+        from openpyxl import Workbook
+        wb = Workbook(); ws = wb.active
+        ws.append(["Name", "E-mail", "Dept"]); ws.append(["Pat Green", "pat@x.com", "Kitchen"])
+        buf = io.BytesIO(); wb.save(buf)
+        r = self.upload(buf.getvalue(), name="staff.xlsx", create_departments="on")
+        self.assertContains(r, "will be created: Kitchen")
+        self.c.post("/company/people/import/", {"step": "confirm"})
+        pat = User.objects.get(email="pat@x.com")
+        self.assertEqual((pat.first_name, pat.last_name), ("Pat", "Green"))
+        self.assertTrue(Workspace.objects.filter(name="Kitchen").exists())
+
+    def test_bad_files_and_non_admin(self):
+        self.assertContains(self.upload(b"Name,Phone\nA,1\n"), "Couldn&#x27;t find an Email column")
+        self.assertContains(self.upload(b"x", name="a.pdf"), "Upload a CSV")
+        self.assertEqual(self.c.get("/company/people/import/?template=1").status_code, 200)
+        staff = Client(); staff.force_login(self.existing)
+        self.assertEqual(staff.get("/company/people/import/").status_code, 404)

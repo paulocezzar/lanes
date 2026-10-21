@@ -715,6 +715,7 @@ class AuditEvent(models.Model):
         "board_archived": "archived the board {board}",
         "board_restored": "restored the board {board}",
         "account_off": "switched off the account of {name}",
+        "people_imported": "added {count} department memberships from a spreadsheet ({new} new accounts)",
         "account_on": "switched the account of {name} back on",
         "two_step_on": "turned on two-step sign-in",
         "two_step_off": "turned off two-step sign-in",

@@ -3,7 +3,8 @@
 {% block content %}
 <main class="home company">
   {% include "boards/_company_tabs.html" %}
-  <p class="muted">{{ active_count }} active account{{ active_count|pluralize }} · {{ with_2fa }} with two-step sign-in on.</p>
+  <div class="row people-head"><p class="muted">{{ active_count }} active account{{ active_count|pluralize }} · {{ with_2fa }} with two-step sign-in on.</p>
+    <a class="btn primary sm" href="{% url 'people_import' %}">⬆ Add people from a spreadsheet</a></div>
   <form class="row audit-filters" method="get">
     <select name="show" onchange="this.form.submit()" aria-label="Show">
       <option value="active" {% if show == 'active' %}selected{% endif %}>Active accounts</option>

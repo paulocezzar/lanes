@@ -11,6 +11,7 @@ urlpatterns = [
     path("company/", views_company.usage, name="company_usage"),
     path("company/audit/", views_company.audit_log, name="company_audit"),
     path("company/people/", views_company.people, name="company_people"),
+    path("company/people/import/", views_company.people_import, name="people_import"),
     path("company/settings/", views_company.settings_page, name="company_settings"),
     path("search/", views_search.search_page, name="search"),
     path("search/save/", views_search.search_save, name="search_save"),

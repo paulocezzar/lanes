@@ -962,3 +962,11 @@ a.hbar-label:hover { text-decoration: underline; }
 .prio-list a:hover { background: var(--surface-2); }
 .prio-list .badge { display: inline-flex; margin-left: 6px; }
 .prio-why { font-size: 13px; color: var(--text-2); }
+.people-head { justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.people-head p { margin: 0; }
+.import-summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.import-table { max-height: 60vh; }
+.company-table tr.bad-row td { background: rgb(248 113 104 / .08); }
+.company-table tr.muted td { color: var(--text-2); }
+.company > section, .company > form { width: 100%; box-sizing: border-box; }
+.company .stack { max-width: none; }

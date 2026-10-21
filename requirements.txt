@@ -5,3 +5,4 @@ gunicorn>=23.0
 psycopg[binary]>=3.2
 django-storages[s3]>=1.14
 segno>=1.6
+openpyxl>=3.1

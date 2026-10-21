@@ -87,7 +87,7 @@ def audit_log(request):
     kind = request.GET.get("kind", "")
     groups = {
         "signin": ["login", "login_failed"],
-        "security": ["two_step_on", "two_step_off", "two_step_failed", "two_step_reset", "account_off", "account_on",
+        "security": ["people_imported", "two_step_on", "two_step_off", "two_step_failed", "two_step_reset", "account_off", "account_on",
                      "settings_changed"],
         "people": ["dept_created", "dept_member_added", "dept_account_created", "dept_member_removed",
                    "dept_member_left", "dept_role_changed", "password_reset"],
@@ -202,3 +202,64 @@ def settings_page(request):
         "tab": "settings", "cs": cs,
         "fields": [{"name": n, "label": l, "choices": c, "help": h, "value": getattr(cs, n)} for n, l, c, h in fields],
     })
+
+
+TEMPLATE_CSV = "First name,Last name,Email,Department,Role\nJo,Baker,jo.baker@example.com,Bakery,Member\n" \
+               "Sam,Smith,sam.smith@example.com,Bakery,Admin\n"
+
+
+@login_required
+def people_import(request):
+    """Company → People → Add from a spreadsheet: upload, check, confirm."""
+    _admin_only(request)
+    from django.contrib import messages
+    from django.shortcuts import redirect
+    from . import audit, people_import as pi
+    if request.GET.get("template"):
+        resp = HttpResponse(TEMPLATE_CSV, content_type="text/csv")
+        resp["Content-Disposition"] = 'attachment; filename="lanes-people-template.csv"'
+        return resp
+    if request.GET.get("download"):
+        rows = request.session.pop("import_credentials", None)
+        if not rows:
+            messages.error(request, "Those passwords have already been downloaded or have expired.")
+            return redirect("company_people")
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"] = 'attachment; filename="lanes-new-accounts.csv"'
+        w = csv.writer(resp)
+        w.writerow(["Name", "Email", "Department", "Temporary password", "Sign in at"])
+        site = request.build_absolute_uri("/login/")
+        for r in rows:
+            w.writerow([r["name"], r["email"], r["dept"], r["password"], site])
+        return resp
+    ctx = {"tab": "people"}
+    if request.method == "POST" and request.POST.get("step") == "confirm":
+        items = request.session.pop("import_plan", None)
+        if not items:
+            messages.error(request, "The upload expired. Upload the file again.")
+            return redirect("people_import")
+        created, added, new_depts = pi.apply(items, request.user)
+        audit.record(request, "people_imported", count=added, new=len(created))
+        request.session["import_credentials"] = created
+        ctx.update({"done": True, "created": created, "added": added, "new_depts": new_depts})
+        return render(request, "boards/company_import.html", ctx)
+    if request.method == "POST" and request.FILES.get("file"):
+        f = request.FILES["file"]
+        if f.size > 5 * 1024 * 1024:
+            ctx["error"] = "That file is over 5 MB — is it the right one?"
+        else:
+            try:
+                items = pi.plan(pi.read_rows(f), bool(request.POST.get("create_departments")))
+            except ValueError as e:
+                ctx["error"] = str(e)
+            else:
+                request.session["import_plan"] = items
+                ctx.update({
+                    "items": items, "filename": f.name,
+                    "n_new": sum(i["action"] == "new" for i in items),
+                    "n_add": sum(i["action"] == "add" for i in items),
+                    "n_already": sum(i["action"] == "already" for i in items),
+                    "n_problem": sum(bool(i["problem"]) for i in items),
+                    "new_depts": sorted({i["dept"] for i in items if i.get("new_dept") and i["action"] in ("new", "add")}),
+                })
+    return render(request, "boards/company_import.html", ctx)
