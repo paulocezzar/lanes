@@ -1,0 +1,18 @@
+{% for r in items %}
+<div class="auto-row{% if not r.rule.is_enabled %} off{% endif %}">
+  <span class="auto-bolt">⚡</span>
+  <div class="auto-desc">
+    <b>{{ r.when }}</b>
+    <ul>{% for t in r.then %}<li>{{ t }}</li>{% endfor %}</ul>
+    <small class="muted">Ran {{ r.rule.run_count }} time{{ r.rule.run_count|pluralize }}{% if r.rule.last_run_at %}, last {{ r.rule.last_run_at|timesince }} ago{% endif %}{% if r.rule.created_by %} · made by {{ r.rule.created_by.display_name }}{% endif %}</small>
+  </div>
+  {% if can_edit %}
+  <form method="post" action="{% url 'rule_update' board.pk r.rule.pk %}">{% csrf_token %}<input type="hidden" name="section" value="{{ section }}">
+    <button class="btn sm {% if r.rule.is_enabled %}ghost{% else %}primary{% endif %}">{% if r.rule.is_enabled %}Pause{% else %}Turn on{% endif %}</button>
+  </form>
+  <form method="post" action="{% url 'rule_update' board.pk r.rule.pk %}" data-confirm="Delete this rule?" data-confirm-ok="Delete" data-danger>{% csrf_token %}<input type="hidden" name="section" value="{{ section }}">
+    <input type="hidden" name="action" value="delete"><button class="icon-btn xs" title="Delete">{% include "boards/_icon.html" with i="close" %}</button>
+  </form>
+  {% endif %}
+</div>
+{% endfor %}

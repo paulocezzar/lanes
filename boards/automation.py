@@ -27,8 +27,19 @@ WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", 
 
 # ---------- rules ----------
 
-def fire(card, trigger, *, list_=None, label=None):
-    """Run every enabled rule on the card's board that matches this event."""
+def _by_whom_ok(rule, actor):
+    """'by me' = the person who made the rule; 'by anyone except me' = everyone else."""
+    if rule.by_whom == "me":
+        return actor is not None and actor.pk == rule.created_by_id
+    if rule.by_whom == "others":
+        return actor is not None and actor.pk != rule.created_by_id
+    return True
+
+
+def fire(card, trigger, *, list_=None, label=None, actor=None, member=None):
+    """Run every enabled rule on the card's board that matches this event.
+    `actor` is whoever did it (None for the system); `member` is who was
+    added, for the member_added trigger."""
     board = card.list.board
     rules = Rule.objects.filter(board=board, trigger=trigger, is_enabled=True)
     if trigger in (Rule.ADDED, Rule.MOVED):
@@ -38,6 +49,10 @@ def fire(card, trigger, *, list_=None, label=None):
     for rule in rules:
         if card.is_archived:
             break
+        if not _by_whom_ok(rule, actor):
+            continue
+        if trigger == Rule.MEMBER_ADDED and rule.trigger_me and (member is None or member.pk != rule.created_by_id):
+            continue
         try:
             with transaction.atomic():
                 done = [d for d in (run_action(card, a) for a in rule.actions) if d]
@@ -121,6 +136,24 @@ def run_action(card, action):
         card.due_at = local.replace(hour=17, minute=0, second=0, microsecond=0)
         card.save(update_fields=["due_at", "updated_at"])
         return f"set due date to {timezone.localtime(card.due_at).strftime('%-d %b')}"
+    elif t == "set_due_workdays":
+        try:
+            days = max(0, min(int(action.get("days", 0)), 260))
+        except (TypeError, ValueError):
+            days = 0
+        card.due_at = add_working_days(timezone.localtime(), days).replace(hour=17, minute=0, second=0, microsecond=0)
+        card.save(update_fields=["due_at", "updated_at"])
+        return f"set due date to {timezone.localtime(card.due_at).strftime('%a %-d %b')}"
+    elif t == "add_checklist":
+        title = (action.get("title") or "Checklist").strip()[:120] or "Checklist"
+        lines = [ln.strip()[:250] for ln in (action.get("text") or "").splitlines() if ln.strip()][:50]
+        if not card.checklists.filter(title=title).exists():
+            last = card.checklists.order_by("-position").first()
+            cl = Checklist.objects.create(card=card, title=title,
+                                          position=(last.position if last else 0) + positions.GAP)
+            for i, line in enumerate(lines, start=1):
+                ChecklistItem.objects.create(checklist=cl, text=line, position=i * positions.GAP)
+            return f"added checklist “{title}”"
     elif t == "clear_due":
         if card.due_at:
             card.due_at = None
@@ -150,6 +183,19 @@ def run_action(card, action):
     return ""
 
 
+def add_working_days(start, days):
+    """`days` working days (Mon–Fri) after `start`. 0 = today, or Monday if it's the weekend."""
+    d = start
+    while d.weekday() >= 5:
+        d += timedelta(days=1)
+    left = days
+    while left > 0:
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            left -= 1
+    return d
+
+
 def checklists_all_done(card):
     items = ChecklistItem.objects.filter(checklist__card=card)
     return items.exists() and not items.filter(is_done=False).exists()
@@ -163,6 +209,12 @@ def describe_rule(rule):
         when = when.replace("list…", f"list “{rule.trigger_list.title if rule.trigger_list else '?'}”")
     if rule.trigger == Rule.LABEL_ADDED:
         when = when.replace("label …", f"label “{rule.trigger_label or '?'}”")
+    if rule.trigger == Rule.MEMBER_ADDED and rule.trigger_me:
+        name = rule.created_by.display_name if rule.created_by else "the rule's creator"
+        when = f"{name} is added to a card"
+    if rule.trigger not in Rule.TIME_TRIGGERS and rule.by_whom != "anyone":
+        name = rule.created_by.display_name if rule.created_by else "?"
+        when += f" by {name}" if rule.by_whom == "me" else f" by anyone except {name}"
     return f"When {when}", [describe_action(rule.board, a) for a in rule.actions]
 
 
@@ -180,6 +232,11 @@ def describe_action(board, a):
         return f"add {m.user.display_name if m else '(removed member)'}"
     if t == "set_due":
         return f"set due date to {a.get('days', 0)} day(s) from now, 17:00"
+    if t == "set_due_workdays":
+        return f"set due date to {a.get('days', 0)} working day(s) from now, 17:00"
+    if t == "add_checklist":
+        n = len([ln for ln in (a.get("text") or "").splitlines() if ln.strip()])
+        return f"add checklist “{a.get('title') or 'Checklist'}”" + (f" ({n} items)" if n else "")
     if t == "comment":
         return f"post comment “{a.get('text', '')}”"
     if t == "add_sticker":
@@ -228,21 +285,37 @@ def describe_schedule(s):
     return f"{when} at {s.hour:02d}:00"
 
 
+def describe_schedule_job(s):
+    """What a schedule does, e.g. 'create “Weekly report” in To do'."""
+    if s.kind == Schedule.ACTIONS:
+        return "; ".join(describe_board_actions(s.board, s.actions)) or "nothing"
+    return f"create “{s.title}” in {s.target_list.title if s.target_list else '(deleted list)'}"
+
+
 def run_due_schedules(now=None):
     """Create cards for every schedule that is due. Returns how many cards were made."""
     now = now or timezone.now()
     made = 0
-    for s in Schedule.objects.filter(is_enabled=True, next_run_at__lte=now).select_related("target_list__board"):
+    for s in Schedule.objects.filter(is_enabled=True, next_run_at__lte=now).select_related("board", "target_list"):
         new_next = next_run(s, now)
         # Claim it: only one caller can move next_run_at on from this exact value.
         if not Schedule.objects.filter(pk=s.pk, next_run_at=s.next_run_at).update(
                 next_run_at=new_next, last_run_at=now, run_count=s.run_count + 1):
             continue
-        lst = s.target_list
-        if lst.is_archived or lst.board.is_archived:
+        if s.board.is_archived:
             continue
         try:
             with transaction.atomic():
+                if s.kind == Schedule.ACTIONS:
+                    done = run_board_actions(s.board, s.actions, None)
+                    if done:
+                        Activity.objects.create(board=s.board, actor=None, verb="automation",
+                                                data={"summary": f"{describe_schedule(s)}: " + "; ".join(done)})
+                    made += 1
+                    continue
+                lst = s.target_list
+                if not lst or lst.is_archived:
+                    continue
                 create_from_schedule(s, lst)
                 made += 1
         except Exception:
@@ -341,13 +414,14 @@ def press_card_button(button, card, user):
     before_list, before_done = card.list_id, card.is_complete
     before_labels = set(card.labels.values_list("pk", flat=True))
     before_checks = checklists_all_done(card)
-    done = []
+    done, added_me = [], False
     for a in button.actions:
         if a.get("type") == "add_me":
             if BoardMember.objects.filter(board=card.list.board, user=user).exists() \
                     and not card.members.filter(pk=user.pk).exists():
                 card.members.add(user)
                 done.append(f"added {user.display_name}")
+                added_me = True
             continue
         d = run_action(card, a)
         if d:
@@ -357,20 +431,28 @@ def press_card_button(button, card, user):
     if card.is_archived:
         return done
     if card.list_id != before_list:
-        fire(card, Rule.MOVED, list_=card.list)
+        fire(card, Rule.MOVED, list_=card.list, actor=user)
     if card.is_complete and not before_done:
-        fire(card, Rule.COMPLETED)
+        fire(card, Rule.COMPLETED, actor=user)
     for label in card.labels.exclude(pk__in=before_labels):
-        fire(card, Rule.LABEL_ADDED, label=label)
+        fire(card, Rule.LABEL_ADDED, label=label, actor=user)
     if not before_checks and checklists_all_done(card):
-        fire(card, Rule.CHECKLIST_DONE)
+        fire(card, Rule.CHECKLIST_DONE, actor=user)
+    if added_me:
+        fire(card, Rule.MEMBER_ADDED, actor=user, member=user)
     return done
 
 
 def press_board_button(button, user):
-    board = button.board
+    done = run_board_actions(button.board, button.actions, user)
+    _after_press(button, user, done)
+    return done
+
+
+def run_board_actions(board, actions, user):
+    """Board-wide actions (shared by board buttons and scheduled jobs)."""
     done = []
-    for a in button.actions:
+    for a in actions:
         t = a.get("type")
         if t == "create_card":
             lst = List.objects.filter(pk=a.get("list"), board=board, is_archived=False).first()
@@ -408,7 +490,6 @@ def press_board_button(button, user):
                     done.append(f"sorted {lst.title} by due date")
     from .signals import bump
     bump(board.pk)
-    _after_press(button, user, done)
     return done
 
 
@@ -422,11 +503,16 @@ def _after_press(button, user, done, card=None):
 
 
 def describe_button_actions(button):
-    names = dict(Rule.ACTIONS) | dict(type(button).BOARD_ACTIONS) | {"add_me": "add the person who pressed it"}
+    return describe_board_actions(button.board, button.actions)
+
+
+def describe_board_actions(board, actions):
+    from .models import Button
+    names = dict(Rule.ACTIONS) | dict(Button.BOARD_ACTIONS) | {"add_me": "add the person who pressed it"}
     out = []
-    lists = {l.pk: l.title for l in button.board.lists.all()}
-    labels = {l.pk: str(l) for l in button.board.labels.all()}
-    for a in button.actions:
+    lists = {l.pk: l.title for l in board.lists.all()}
+    labels = {l.pk: str(l) for l in board.labels.all()}
+    for a in actions:
         t = a.get("type")
         text = names.get(t, t)
         if t == "move" or t == "sort_due":
@@ -437,8 +523,10 @@ def describe_button_actions(button):
             text = f"create “{a.get('text')}” in {lists.get(a.get('list'), '?')}"
         if t in ("add_label", "remove_label"):
             text = text.replace("label…", f"label {labels.get(a.get('label'), '?')}")
-        if t == "set_due":
+        if t in ("set_due", "set_due_workdays"):
             text = text.replace("…", str(a.get("days", 0)))
+        if t == "add_checklist":
+            text = f"add checklist “{a.get('title') or 'Checklist'}”"
         if t == "comment":
             text = f"post comment “{a.get('text', '')[:40]}”"
         if t == "add_sticker":

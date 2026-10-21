@@ -308,14 +308,14 @@
   });
 
   function openAddCard(listEl) {
-    $('[data-add-card]', listEl).hidden = true;
+    $('.foot-row', listEl).hidden = true;
     const form = $('[data-add-card-form]', listEl);
     form.hidden = false;
     $('textarea', form).focus();
   }
   function closeAddCard(listEl) {
     $('[data-add-card-form]', listEl).hidden = true;
-    $('[data-add-card]', listEl).hidden = false;
+    $('.foot-row', listEl).hidden = false;
   }
 
   // ---------- card dialog ----------

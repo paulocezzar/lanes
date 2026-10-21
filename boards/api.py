@@ -140,7 +140,7 @@ def card_create(request, list_id):
             card.due_at = due
             card.save(update_fields=["due_at"])
             log(lst.board, request.user, "due_set", card=card, due=timezone.localtime(due).strftime("%-d %b %Y, %H:%M"))
-    automation.fire(card, Rule.ADDED, list_=lst)
+    automation.fire(card, Rule.ADDED, list_=lst, actor=request.user)
     return card_response(card.pk, request)
 
 
@@ -159,7 +159,7 @@ def card_move(request, card_id):
             raise ApiError("You can't add cards to that board.", 403)
         from .copying import transfer_card
         transfer_card(card, new_list, user=request.user)
-        automation.fire(card, Rule.ADDED, list_=new_list)
+        automation.fire(card, Rule.ADDED, list_=new_list, actor=request.user)
         data = card_response(card.pk, request)
         data["moved_board"] = new_list.board_id
         return data
@@ -169,7 +169,7 @@ def card_move(request, card_id):
     card.save(update_fields=["list", "position", "updated_at"])
     if new_list.pk != old_list.pk:
         log(card.list.board, request.user, "card_moved", card=card, **{"from": old_list.title, "to": new_list.title})
-        automation.fire(card, Rule.MOVED, list_=new_list)
+        automation.fire(card, Rule.MOVED, list_=new_list, actor=request.user)
     return card_response(card.pk, request)
 
 
@@ -221,7 +221,7 @@ def card_update(request, card_id):
     just_completed = "is_complete" in d and card.is_complete and not Card.objects.get(pk=card.pk).is_complete
     card.save()
     if just_completed:
-        automation.fire(card, Rule.COMPLETED)
+        automation.fire(card, Rule.COMPLETED, actor=request.user)
     return card_response(card.pk, request)
 
 
@@ -233,7 +233,7 @@ def card_toggle_label(request, card_id):
         card.labels.remove(label)
     else:
         card.labels.add(label)
-        automation.fire(card, Rule.LABEL_ADDED, label=label)
+        automation.fire(card, Rule.LABEL_ADDED, label=label, actor=request.user)
     return card_response(card.pk, request)
 
 
@@ -277,6 +277,7 @@ def card_toggle_member(request, card_id):
         log(board, request.user, "member_joined" if me else "member_added", card=card, name=person.display_name)
         notify.send(person, Notification.ASSIGNED, actor=request.user, card=card,
                     text=f"assigned you to {card.title}")
+        automation.fire(card, Rule.MEMBER_ADDED, actor=request.user, member=person)
     return card_response(card.pk, request)
 
 
@@ -372,7 +373,7 @@ def item_update(request, item_id):
         log(card.list.board, request.user, "item_done" if item.is_done else "item_undone", card=card, text=item.text)
     item.save()
     if request.data.get("is_done") and automation.checklists_all_done(card):
-        automation.fire(card, Rule.CHECKLIST_DONE)
+        automation.fire(card, Rule.CHECKLIST_DONE, actor=request.user)
     return card_response(card.pk, request)
 
 
@@ -636,7 +637,7 @@ def card_from_template(request, list_id):
     tpl = get_object_or_404(Card, pk=request.data.get("template_id"), list__board=lst.board, is_template=True)
     from .copying import copy_card
     new = copy_card(tpl, lst, user=request.user, keep_members=True, keep_dates=False)
-    automation.fire(new, Rule.ADDED, list_=lst)
+    automation.fire(new, Rule.ADDED, list_=lst, actor=request.user)
     return card_response(new.pk, request)
 
 
@@ -975,7 +976,7 @@ def list_move_cards(request, list_id):
         c.position = positions.end_position(target.cards.filter(is_archived=False))
         c.save(update_fields=["list", "position", "updated_at"])
         log(lst.board, request.user, "card_moved", card=c, **{"from": lst.title, "to": target.title})
-        automation.fire(c, Rule.MOVED, list_=target)
+        automation.fire(c, Rule.MOVED, list_=target, actor=request.user)
         n += 1
     return {"ok": True, "moved": n}
 

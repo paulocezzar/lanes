@@ -1126,7 +1126,7 @@ class ButtonTests(TestCase):
         self.assertTrue(self.card.is_complete)
         self.assertTrue(self.card.members.filter(pk=self.u.pk).exists())
         self.assertTrue(Activity.objects.filter(verb="button", card=self.card).exists())
-        self.assertContains(self.c.get(f"/b/{self.board.pk}/automation/"), "Pressed 1 time")
+        self.assertContains(self.c.get(f"/b/{self.board.pk}/automation/?s=card-buttons"), "Pressed 1 time")
 
     def test_board_button(self):
         from .models import Button
@@ -1502,7 +1502,7 @@ class DueRuleTests(TestCase):
         self.assertEqual(r.status_code, 302)
         rule = Rule.objects.get()
         self.assertEqual(rule.trigger_hours, 24)
-        self.assertContains(self.c.get(f"/b/{self.board.pk}/automation/"), "due within 1 day")
+        self.assertContains(self.c.get(f"/b/{self.board.pk}/automation/?s=due"), "due within 1 day")
         now = timezone.now()
         soon = Card.objects.create(list=self.lst, title="Flour", due_at=now + timedelta(hours=5))
         soon.members.add(self.mate)
@@ -1874,3 +1874,106 @@ class TrelloTouchesTests(TestCase):
         r = mc.get(f"/b/{self.b1.pk}/")
         self.assertContains(r, 'data-pane="export"')
         self.assertNotContains(r, 'data-pane="settings"')
+
+
+class AutomationV2Tests(TestCase):
+    """By-whom qualifiers, member-added trigger, checklist / working-day actions,
+    scheduled board actions and the sectioned page."""
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery V2")
+        self.me = User.objects.create_user("me2@x.com", "pw", first_name="Me")
+        self.other = User.objects.create_user("other2@x.com", "pw", first_name="Other")
+        for u in (self.me, self.other):
+            WorkspaceMember.objects.create(workspace=self.ws, user=u)
+        self.board = Board.objects.create(workspace=self.ws, title="Orders")
+        for u in (self.me, self.other):
+            BoardMember.objects.create(board=self.board, user=u, role="admin")
+        self.todo = List.objects.create(board=self.board, title="To do", position=1)
+        self.done = List.objects.create(board=self.board, title="Done", position=2)
+        self.c = Client(); self.c.force_login(self.me)
+        self.c2 = Client(); self.c2.force_login(self.other)
+
+    def _add(self, client, title):
+        r = client.post(f"/api/lists/{self.todo.pk}/cards/", json.dumps({"title": title}),
+                        content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content)
+        return Card.objects.get(title=title)
+
+    def test_by_me_and_add_checklist(self):
+        from .models import Rule
+        r = self.c.post(f"/b/{self.board.pk}/automation/rules/", {
+            "section": "rules", "trigger": "card_added", "trigger_list": self.todo.pk, "by_whom": "me",
+            "action_0": "add_checklist", "cltitle_0": "Steps", "clitems_0": "Weigh\nMix\n\nBake"})
+        self.assertRedirects(r, f"/b/{self.board.pk}/automation/?s=rules", fetch_redirect_response=False)
+        rule = Rule.objects.get()
+        self.assertEqual(rule.by_whom, "me")
+        mine = self._add(self.c, "Mine")
+        theirs = self._add(self.c2, "Theirs")
+        self.assertEqual([i.text for i in mine.checklists.get(title="Steps").items.order_by("position")],
+                         ["Weigh", "Mix", "Bake"])
+        self.assertFalse(theirs.checklists.exists())
+        rule.by_whom = "others"; rule.save()
+        self.assertTrue(self._add(self.c2, "Theirs 2").checklists.exists())
+        self.assertFalse(self._add(self.c, "Mine 2").checklists.exists())
+        page = self.c.get(f"/b/{self.board.pk}/automation/?s=rules")
+        self.assertContains(page, "by Me")
+        self.assertContains(page, "add checklist “Steps” (3 items)")
+
+    def test_when_i_am_added_working_days(self):
+        from datetime import datetime
+        from django.utils import timezone
+        from . import automation
+        self.c.post(f"/b/{self.board.pk}/automation/rules/", {
+            "trigger": "member_added", "member_who": "me",
+            "action_0": "set_due_workdays", "days_0": "5", "action_1": "comment", "text_1": "I got this!"})
+        card = Card.objects.create(list=self.todo, title="Job")
+        url = f"/api/cards/{card.pk}/members/"
+        self.c.post(url, json.dumps({"user_id": self.other.pk}), content_type="application/json")
+        card.refresh_from_db()
+        self.assertIsNone(card.due_at)                     # someone else was added: no
+        self.c2.post(url, json.dumps({"user_id": self.me.pk}), content_type="application/json")
+        card.refresh_from_db()
+        self.assertIsNotNone(card.due_at)                  # I was added (by anyone): yes
+        self.assertTrue(card.comments.filter(body="I got this!").exists())
+        self.assertLess(timezone.localtime(card.due_at).weekday(), 5)
+        # Friday + 1 working day = Monday; Saturday + 0 = Monday
+        tz = timezone.get_current_timezone()
+        fri = timezone.make_aware(datetime(2026, 10, 23, 9), tz)
+        self.assertEqual(automation.add_working_days(fri, 1).date().isoformat(), "2026-10-26")
+        self.assertEqual(automation.add_working_days(fri, 5).date().isoformat(), "2026-10-30")
+        sat = timezone.make_aware(datetime(2026, 10, 24, 9), tz)
+        self.assertEqual(automation.add_working_days(sat, 0).date().isoformat(), "2026-10-26")
+
+    def test_scheduled_board_actions(self):
+        from django.utils import timezone
+        from . import automation
+        from .models import Schedule
+        Card.objects.create(list=self.done, title="Old 1")
+        Card.objects.create(list=self.done, title="Old 2")
+        r = self.c.post(f"/b/{self.board.pk}/automation/schedules/", {
+            "section": "scheduled", "kind": "actions", "frequency": "weekly", "weekday": "4", "hour": "17",
+            "saction_0": "move_all", "sfrom_list_0": self.done.pk, "slist_0": self.todo.pk})
+        self.assertEqual(r.status_code, 302)
+        s = Schedule.objects.get()
+        self.assertEqual((s.kind, s.target_list), ("actions", None))
+        page = self.c.get(f"/b/{self.board.pk}/automation/?s=scheduled")
+        self.assertContains(page, "Every Friday at 17:00")
+        self.assertContains(page, "move every card from Done to To do")
+        Schedule.objects.filter(pk=s.pk).update(next_run_at=timezone.now())
+        self.assertEqual(automation.run_due_schedules(), 1)
+        self.assertEqual(self.todo.cards.count(), 2)
+        self.assertEqual(automation.run_due_schedules(), 0)     # claimed; not again until next Friday
+        # Run now works too
+        Card.objects.create(list=self.done, title="Old 3")
+        self.c.post(f"/b/{self.board.pk}/automation/schedules/{s.pk}/", {"action": "run"})
+        self.assertEqual(self.done.cards.count(), 0)
+        act = self.c.get(f"/b/{self.board.pk}/automation/?s=activity")
+        self.assertContains(act, "moved 2 cards from Done to To do")
+
+    def test_sections_and_examples(self):
+        for s in ("rules", "due", "scheduled", "card-buttons", "board-buttons", "activity"):
+            r = self.c.get(f"/b/{self.board.pk}/automation/?s={s}")
+            self.assertEqual(r.status_code, 200, s)
+        r = self.c.get(f"/b/{self.board.pk}/automation/")
+        self.assertContains(r, "data-example=")
+        self.assertContains(r, "When I am added to a card")

@@ -205,7 +205,7 @@ def inbox_to_card(request, item_id):
     if BoardMember.objects.filter(board=lst.board, user=request.user).exists():
         card.members.add(request.user)
     log(lst.board, request.user, "card_created", card=card, list=lst.title)
-    automation.fire(card, Rule.ADDED, list_=lst)
+    automation.fire(card, Rule.ADDED, list_=lst, actor=request.user)
     item.delete()
     data = card_response(card.pk, request)
     data["inbox_html"] = inbox_html(request)

@@ -429,7 +429,10 @@ class Rule(models.Model):
         (LABEL_ADDED, "label … is added to a card"),
         (DUE_SOON, "a card is due within…"),
         (OVERDUE, "a card becomes overdue"),
+        ("member_added", "someone is added to a card"),
     ]
+    MEMBER_ADDED = "member_added"
+    BY_WHOM = [("anyone", "by anyone"), ("me", "by me"), ("others", "by anyone except me")]
     TIME_TRIGGERS = (DUE_SOON, OVERDUE)
     HOURS = [(1, "1 hour"), (3, "3 hours"), (12, "12 hours"), (24, "1 day"), (48, "2 days"), (72, "3 days"),
              (168, "1 week")]
@@ -447,6 +450,8 @@ class Rule(models.Model):
         ("clear_due", "remove the due date"),
         ("comment", "post comment…"),
         ("notify", "notify its members…"),
+        ("add_checklist", "add checklist…"),
+        ("set_due_workdays", "set due date to … working days from now"),
         ("add_sticker", "add sticker…"),
         ("archive", "archive it"),
     ]
@@ -456,6 +461,8 @@ class Rule(models.Model):
     trigger_list = models.ForeignKey(List, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
     trigger_label = models.ForeignKey(Label, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
     trigger_hours = models.PositiveSmallIntegerField(null=True, blank=True)   # for "due within…"
+    by_whom = models.CharField(max_length=10, choices=BY_WHOM, default="anyone")   # whose action triggers it
+    trigger_me = models.BooleanField(default=False)    # member_added: only when the rule's creator is added
     actions = models.JSONField(default=list)   # [{"type": "move", "list": 3}, {"type": "complete"}]
     is_enabled = models.BooleanField(default=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
@@ -488,12 +495,16 @@ class Schedule(models.Model):
                    (WEEKLY, "Every week on…"), (MONTHLY, "Every month on day…")]
 
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="schedules")
+    CARD, ACTIONS = "card", "actions"
+    kind = models.CharField(max_length=10, choices=[(CARD, "Create a card"), (ACTIONS, "Run board actions")],
+                            default=CARD)
+    actions = models.JSONField(default=list, blank=True)       # for kind=actions: same as board buttons
     frequency = models.CharField(max_length=10, choices=FREQUENCIES, default=WEEKLY)
     weekday = models.PositiveSmallIntegerField(default=0)      # 0 = Monday, for weekly
     month_day = models.PositiveSmallIntegerField(default=1)    # 1–28, for monthly
     hour = models.PositiveSmallIntegerField(default=7)         # local time
-    target_list = models.ForeignKey(List, on_delete=models.CASCADE, related_name="+")
-    title = models.CharField(max_length=250)
+    target_list = models.ForeignKey(List, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
+    title = models.CharField(max_length=250, blank=True)
     checklist = models.TextField(blank=True)                   # one item per line
     member = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     due_in_days = models.PositiveSmallIntegerField(null=True, blank=True)

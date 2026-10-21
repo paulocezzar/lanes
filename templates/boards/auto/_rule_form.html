@@ -1,0 +1,15 @@
+<form method="post" action="{% url 'rule_create' board.pk %}" class="auto-form" data-rule-form data-builder {% if not open_form %}hidden{% endif %}>
+  {% csrf_token %}<input type="hidden" name="section" value="{{ section }}">
+  <h4 class="section-label">{% if section == "due" %}New due-date rule{% else %}New rule{% endif %}</h4>
+  <div class="auto-line">
+    <span class="auto-word">When</span>
+    <select name="trigger" data-trigger aria-label="Trigger">{% for k, v in trigs %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+    <select name="member_who" data-show-for="member_added" aria-label="Who is added"><option value="anyone">anyone</option><option value="me">only me ({{ user.display_name }})</option></select>
+    <select name="trigger_list" data-show-for="card_added card_moved" data-list aria-label="List">{% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</select>
+    <select name="trigger_label" data-show-for="label_added" data-label aria-label="Label">{% for l in labels %}<option value="{{ l.pk }}" data-colour="{{ l.colour }}">{{ l }}</option>{% endfor %}</select>
+    <select name="trigger_hours" data-show-for="card_due_soon" aria-label="How soon">{% for h, label in trigger_hours %}<option value="{{ h }}" {% if h == 24 %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    {% if section != "due" %}<select name="by_whom" aria-label="By whom">{% for k, v in by_whom %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>{% endif %}
+  </div>
+  {% include "boards/auto/_card_action_rows.html" with p="" word="then" add_me=False %}
+  <div class="row"><button type="button" class="btn ghost sm" data-close-form>Cancel</button><button class="btn primary sm">Save rule</button></div>
+</form>

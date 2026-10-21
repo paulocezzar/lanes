@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -12,25 +13,105 @@ from .models import STICKERS, Board, BoardMember, Label, List, Rule, Schedule
 
 MAX_ACTIONS = 4
 NEEDS = {"move": "list", "add_label": "label", "remove_label": "label", "add_member": "user",
-         "set_due": "days", "comment": "text", "add_sticker": "sticker", "notify": "message"}
+         "set_due": "days", "set_due_workdays": "days", "comment": "text", "add_sticker": "sticker",
+         "notify": "message", "add_checklist": "checklist"}
+SECTIONS = [("rules", "Rules"), ("due", "Due date"), ("scheduled", "Scheduled"),
+            ("card-buttons", "Card buttons"), ("board-buttons", "Board buttons"), ("activity", "Activity")]
+
+# Clickable examples. Lists/labels are matched by name on this board ("first"/"last" = position).
+EXAMPLES = {
+    "rules": [
+        ("When a <b>card is added to list</b> “To do” <b>by me</b>, <b>add the “Steps” checklist</b>.",
+         {"trigger": "card_added", "trigger_list": "first", "by_whom": "me",
+          "actions": [{"type": "add_checklist", "title": "Steps"}]}),
+        ("When a <b>card is moved to list</b> “Done” <b>by anyone</b>, <b>mark it complete</b> and "
+         "<b>remove all members</b>.",
+         {"trigger": "card_moved", "trigger_list": "done", "by_whom": "anyone",
+          "actions": [{"type": "complete"}, {"type": "clear_members"}]}),
+        ("<b>When I am added to a card</b>, <b>set the due date</b> in 5 working days and <b>post a comment</b> "
+         "saying “I got this!”",
+         {"trigger": "member_added", "member_who": "me",
+          "actions": [{"type": "set_due_workdays", "days": 5}, {"type": "comment", "text": "I got this!"}]}),
+        ("When <b>all checklists are complete</b>, <b>move the card</b> to “Done”.",
+         {"trigger": "checklist_done", "actions": [{"type": "move", "list": "done"}]}),
+    ],
+    "due": [
+        ("When a card is <b>due within 1 day</b>, <b>notify its members</b> and <b>move it to the top</b>.",
+         {"trigger": "card_due_soon", "trigger_hours": 24, "actions": [{"type": "notify"}, {"type": "move_top"}]}),
+        ("When a card <b>becomes overdue</b>, <b>add the red label</b> and <b>post a comment</b> “This is late”.",
+         {"trigger": "card_overdue",
+          "actions": [{"type": "add_label", "label": "red"}, {"type": "comment", "text": "This is late — can we catch up?"}]}),
+        ("When a card is <b>due within 1 week</b>, <b>add the ⏰ sticker</b>.",
+         {"trigger": "card_due_soon", "trigger_hours": 168, "actions": [{"type": "add_sticker", "sticker": "⏰"}]}),
+    ],
+    "scheduled": [
+        ("<b>Every Monday</b> at 07:00, <b>create a card</b> “Weekly deep clean” in the first list with a checklist.",
+         {"kind": "card", "frequency": "weekly", "weekday": 0, "hour": 7, "title": "Weekly deep clean",
+          "target_list": "first", "checklist": "Ovens\nProving cabinets\nFloor drains"}),
+        ("<b>Every Friday</b> at 17:00, <b>move every card</b> from “Done” to the last list.",
+         {"kind": "actions", "frequency": "weekly", "weekday": 4, "hour": 17,
+          "actions": [{"type": "move_all", "from_list": "done", "list": "last"}]}),
+        ("<b>Every weekday</b> at 06:00, <b>sort</b> the first list <b>by due date</b>.",
+         {"kind": "actions", "frequency": "weekdays", "hour": 6,
+          "actions": [{"type": "sort_due", "list": "first"}]}),
+        ("<b>On the 1st of every month</b>, <b>archive every complete card</b>.",
+         {"kind": "actions", "frequency": "monthly", "month_day": 1, "hour": 6,
+          "actions": [{"type": "archive_done"}]}),
+    ],
+    "card-buttons": [
+        ("A <b>“Delivered”</b> button that <b>moves the card</b> to “Done”, <b>marks it complete</b> and "
+         "<b>posts a comment</b>.",
+         {"name": "Delivered", "icon": "🚚", "actions": [{"type": "move", "list": "done"}, {"type": "complete"},
+                                                         {"type": "comment", "text": "Delivered ✅"}]}),
+        ("A <b>“Take it”</b> button that <b>adds whoever pressed it</b> and <b>sets the due date</b> in 2 working days.",
+         {"name": "Take it", "icon": "👋", "actions": [{"type": "add_me"}, {"type": "set_due_workdays", "days": 2}]}),
+    ],
+    "board-buttons": [
+        ("A <b>“New week”</b> button that <b>moves every card</b> from “Done” to the last list.",
+         {"name": "New week", "icon": "🧹", "actions": [{"type": "move_all", "from_list": "done", "list": "last"}]}),
+        ("A <b>“Tidy up”</b> button that <b>archives every complete card</b> and <b>sorts</b> the first list by due date.",
+         {"name": "Tidy up", "icon": "📦", "actions": [{"type": "archive_done"}, {"type": "sort_due", "list": "first"}]}),
+    ],
+}
 
 
 @login_required
 def automation_page(request, board_id):
+    import json
+
+    from django.utils.safestring import mark_safe
     board, ctx = board_context(request, board_id, "automation")
-    rules = []
-    for r in board.rules.select_related("trigger_list", "trigger_label"):
+    section = request.GET.get("s") or ("rules" if request.GET.get("trigger") else "rules")
+    if section not in dict(SECTIONS):
+        section = "rules"
+    rules, due_rules = [], []
+    for r in board.rules.select_related("trigger_list", "trigger_label", "created_by"):
         when, then = automation.describe_rule(r)
-        rules.append({"rule": r, "when": when, "then": then})
-    schedules = [{"s": s, "when": automation.describe_schedule(s)}
+        (due_rules if r.trigger in Rule.TIME_TRIGGERS else rules).append({"rule": r, "when": when, "then": then})
+    schedules = [{"s": s, "when": automation.describe_schedule(s), "does": automation.describe_schedule_job(s)}
                  for s in board.schedules.select_related("target_list", "member", "label")]
-    from .models import Button
+    from .models import Activity, Button
     buttons = [{"b": b, "does": automation.describe_button_actions(b)} for b in board.buttons.all()]
+    counts = {"rules": len(rules), "due": len(due_rules), "scheduled": len(schedules),
+              "card-buttons": sum(1 for b in buttons if b["b"].kind == Button.CARD),
+              "board-buttons": sum(1 for b in buttons if b["b"].kind == Button.BOARD)}
     ctx.update({
+        "section": section,
+        "sections": [(k, v, counts.get(k)) for k, v in SECTIONS],
+        "examples": [(mark_safe(text), json.dumps(data)) for text, data in EXAMPLES.get(section, [])],
+        "rules": rules,
+        "due_rules": due_rules,
+        "event_triggers": [t for t in Rule.TRIGGERS if t[0] not in Rule.TIME_TRIGGERS],
+        "time_triggers": [t for t in Rule.TRIGGERS if t[0] in Rule.TIME_TRIGGERS],
+        "by_whom": Rule.BY_WHOM,
+        "auto_activity": (Activity.objects.filter(board=board, verb__in=["automation", "button"])
+                          .select_related("actor", "card")[:60]) if section == "activity" else [],
+        "open_form": bool(request.GET.get("trigger")) or request.GET.get("new") == "1",
+        "card_buttons": [b for b in buttons if b["b"].kind == Button.CARD],
+        "board_buttons": [b for b in buttons if b["b"].kind == Button.BOARD],
         "buttons": buttons,
         "board_actions": Button.BOARD_ACTIONS,
         "button_icons": ["", "✅", "🚚", "📦", "🔥", "⭐", "🧹", "📌", "⏰", "👋"],
-        "rules": rules,
         "schedules": schedules,
         "triggers": Rule.TRIGGERS,
         "trigger_hours": Rule.HOURS,
@@ -44,6 +125,12 @@ def automation_page(request, board_id):
         "stickers": STICKERS,
     })
     return render(request, "boards/automation.html", ctx)
+
+
+def _back(board, request, section=None):
+    section = section or request.POST.get("section")
+    url = reverse("board_automation", kwargs={"board_id": board.pk})
+    return redirect(f"{url}?s={section}" if section in dict(SECTIONS) else url)
 
 
 def _editable_board(request, board_id):
@@ -60,7 +147,7 @@ def _editable_board(request, board_id):
 @require_POST
 def rule_create(request, board_id):
     board, ok = _editable_board(request, board_id)
-    back = redirect("board_automation", board_id=board.pk)
+    back = _back(board, request)
     if not ok:
         return back
     p = request.POST
@@ -69,6 +156,10 @@ def rule_create(request, board_id):
         messages.error(request, "Pick when the rule should run.")
         return back
     rule = Rule(board=board, trigger=trigger, created_by=request.user)
+    if trigger not in Rule.TIME_TRIGGERS and p.get("by_whom") in dict(Rule.BY_WHOM):
+        rule.by_whom = p["by_whom"]
+    if trigger == Rule.MEMBER_ADDED:
+        rule.trigger_me = p.get("member_who") == "me"
     if trigger in (Rule.ADDED, Rule.MOVED):
         rule.trigger_list = List.objects.filter(pk=p.get("trigger_list") or 0, board=board).first()
         if not rule.trigger_list:
@@ -143,6 +234,9 @@ def parse_actions(p, board, prefix="", extra=()):
                 a["days"] = max(0, min(int(p.get(f"{prefix}days_{i}") or 0), 365))
             except ValueError:
                 a["days"] = 0
+        elif need == "checklist":
+            a["title"] = (p.get(f"{prefix}cltitle_{i}") or "").strip()[:120] or "Checklist"
+            a["text"] = (p.get(f"{prefix}clitems_{i}") or "")[:5000]
         elif need == "sticker":
             st = p.get(f"{prefix}sticker_{i}")
             if st not in STICKERS:
@@ -164,7 +258,7 @@ def parse_actions(p, board, prefix="", extra=()):
 def button_create(request, board_id):
     from .models import Button
     board, ok = _editable_board(request, board_id)
-    back = redirect("board_automation", board_id=board.pk)
+    back = _back(board, request)
     if not ok:
         return back
     p = request.POST
@@ -199,7 +293,7 @@ def button_update(request, board_id, button_id):
     if ok and request.POST.get("action") == "delete":
         get_object_or_404(Button, pk=button_id, board=board).delete()
         messages.success(request, "Button deleted.")
-    return redirect("board_automation", board_id=board.pk)
+    return _back(board, request)
 
 
 @login_required
@@ -214,22 +308,32 @@ def rule_update(request, board_id, rule_id):
         else:
             rule.is_enabled = not rule.is_enabled
             rule.save(update_fields=["is_enabled"])
-    return redirect("board_automation", board_id=board.pk)
+    return _back(board, request)
 
 
 @login_required
 @require_POST
 def schedule_create(request, board_id):
     board, ok = _editable_board(request, board_id)
-    back = redirect("board_automation", board_id=board.pk)
+    back = _back(board, request)
     if not ok:
         return back
     p = request.POST
-    lst = List.objects.filter(pk=p.get("target_list") or 0, board=board, is_archived=False).first()
-    title = (p.get("title") or "").strip()[:250]
-    if not lst or not title:
-        messages.error(request, "A recurring card needs a title and a list.")
-        return back
+    from .models import Button
+    kind = Schedule.ACTIONS if p.get("kind") == Schedule.ACTIONS else Schedule.CARD
+    lst, title, actions = None, "", []
+    if kind == Schedule.CARD:
+        lst = List.objects.filter(pk=p.get("target_list") or 0, board=board, is_archived=False).first()
+        title = (p.get("title") or "").strip()[:250]
+        if not lst or not title:
+            messages.error(request, "A scheduled card needs a title and a list.")
+            return back
+    else:
+        actions, error = parse_actions(p, board, prefix="s", extra=Button.BOARD_ACTIONS)
+        actions = [a for a in actions if a["type"] in dict(Button.BOARD_ACTIONS)]
+        if error or not actions:
+            messages.error(request, error or "Add at least one action.")
+            return back
 
     def num(name, lo, hi, default):
         try:
@@ -238,7 +342,7 @@ def schedule_create(request, board_id):
             return default
 
     s = Schedule(
-        board=board, target_list=lst, title=title, created_by=request.user,
+        board=board, kind=kind, actions=actions, target_list=lst, title=title, created_by=request.user,
         frequency=p.get("frequency") if p.get("frequency") in dict(Schedule.FREQUENCIES) else Schedule.WEEKLY,
         weekday=num("weekday", 0, 6, 0), month_day=num("month_day", 1, 28, 1), hour=num("hour", 0, 23, 7),
         checklist=(p.get("checklist") or "")[:5000],
@@ -250,7 +354,7 @@ def schedule_create(request, board_id):
     s.label = label
     s.next_run_at = automation.next_run(s, timezone.now())
     s.save()
-    messages.success(request, f"Recurring card added. First one: {timezone.localtime(s.next_run_at):%a %-d %b, %H:%M}.")
+    messages.success(request, f"Scheduled. First run: {timezone.localtime(s.next_run_at):%a %-d %b, %H:%M}.")
     return back
 
 
@@ -263,13 +367,19 @@ def schedule_update(request, board_id, schedule_id):
         action = request.POST.get("action")
         if action == "delete":
             s.delete()
-            messages.success(request, "Recurring card deleted.")
+            messages.success(request, "Scheduled job deleted.")
         elif action == "run":
-            automation.create_from_schedule(s, s.target_list)
-            messages.success(request, f"Created “{s.title}” in {s.target_list.title}.")
+            if s.kind == Schedule.ACTIONS:
+                done = automation.run_board_actions(board, s.actions, request.user)
+                messages.success(request, ("Done: " + "; ".join(done) + ".") if done else "Ran — nothing to change.")
+            elif s.target_list and not s.target_list.is_archived:
+                automation.create_from_schedule(s, s.target_list)
+                messages.success(request, f"Created “{s.title}” in {s.target_list.title}.")
+            else:
+                messages.error(request, "Its list has been archived or deleted.")
         else:
             s.is_enabled = not s.is_enabled
             if s.is_enabled:  # don't fire a backlog of missed runs on re-enable
                 s.next_run_at = automation.next_run(s, timezone.now())
             s.save(update_fields=["is_enabled", "next_run_at"])
-    return redirect("board_automation", board_id=board.pk)
+    return _back(board, request)
