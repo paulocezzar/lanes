@@ -12,7 +12,7 @@ from .models import STICKERS, Board, BoardMember, Label, List, Rule, Schedule
 
 MAX_ACTIONS = 4
 NEEDS = {"move": "list", "add_label": "label", "remove_label": "label", "add_member": "user",
-         "set_due": "days", "comment": "text", "add_sticker": "sticker"}
+         "set_due": "days", "comment": "text", "add_sticker": "sticker", "notify": "message"}
 
 
 @login_required
@@ -33,6 +33,7 @@ def automation_page(request, board_id):
         "rules": rules,
         "schedules": schedules,
         "triggers": Rule.TRIGGERS,
+        "trigger_hours": Rule.HOURS,
         "actions": Rule.ACTIONS,
         "action_slots": range(MAX_ACTIONS),
         "lists": board.lists.filter(is_archived=False),
@@ -72,6 +73,14 @@ def rule_create(request, board_id):
         rule.trigger_list = List.objects.filter(pk=p.get("trigger_list") or 0, board=board).first()
         if not rule.trigger_list:
             messages.error(request, "Pick which list triggers the rule.")
+            return back
+    if trigger == Rule.DUE_SOON:
+        try:
+            rule.trigger_hours = int(p.get("trigger_hours"))
+        except (TypeError, ValueError):
+            rule.trigger_hours = None
+        if rule.trigger_hours not in dict(Rule.HOURS):
+            messages.error(request, "Pick how soon before the due date the rule should run.")
             return back
     if trigger == Rule.LABEL_ADDED:
         rule.trigger_label = Label.objects.filter(pk=p.get("trigger_label") or 0, board=board).first()
@@ -139,6 +148,8 @@ def parse_actions(p, board, prefix="", extra=()):
             if st not in STICKERS:
                 return [], "Pick a sticker."
             a["sticker"] = st
+        if need == "message":
+            a["text"] = (p.get(f"{prefix}text_{i}") or "").strip()[:250]
         if need == "text" or t == "create_card":
             text = (p.get(f"{prefix}text_{i}") or "").strip()[:2000]
             if not text:

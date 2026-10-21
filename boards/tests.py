@@ -1475,3 +1475,57 @@ class AdminLoginTests(TestCase):
         r = Client().get("/admin/login/?next=/admin/")
         self.assertEqual(r.status_code, 302)
         self.assertTrue(r["Location"].startswith("/login/?next=/admin/"))
+
+
+class DueRuleTests(TestCase):
+    def setUp(self):
+        from .models import Rule
+        self.ws = Workspace.objects.create(name="Bakery D")
+        self.u = User.objects.create_user("d@x.com", "pw", first_name="Dee")
+        self.mate = User.objects.create_user("mate@x.com", "pw", first_name="Mate")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.board = Board.objects.create(workspace=self.ws, title="Orders")
+        for u in (self.u, self.mate):
+            BoardMember.objects.create(board=self.board, user=u, role="admin")
+        self.lst = List.objects.create(board=self.board, title="To do")
+        self.urgent = Label.objects.create(board=self.board, name="Urgent", colour="red")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def test_form_and_due_soon_runs_once_per_due_date(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from . import automation
+        from .models import Rule
+        r = self.c.post(f"/b/{self.board.pk}/automation/rules/", {
+            "trigger": "card_due_soon", "trigger_hours": "24",
+            "action_0": "add_label", "label_0": self.urgent.pk, "action_1": "notify", "text_1": "Chase supplier"})
+        self.assertEqual(r.status_code, 302)
+        rule = Rule.objects.get()
+        self.assertEqual(rule.trigger_hours, 24)
+        self.assertContains(self.c.get(f"/b/{self.board.pk}/automation/"), "due within 1 day")
+        now = timezone.now()
+        soon = Card.objects.create(list=self.lst, title="Flour", due_at=now + timedelta(hours=5))
+        soon.members.add(self.mate)
+        later = Card.objects.create(list=self.lst, title="Sugar", due_at=now + timedelta(days=4))
+        self.assertEqual(automation.run_due_rules(), 1)
+        self.assertEqual(automation.run_due_rules(), 0)             # once only
+        self.assertTrue(soon.labels.filter(pk=self.urgent.pk).exists())
+        self.assertFalse(later.labels.exists())
+        n = Notification.objects.get(recipient=self.mate, kind="automation")
+        self.assertIn("Chase supplier", n.text)
+        soon.due_at = now + timedelta(hours=10); soon.save()        # new due date → runs again
+        self.assertEqual(automation.run_due_rules(), 1)
+
+    def test_overdue_ignores_ancient_and_complete(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from . import automation
+        from .models import Rule
+        Rule.objects.create(board=self.board, trigger="card_overdue", actions=[{"type": "move_top"}, {"type": "add_sticker", "sticker": "⏰"}])
+        now = timezone.now()
+        late = Card.objects.create(list=self.lst, title="Late", due_at=now - timedelta(hours=2))
+        Card.objects.create(list=self.lst, title="Done", due_at=now - timedelta(hours=2), is_complete=True)
+        Card.objects.create(list=self.lst, title="Ancient", due_at=now - timedelta(days=90))
+        self.assertEqual(automation.run_due_rules(), 1)
+        late.refresh_from_db()
+        self.assertIn("⏰", late.stickers)

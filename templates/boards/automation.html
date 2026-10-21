@@ -4,7 +4,7 @@
   <div class="auto-grid">
     <section class="dash-card">
       <h3>⚡ Rules <span class="count">{{ rules|length }}</span></h3>
-      <p class="muted small">Rules run instantly when someone does something on this board.</p>
+      <p class="muted small">Rules run instantly when someone does something on this board. Due-date rules are checked every minute or so.</p>
       {% for r in rules %}
       <div class="auto-row{% if not r.rule.is_enabled %} off{% endif %}">
         <div class="auto-desc">
@@ -32,6 +32,7 @@
           <select name="trigger" data-trigger>{% for k, v in triggers %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
           <select name="trigger_list" data-show-for="card_added card_moved">{% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</select>
           <select name="trigger_label" data-show-for="label_added">{% for l in labels %}<option value="{{ l.pk }}">{{ l }}</option>{% endfor %}</select>
+          <select name="trigger_hours" data-show-for="card_due_soon" aria-label="How soon">{% for h, label in trigger_hours %}<option value="{{ h }}" {% if h == 24 %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
         </div>
         {% for i in action_slots %}
         <div class="auto-line" data-action-row {% if not forloop.first %}hidden{% endif %}>
@@ -45,6 +46,7 @@
           <select name="user_{{ i }}" data-param="add_member">{% for u in people %}<option value="{{ u.pk }}">{{ u.display_name }}</option>{% endfor %}</select>
           <input name="days_{{ i }}" type="number" min="0" max="365" value="1" data-param="set_due" aria-label="Days from now">
           <input name="text_{{ i }}" maxlength="2000" placeholder="Comment text" data-param="comment">
+          <input name="text_{{ i }}" maxlength="250" placeholder="Message (optional)" data-param="notify">
           <select name="sticker_{{ i }}" data-param="add_sticker" aria-label="Sticker">{% for s in stickers %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
         </div>
         {% endfor %}
@@ -135,6 +137,7 @@
             <select name="buser_{{ i }}" data-param="add_member">{% for u in people %}<option value="{{ u.pk }}">{{ u.display_name }}</option>{% endfor %}</select>
             <input name="bdays_{{ i }}" type="number" min="0" max="365" value="1" data-param="set_due" aria-label="Days from now">
             <input name="btext_{{ i }}" maxlength="2000" placeholder="Comment text" data-param="comment">
+            <input name="btext_{{ i }}" maxlength="250" placeholder="Message (optional)" data-param="notify">
             <select name="bsticker_{{ i }}" data-param="add_sticker" aria-label="Sticker">{% for s in stickers %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
           </div>
           {% endfor %}

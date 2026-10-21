@@ -418,15 +418,21 @@ class Activity(models.Model):
 class Rule(models.Model):
     """Board automation: when <trigger> happens to a card, run <actions> on it."""
 
-    ADDED, MOVED, COMPLETED, CHECKLIST_DONE, LABEL_ADDED = (
-        "card_added", "card_moved", "card_completed", "checklist_done", "label_added")
+    ADDED, MOVED, COMPLETED, CHECKLIST_DONE, LABEL_ADDED, DUE_SOON, OVERDUE = (
+        "card_added", "card_moved", "card_completed", "checklist_done", "label_added", "card_due_soon",
+        "card_overdue")
     TRIGGERS = [
         (ADDED, "a card is added to list…"),
         (MOVED, "a card is moved into list…"),
         (COMPLETED, "a card is marked complete"),
         (CHECKLIST_DONE, "all checklist items on a card are done"),
         (LABEL_ADDED, "label … is added to a card"),
+        (DUE_SOON, "a card is due within…"),
+        (OVERDUE, "a card becomes overdue"),
     ]
+    TIME_TRIGGERS = (DUE_SOON, OVERDUE)
+    HOURS = [(1, "1 hour"), (3, "3 hours"), (12, "12 hours"), (24, "1 day"), (48, "2 days"), (72, "3 days"),
+             (168, "1 week")]
     ACTIONS = [
         ("move", "move it to list…"),
         ("move_top", "move it to the top of its list"),
@@ -440,6 +446,7 @@ class Rule(models.Model):
         ("set_due", "set due date to … days from now"),
         ("clear_due", "remove the due date"),
         ("comment", "post comment…"),
+        ("notify", "notify its members…"),
         ("add_sticker", "add sticker…"),
         ("archive", "archive it"),
     ]
@@ -448,6 +455,7 @@ class Rule(models.Model):
     trigger = models.CharField(max_length=20, choices=TRIGGERS)
     trigger_list = models.ForeignKey(List, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
     trigger_label = models.ForeignKey(Label, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
+    trigger_hours = models.PositiveSmallIntegerField(null=True, blank=True)   # for "due within…"
     actions = models.JSONField(default=list)   # [{"type": "move", "list": 3}, {"type": "complete"}]
     is_enabled = models.BooleanField(default=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
@@ -457,6 +465,19 @@ class Rule(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class RuleFire(models.Model):
+    """A time-based rule ran for this card and due date — so it runs once per
+    due date, and again only if the date changes."""
+
+    rule = models.ForeignKey(Rule, on_delete=models.CASCADE, related_name="fires")
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="+")
+    due_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["rule", "card", "due_at"], name="uniq_rule_fire")]
 
 
 class Schedule(models.Model):
@@ -522,13 +543,13 @@ class Notification(models.Model):
     """Something a person should know about: assigned, mentioned, a comment on
     their card, or a due date coming up."""
 
-    ASSIGNED, ITEM_ASSIGNED, MENTIONED, COMMENTED, DUE_SOON, ITEM_DUE_SOON, ADDED_TO_BOARD, WATCHED = (
+    ASSIGNED, ITEM_ASSIGNED, MENTIONED, COMMENTED, DUE_SOON, ITEM_DUE_SOON, ADDED_TO_BOARD, WATCHED, AUTOMATION = (
         "assigned", "item_assigned", "mentioned", "commented", "due_soon", "item_due_soon", "added_to_board",
-        "watched")
+        "watched", "automation")
     KINDS = [(ASSIGNED, "Assigned to a card"), (ITEM_ASSIGNED, "Assigned a checklist item"),
              (MENTIONED, "Mentioned"), (COMMENTED, "Comment on your card"), (DUE_SOON, "Card due soon"),
              (ITEM_DUE_SOON, "Checklist item due soon"), (ADDED_TO_BOARD, "Added to a board"),
-             (WATCHED, "Something you watch changed")]
+             (WATCHED, "Something you watch changed"), (AUTOMATION, "From a board rule")]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")

@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timedelta
 
 from django.db import transaction
+from django.db.models import Exists, F, OuterRef
 from django.utils import timezone
 
 from . import positions
@@ -130,6 +131,17 @@ def run_action(card, action):
         if text:
             Comment.objects.create(card=card, author=None, body=text)
             return "posted a comment"
+    elif t == "notify":
+        from . import notify
+        when = timezone.localtime(card.due_at).strftime("%a %-d %b, %H:%M") if card.due_at else ""
+        msg = (action.get("text") or "").strip() or (f"{card.title} is due {when}" if when else f"{card.title} needs attention")
+        people = list(card.members.all()) or ([card.created_by] if card.created_by else [])
+        sent = 0
+        for u in people:
+            if notify.send(u, "automation", card=card, text=msg[:300] if msg.startswith(card.title) else f"{card.title}: {msg}"[:300]):
+                sent += 1
+        if sent:
+            return f"notified {sent} {'person' if sent == 1 else 'people'}"
     elif t == "archive":
         if not card.is_archived:
             card.is_archived = True
@@ -145,6 +157,8 @@ def checklists_all_done(card):
 
 def describe_rule(rule):
     when = dict(Rule.TRIGGERS)[rule.trigger]
+    if rule.trigger == Rule.DUE_SOON:
+        when = when.replace("within…", f"within {dict(Rule.HOURS).get(rule.trigger_hours, f'{rule.trigger_hours} hours')}")
     if rule.trigger in (Rule.ADDED, Rule.MOVED):
         when = when.replace("list…", f"list “{rule.trigger_list.title if rule.trigger_list else '?'}”")
     if rule.trigger == Rule.LABEL_ADDED:
@@ -170,6 +184,8 @@ def describe_action(board, a):
         return f"post comment “{a.get('text', '')}”"
     if t == "add_sticker":
         return f"add sticker {a.get('sticker', '')}"
+    if t == "notify":
+        return f"notify its members: “{a['text']}”" if a.get("text") else "notify its members"
     return name
 
 
@@ -263,6 +279,43 @@ def create_from_schedule(s, lst):
 _last_lazy_run = 0.0
 
 
+def run_due_rules(now=None):
+    """Time-based rules: 'a card is due within…' and 'a card becomes overdue'.
+    Each rule runs once per card per due date (RuleFire), so it's safe to call
+    every minute from several places at once."""
+    from django.db import IntegrityError
+
+    from .models import RuleFire
+    now = now or timezone.now()
+    ran = 0
+    rules = Rule.objects.filter(trigger__in=Rule.TIME_TRIGGERS, is_enabled=True, board__is_archived=False)
+    for rule in rules.select_related("board"):
+        cards = Card.objects.filter(list__board=rule.board, list__is_archived=False, is_archived=False,
+                                    is_template=False, is_complete=False, due_at__isnull=False)
+        if rule.trigger == Rule.DUE_SOON:
+            cards = cards.filter(due_at__gt=now, due_at__lte=now + timedelta(hours=rule.trigger_hours or 24))
+        else:   # overdue — ignore cards that were already long overdue when the rule was made
+            cards = cards.filter(due_at__lte=now, due_at__gte=max(now - timedelta(days=30), rule.created_at - timedelta(days=1)))
+        fired = RuleFire.objects.filter(rule=rule, card=OuterRef("pk"), due_at=OuterRef("due_at"))
+        for card in cards.select_related("list__board").exclude(Exists(fired)):
+            try:
+                with transaction.atomic():
+                    RuleFire.objects.create(rule=rule, card=card, due_at=card.due_at)
+                    done = [d for d in (run_action(card, a) for a in rule.actions) if d]
+                    Rule.objects.filter(pk=rule.pk).update(run_count=F("run_count") + 1, last_run_at=now)
+                    if done:
+                        act = Activity.objects.create(board=rule.board, card=card, actor=None, verb="automation",
+                                                      data={"summary": "; ".join(done)})
+                        from . import notify
+                        notify.on_activity(act)
+                    ran += 1
+            except IntegrityError:
+                continue          # another worker got there first
+            except Exception:
+                log.exception("Due-date rule %s failed on card %s", rule.pk, card.pk)
+    return ran
+
+
 def maybe_run_schedules():
     """Cheap fallback so schedules and due reminders run even without a cron
     job: at most once a minute per process, piggybacking on page loads."""
@@ -272,6 +325,7 @@ def maybe_run_schedules():
     _last_lazy_run = time.monotonic()
     try:
         run_due_schedules()
+        run_due_rules()
         from .notify import send_due_reminders
         send_due_reminders()
     except Exception:
