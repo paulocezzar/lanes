@@ -19,6 +19,31 @@ services:
           name: lanes-db
           property: connectionString
 
+  # Runs recurring cards, due reminders and due-date rules every 5 minutes, even
+  # when nobody has Lanes open. (The web app also runs them lazily as a backup.)
+  - type: cron
+    name: lanes-automations
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "*/5 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py run_automations
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: DEBUG
+        value: "0"
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: lanes
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lanes-db
+          property: connectionString
+
 databases:
   - name: lanes-db
     region: frankfurt
