@@ -1,5 +1,5 @@
 from django.templatetags.static import static
-from django.views.generic import RedirectView
+from django.shortcuts import redirect
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
@@ -20,7 +20,7 @@ admin.site.site_header = "Lanes admin"
 admin.site.site_title = "Lanes"
 
 urlpatterns = [
-    path("favicon.ico", RedirectView.as_view(url=static("lanes/favicon.svg"), permanent=True)),
+    path("favicon.ico", lambda request: redirect(static("lanes/favicon.svg"), permanent=True)),
     path("admin/", admin.site.urls),
     path("login/", twofactor.LoginView.as_view(), name="login"),
     path("login/code/", twofactor.login_code, name="login_code"),
