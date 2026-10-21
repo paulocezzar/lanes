@@ -24,7 +24,7 @@
       {% empty %}<p class="muted">No rules yet.</p>{% endfor %}
 
       {% if can_edit %}
-      <form method="post" action="{% url 'rule_create' board.pk %}" class="auto-form" data-rule-form>
+      <form method="post" action="{% url 'rule_create' board.pk %}" class="auto-form" data-rule-form data-actions-form>
         {% csrf_token %}
         <h4 class="section-label">New rule</h4>
         <div class="auto-line">
@@ -93,6 +93,73 @@
       </form>
       {% endif %}
     </section>
+
+    <section class="dash-card auto-buttons">
+      <h3>🔘 Buttons <span class="count">{{ buttons|length }}</span></h3>
+      <p class="muted small">A button does several things in one click. <b>Card buttons</b> show on every card (e.g. “Delivered” → move to Done, mark complete, add a comment). <b>Board buttons</b> sit in the board header (e.g. “New week” → move everything from Done to Archive).</p>
+      {% for row in buttons %}{% with b=row.b %}
+      <div class="auto-row">
+        <div class="auto-desc">
+          <b class="btn-preview"><span class="btn sm">{{ b.icon }} {{ b.name }}</span> <small class="muted">{{ b.get_kind_display }}</small></b>
+          <ul>{% for t in row.does %}<li>{{ t }}</li>{% endfor %}</ul>
+          <small class="muted">Pressed {{ b.run_count }} time{{ b.run_count|pluralize }}</small>
+        </div>
+        {% if can_edit %}
+        <form method="post" action="{% url 'button_update' board.pk b.pk %}" onsubmit="return confirm('Delete this button?')">{% csrf_token %}
+          <input type="hidden" name="action" value="delete"><button class="icon-btn xs" title="Delete">{% include "boards/_icon.html" with i="close" %}</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endwith %}{% empty %}<p class="muted">No buttons yet.</p>{% endfor %}
+
+      {% if can_edit %}
+      <form method="post" action="{% url 'button_create' board.pk %}" class="auto-form" data-button-form>
+        {% csrf_token %}
+        <h4 class="section-label">New button</h4>
+        <div class="auto-line">
+          <select name="kind" data-button-kind aria-label="Button type"><option value="card">Card button</option><option value="board">Board button</option></select>
+          <select name="icon" aria-label="Icon">{% for i in button_icons %}<option value="{{ i }}">{{ i|default:"no icon" }}</option>{% endfor %}</select>
+          <input name="name" maxlength="40" required placeholder="Button name, e.g. Delivered">
+        </div>
+        <div data-kind-panel="card" data-actions-form>
+          {% for i in action_slots %}
+          <div class="auto-line" data-action-row {% if not forloop.first %}hidden{% endif %}>
+            <span class="auto-word">{% if forloop.first %}it will{% else %}and{% endif %}</span>
+            <select name="baction_{{ i }}" data-action>
+              {% if not forloop.first %}<option value="">— no more actions —</option>{% endif %}
+              {% for k, v in actions %}<option value="{{ k }}">{{ v|cut:"it "|cut:"its " }}</option>{% endfor %}
+              <option value="add_me">add the person who pressed it</option>
+            </select>
+            <select name="blist_{{ i }}" data-param="move">{% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</select>
+            <select name="blabel_{{ i }}" data-param="add_label remove_label">{% for l in labels %}<option value="{{ l.pk }}">{{ l }}</option>{% endfor %}</select>
+            <select name="buser_{{ i }}" data-param="add_member">{% for u in people %}<option value="{{ u.pk }}">{{ u.display_name }}</option>{% endfor %}</select>
+            <input name="bdays_{{ i }}" type="number" min="0" max="365" value="1" data-param="set_due" aria-label="Days from now">
+            <input name="btext_{{ i }}" maxlength="2000" placeholder="Comment text" data-param="comment">
+            <select name="bsticker_{{ i }}" data-param="add_sticker" aria-label="Sticker">{% for s in stickers %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+          </div>
+          {% endfor %}
+          <button type="button" class="btn ghost sm" data-more-actions>+ Another action</button>
+        </div>
+        <div data-kind-panel="board" data-actions-form hidden>
+          {% for i in action_slots %}
+          <div class="auto-line" data-action-row {% if not forloop.first %}hidden{% endif %}>
+            <span class="auto-word">{% if forloop.first %}it will{% else %}and{% endif %}</span>
+            <select name="bbaction_{{ i }}" data-action>
+              {% if not forloop.first %}<option value="">— no more actions —</option>{% endif %}
+              {% for k, v in board_actions %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+            </select>
+            <input name="bbtext_{{ i }}" maxlength="250" placeholder="Card title" data-param="create_card">
+            <select name="bbfrom_list_{{ i }}" data-param="move_all" aria-label="From list">{% for l in lists %}<option value="{{ l.pk }}">from {{ l.title }}</option>{% endfor %}</select>
+            <select name="bblist_{{ i }}" data-param="create_card move_all sort_due" aria-label="List">{% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</select>
+          </div>
+          {% endfor %}
+          <button type="button" class="btn ghost sm" data-more-actions>+ Another action</button>
+          <p class="muted small">Tip: card titles can include the date — <code>Stocktake %d %b</code> becomes “Stocktake 21 Oct”.</p>
+        </div>
+        <div class="row"><button class="btn primary sm">Add button</button></div>
+      </form>
+      {% endif %}
+    </section>
   </div>
 </div>
 {% endblock %}
@@ -106,17 +173,36 @@
       el.hidden = !el.dataset.showFor.split(' ').includes(trig.value);
     });
     trig.addEventListener('change', showTrig); showTrig();
-    const rows = [...rf.querySelectorAll('[data-action-row]')];
+  }
+  document.querySelectorAll('[data-actions-form]').forEach(f => {
+    const rows = [...f.querySelectorAll('[data-action-row]')];
     const showParams = row => {
       const t = row.querySelector('[data-action]').value;
-      row.querySelectorAll('[data-param]').forEach(el => { el.hidden = !el.dataset.param.split(' ').includes(t); });
+      row.querySelectorAll('[data-param]').forEach(el => {
+        el.hidden = !el.dataset.param.split(' ').includes(t);
+        el.disabled = el.hidden || row.hidden;
+      });
     };
     rows.forEach(row => { row.querySelector('[data-action]').addEventListener('change', () => showParams(row)); showParams(row); });
-    rf.querySelector('[data-more-actions]').addEventListener('click', e => {
+    f.querySelector('[data-more-actions]').addEventListener('click', e => {
       const next = rows.find(r => r.hidden);
       if (next) { next.hidden = false; next.querySelector('[data-action]').selectedIndex = 1; showParams(next); }
       if (!rows.some(r => r.hidden)) e.target.hidden = true;
     });
+  });
+  const bf = document.querySelector('[data-button-form]');
+  if (bf) {
+    const kind = bf.querySelector('[data-button-kind]');
+    const sync = () => bf.querySelectorAll('[data-kind-panel]').forEach(p => {
+      const on = p.dataset.kindPanel === kind.value;
+      p.hidden = !on;
+      p.querySelectorAll('[data-action-row]').forEach(r => {
+        const a = r.querySelector('[data-action]');
+        a.disabled = !on || r.hidden;
+      });
+    });
+    kind.addEventListener('change', sync); sync();
+    bf.addEventListener('click', e => { if (e.target.closest('[data-more-actions]')) setTimeout(sync); });
   }
   const sf = document.querySelector('[data-schedule-form]');
   if (sf) {

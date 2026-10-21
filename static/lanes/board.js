@@ -357,6 +357,14 @@
     if (!t.closest('.pop')) hidePops();
 
     if (t.closest('[data-watch-card]')) return cardPost('watch');
+    const press = t.closest('[data-press-card]');
+    if (press) {
+      press.disabled = true;
+      return post(`/api/cards/${openCardId}/buttons/${press.dataset.pressCard}/`).then(data => {
+        applyCard(data);
+        toast(data.summary);
+      }).finally(() => (press.disabled = false));
+    }
     if (t.closest('[data-toggle-complete]')) {
       return cardPost('update', { is_complete: !t.closest('[data-toggle-complete]').classList.contains('on') });
     }
@@ -487,6 +495,14 @@
     const data = await post(`/api/boards/${boardId}/star/`);
     e.currentTarget.classList.toggle('on', data.starred);
   });
+  $$('[data-press-board]').forEach(b => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try {
+      const data = await post(`/api/boards/${boardId}/buttons/${b.dataset.pressBoard}/`);
+      toast(data.summary);
+      if (view === 'board') forceRefresh(); else location.reload();
+    } finally { b.disabled = false; }
+  }));
   $('[data-watch-board]')?.addEventListener('click', async e => {
     const btn = e.currentTarget;
     const data = await post(`/api/boards/${boardId}/watch/`);

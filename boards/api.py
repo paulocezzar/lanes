@@ -686,3 +686,26 @@ def board_watch(request, board_id):
     else:
         Watch.objects.create(user=request.user, board=board)
     return {"watching": not w}
+
+
+# ---------- buttons ----------
+
+@api
+def card_button_press(request, card_id, button_id):
+    from .models import Button
+    card = _card(request, card_id)
+    button = get_object_or_404(Button, pk=button_id, board=card.list.board, kind=Button.CARD)
+    done = automation.press_card_button(button, card, request.user)
+    data = card_response(card.pk, request)
+    data["summary"] = "; ".join(done) or "Nothing to change."
+    return data
+
+
+@api
+def board_button_press(request, board_id, button_id):
+    from .models import Button
+    board = get_object_or_404(Board, pk=board_id)
+    _edit(board, request.user)
+    button = get_object_or_404(Button, pk=button_id, board=board, kind=Button.BOARD)
+    done = automation.press_board_button(button, request.user)
+    return {"summary": "; ".join(done) or "Nothing to change."}

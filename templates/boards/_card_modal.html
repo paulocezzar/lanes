@@ -109,6 +109,10 @@
       </div>
       {% endif %}
 
+      {% if can_edit and card_buttons %}
+      <div class="cm-buttons">{% for b in card_buttons %}<button class="btn sm press-btn" data-press-card="{{ b.pk }}">{{ b.icon }} {{ b.name }}</button>{% endfor %}</div>
+      {% endif %}
+
       {% if card.labels.all or card.members.all or card.due_at or card.start_date %}
       <div class="cm-meta">
         {% if card.members.all %}<div><h4 class="section-label">Members</h4><div class="avatar-row">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="lg" %}{% endfor %}</div></div>{% endif %}

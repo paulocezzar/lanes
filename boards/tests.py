@@ -1093,3 +1093,52 @@ class MapTests(TestCase):
                         json.dumps({"field_id": self.field.pk, "value": "nowhere"}), content_type="application/json")
             page = self.c.get(f"/b/{self.board.pk}/map/")
         self.assertContains(page, "Couldn")
+
+
+class ButtonTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery Btn")
+        self.u = User.objects.create_user("btn@x.com", "pw", first_name="Btn")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.board = Board.objects.create(workspace=self.ws, title="Orders")
+        BoardMember.objects.create(board=self.board, user=self.u, role="admin")
+        self.todo = List.objects.create(board=self.board, title="To do", position=1)
+        self.done = List.objects.create(board=self.board, title="Done", position=2)
+        self.card = Card.objects.create(list=self.todo, title="Wholesale order")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def test_card_button(self):
+        from .models import Button
+        r = self.c.post(f"/b/{self.board.pk}/automation/buttons/", {
+            "kind": "card", "name": "Delivered", "icon": "🚚",
+            "baction_0": "move", "blist_0": self.done.pk, "baction_1": "complete", "baction_2": "add_me"})
+        self.assertEqual(r.status_code, 302)
+        b = Button.objects.get()
+        self.assertEqual([a["type"] for a in b.actions], ["move", "complete", "add_me"])
+        modal = self.c.get(f"/cards/{self.card.pk}/")
+        self.assertContains(modal, "Delivered")
+        r = self.c.post(f"/api/cards/{self.card.pk}/buttons/{b.pk}/", "{}", content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.list, self.done)
+        self.assertTrue(self.card.is_complete)
+        self.assertTrue(self.card.members.filter(pk=self.u.pk).exists())
+        self.assertTrue(Activity.objects.filter(verb="button", card=self.card).exists())
+        self.assertContains(self.c.get(f"/b/{self.board.pk}/automation/"), "Pressed 1 time")
+
+    def test_board_button(self):
+        from .models import Button
+        Card.objects.create(list=self.done, title="Old", is_complete=True)
+        Card.objects.create(list=self.done, title="Old 2")
+        self.c.post(f"/b/{self.board.pk}/automation/buttons/", {
+            "kind": "board", "name": "New week",
+            "bbaction_0": "archive_done", "bbaction_1": "move_all", "bbfrom_list_1": self.done.pk,
+            "bblist_1": self.todo.pk, "bbaction_2": "create_card", "bbtext_2": "Stocktake %d %b",
+            "bblist_2": self.todo.pk})
+        b = Button.objects.get(kind="board")
+        self.assertContains(self.c.get(f"/b/{self.board.pk}/"), "New week")
+        r = self.c.post(f"/api/boards/{self.board.pk}/buttons/{b.pk}/", "{}", content_type="application/json")
+        self.assertIn("archived 1", r.json()["summary"])
+        self.assertTrue(Card.objects.get(title="Old").is_archived)
+        self.assertEqual(Card.objects.get(title="Old 2").list, self.todo)
+        self.assertTrue(Card.objects.filter(title__startswith="Stocktake ", list=self.todo).exists())

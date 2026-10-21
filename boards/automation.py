@@ -276,3 +276,102 @@ def maybe_run_schedules():
         send_due_reminders()
     except Exception:
         log.exception("Lazy schedule run failed")
+
+
+# ---------- buttons ----------
+
+def press_card_button(button, card, user):
+    """Run a card button's actions. Returns the list of things that changed."""
+    done = []
+    for a in button.actions:
+        if a.get("type") == "add_me":
+            if BoardMember.objects.filter(board=card.list.board, user=user).exists() \
+                    and not card.members.filter(pk=user.pk).exists():
+                card.members.add(user)
+                done.append(f"added {user.display_name}")
+            continue
+        d = run_action(card, a)
+        if d:
+            done.append(d)
+    _after_press(button, user, done, card=card)
+    return done
+
+
+def press_board_button(button, user):
+    board = button.board
+    done = []
+    for a in button.actions:
+        t = a.get("type")
+        if t == "create_card":
+            lst = List.objects.filter(pk=a.get("list"), board=board, is_archived=False).first()
+            title = (a.get("text") or "").strip()
+            if lst and title:
+                title = timezone.localtime().strftime(title) if "%" in title else title
+                card = Card.objects.create(list=lst, title=title[:250], created_by=user,
+                                           position=positions.end_position(lst.cards.filter(is_archived=False)))
+                done.append(f"created “{card.title}” in {lst.title}")
+        elif t == "move_all":
+            src = List.objects.filter(pk=a.get("from_list"), board=board).first()
+            dst = List.objects.filter(pk=a.get("list"), board=board, is_archived=False).first()
+            if src and dst and src.pk != dst.pk:
+                moved = 0
+                for c in src.cards.filter(is_archived=False).order_by("position"):
+                    c.list = dst
+                    c.position = positions.end_position(dst.cards.filter(is_archived=False))
+                    c.save(update_fields=["list", "position", "updated_at"])
+                    moved += 1
+                if moved:
+                    done.append(f"moved {moved} card{'s' if moved != 1 else ''} from {src.title} to {dst.title}")
+        elif t == "archive_done":
+            n = Card.objects.filter(list__board=board, is_complete=True, is_archived=False).update(
+                is_archived=True, updated_at=timezone.now())
+            if n:
+                done.append(f"archived {n} complete card{'s' if n != 1 else ''}")
+        elif t == "sort_due":
+            lst = List.objects.filter(pk=a.get("list"), board=board, is_archived=False).first()
+            if lst:
+                far = timezone.now() + timedelta(days=36500)
+                cards = sorted(lst.cards.filter(is_archived=False), key=lambda c: (c.due_at or far, c.position))
+                for i, c in enumerate(cards, start=1):
+                    Card.objects.filter(pk=c.pk).update(position=i * positions.GAP)
+                if cards:
+                    done.append(f"sorted {lst.title} by due date")
+    from .signals import bump
+    bump(board.pk)
+    _after_press(button, user, done)
+    return done
+
+
+def _after_press(button, user, done, card=None):
+    Button = type(button)
+    Button.objects.filter(pk=button.pk).update(run_count=button.run_count + 1)
+    if done:
+        from .services import log as log_activity
+        log_activity(button.board, user, "button", card=card, name=f"{button.icon} {button.name}".strip(),
+                     summary="; ".join(done))
+
+
+def describe_button_actions(button):
+    names = dict(Rule.ACTIONS) | dict(type(button).BOARD_ACTIONS) | {"add_me": "add the person who pressed it"}
+    out = []
+    lists = {l.pk: l.title for l in button.board.lists.all()}
+    labels = {l.pk: str(l) for l in button.board.labels.all()}
+    for a in button.actions:
+        t = a.get("type")
+        text = names.get(t, t)
+        if t == "move" or t == "sort_due":
+            text = text.replace("list…", lists.get(a.get("list"), "?"))
+        if t == "move_all":
+            text = f"move every card from {lists.get(a.get('from_list'), '?')} to {lists.get(a.get('list'), '?')}"
+        if t == "create_card":
+            text = f"create “{a.get('text')}” in {lists.get(a.get('list'), '?')}"
+        if t in ("add_label", "remove_label"):
+            text = text.replace("label…", f"label {labels.get(a.get('label'), '?')}")
+        if t == "set_due":
+            text = text.replace("…", str(a.get("days", 0)))
+        if t == "comment":
+            text = f"post comment “{a.get('text', '')[:40]}”"
+        if t == "add_sticker":
+            text = f"add sticker {a.get('sticker')}"
+        out.append(text)
+    return out

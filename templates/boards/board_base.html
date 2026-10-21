@@ -38,6 +38,7 @@
         </form>
       </div>
       {% endif %}
+      {% if can_edit %}{% for b in board_buttons %}<button class="btn light sm press-btn" data-press-board="{{ b.pk }}" title="Board button">{{ b.icon }} {{ b.name }}</button>{% endfor %}{% endif %}
       {% if can_edit and view == "board" %}<button class="btn light sm" data-toggle-inbox title="Your private inbox — drag items onto a list">{% include "boards/_icon.html" with i="inbox" %}Inbox</button>{% endif %}
       <div class="avatar-stack" data-open-share>
         {% for u in people|slice:":6" %}{% include "boards/_avatar.html" %}{% endfor %}

@@ -802,3 +802,8 @@ button.colour-dot { width: 24px; height: 24px; border-radius: 50%; cursor: point
 .map-pop { font-size: 13px; line-height: 1.5; color: #172b4d; }
 .map-pop .btn { margin-top: 6px; }
 @media (max-width: 760px) { .map-layout { grid-template-columns: 1fr; grid-template-rows: 60vh auto; } .map-view { height: auto; } }
+
+/* ---------- buttons ---------- */
+.cm-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.press-btn { white-space: nowrap; }
+.btn-preview { display: inline-flex; gap: 6px; align-items: center; }

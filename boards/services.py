@@ -79,6 +79,7 @@ def render_modal(card, request):
         "colours": COLOURS,
         "ai_enabled": ai.enabled(),
         "sticker_choices": STICKERS,
+        "card_buttons": [b for b in board.buttons.all() if b.kind == "card"],
         "watching": card.watches.filter(user=user).exists(),
         "watching_board": board.watches.filter(user=user, card__isnull=True).exists(),
     }

@@ -24,7 +24,12 @@ def automation_page(request, board_id):
         rules.append({"rule": r, "when": when, "then": then})
     schedules = [{"s": s, "when": automation.describe_schedule(s)}
                  for s in board.schedules.select_related("target_list", "member", "label")]
+    from .models import Button
+    buttons = [{"b": b, "does": automation.describe_button_actions(b)} for b in board.buttons.all()]
     ctx.update({
+        "buttons": buttons,
+        "board_actions": Button.BOARD_ACTIONS,
+        "button_icons": ["", "✅", "🚚", "📦", "🔥", "⭐", "🧹", "📌", "⏰", "👋"],
         "rules": rules,
         "schedules": schedules,
         "triggers": Rule.TRIGGERS,
@@ -74,51 +79,10 @@ def rule_create(request, board_id):
             messages.error(request, "Pick which label triggers the rule.")
             return back
 
-    actions = []
-    for i in range(MAX_ACTIONS):
-        t = p.get(f"action_{i}")
-        if not t:
-            continue
-        if t not in dict(Rule.ACTIONS):
-            continue
-        a = {"type": t}
-        need = NEEDS.get(t)
-        if need == "list":
-            lst = List.objects.filter(pk=p.get(f"list_{i}") or 0, board=board).first()
-            if not lst:
-                messages.error(request, "Pick the list to move cards to.")
-                return back
-            a["list"] = lst.pk
-        elif need == "label":
-            lab = Label.objects.filter(pk=p.get(f"label_{i}") or 0, board=board).first()
-            if not lab:
-                messages.error(request, "Pick the label.")
-                return back
-            a["label"] = lab.pk
-        elif need == "user":
-            m = BoardMember.objects.filter(board=board, user_id=p.get(f"user_{i}") or 0).first()
-            if not m:
-                messages.error(request, "Pick a board member to add.")
-                return back
-            a["user"] = m.user_id
-        elif need == "days":
-            try:
-                a["days"] = max(0, min(int(p.get(f"days_{i}") or 0), 365))
-            except ValueError:
-                a["days"] = 0
-        elif need == "sticker":
-            s = p.get(f"sticker_{i}")
-            if s not in STICKERS:
-                messages.error(request, "Pick a sticker.")
-                return back
-            a["sticker"] = s
-        elif need == "text":
-            text = (p.get(f"text_{i}") or "").strip()[:2000]
-            if not text:
-                messages.error(request, "Write the comment to post.")
-                return back
-            a["text"] = text
-        actions.append(a)
+    actions, error = parse_actions(p, board)
+    if error:
+        messages.error(request, error)
+        return back
     if not actions:
         messages.error(request, "Add at least one action.")
         return back
@@ -130,6 +94,101 @@ def rule_create(request, board_id):
     rule.save()
     messages.success(request, "Rule added.")
     return back
+
+
+def parse_actions(p, board, prefix="", extra=()):
+    """Read action_0..action_3 (+ their parameters) from a POST. Returns (actions, error)."""
+    allowed = dict(Rule.ACTIONS) | dict(extra)
+    actions = []
+    for i in range(MAX_ACTIONS):
+        t = p.get(f"{prefix}action_{i}")
+        if not t or t not in allowed:
+            continue
+        a = {"type": t}
+        need = NEEDS.get(t)
+        if t == "move_all":
+            src = List.objects.filter(pk=p.get(f"{prefix}from_list_{i}") or 0, board=board).first()
+            if not src:
+                return [], "Pick the list to move cards from."
+            a["from_list"] = src.pk
+            need = "list"
+        if t in ("create_card", "sort_due"):
+            need = "list"
+        if need == "list":
+            lst = List.objects.filter(pk=p.get(f"{prefix}list_{i}") or 0, board=board).first()
+            if not lst:
+                return [], "Pick the list."
+            a["list"] = lst.pk
+        elif need == "label":
+            lab = Label.objects.filter(pk=p.get(f"{prefix}label_{i}") or 0, board=board).first()
+            if not lab:
+                return [], "Pick the label."
+            a["label"] = lab.pk
+        elif need == "user":
+            m = BoardMember.objects.filter(board=board, user_id=p.get(f"{prefix}user_{i}") or 0).first()
+            if not m:
+                return [], "Pick a board member to add."
+            a["user"] = m.user_id
+        elif need == "days":
+            try:
+                a["days"] = max(0, min(int(p.get(f"{prefix}days_{i}") or 0), 365))
+            except ValueError:
+                a["days"] = 0
+        elif need == "sticker":
+            st = p.get(f"{prefix}sticker_{i}")
+            if st not in STICKERS:
+                return [], "Pick a sticker."
+            a["sticker"] = st
+        if need == "text" or t == "create_card":
+            text = (p.get(f"{prefix}text_{i}") or "").strip()[:2000]
+            if not text:
+                return [], "Write the card title." if t == "create_card" else "Write the comment to post."
+            a["text"] = text[:250] if t == "create_card" else text
+        actions.append(a)
+    return actions, None
+
+
+@login_required
+@require_POST
+def button_create(request, board_id):
+    from .models import Button
+    board, ok = _editable_board(request, board_id)
+    back = redirect("board_automation", board_id=board.pk)
+    if not ok:
+        return back
+    p = request.POST
+    kind = p.get("kind") if p.get("kind") in dict(Button.KINDS) else Button.CARD
+    name = (p.get("name") or "").strip()[:40]
+    if not name:
+        messages.error(request, "Give the button a name.")
+        return back
+    if kind == Button.CARD:
+        actions, error = parse_actions(p, board, prefix="b", extra=[("add_me", "")])
+    else:
+        actions, error = parse_actions(p, board, prefix="bb", extra=Button.BOARD_ACTIONS)
+        actions = [a for a in actions if a["type"] in dict(Button.BOARD_ACTIONS)]
+    if error:
+        messages.error(request, error)
+        return back
+    if not actions:
+        messages.error(request, "Add at least one action.")
+        return back
+    Button.objects.create(board=board, kind=kind, name=name, icon=(p.get("icon") or "")[:8], actions=actions,
+                          created_by=request.user)
+    messages.success(request, f"Button “{name}” added. " + (
+        "It shows on every card on this board." if kind == Button.CARD else "It shows in the board's header."))
+    return back
+
+
+@login_required
+@require_POST
+def button_update(request, board_id, button_id):
+    from .models import Button
+    board, ok = _editable_board(request, board_id)
+    if ok and request.POST.get("action") == "delete":
+        get_object_or_404(Button, pk=button_id, board=board).delete()
+        messages.success(request, "Button deleted.")
+    return redirect("board_automation", board_id=board.pk)
 
 
 @login_required

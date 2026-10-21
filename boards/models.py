@@ -385,6 +385,7 @@ class Activity(models.Model):
             "unmirrored": f"removed the mirror from {d.get('frm', '')}",
             "mirror_added": f"mirrored a card here from {d.get('source', '')} ({d.get('list', '')})",
             "attachment_added": f"attached {d.get('name', 'a file')}",
+            "button": f"pressed {d.get('name', 'a button')}: {d.get('summary', '')}",
         }.get(self.verb, self.verb.replace("_", " "))
 
 
@@ -591,3 +592,31 @@ class Watch(models.Model):
             models.UniqueConstraint(fields=["user", "card"], condition=models.Q(card__isnull=False),
                                     name="uniq_watch_card"),
         ]
+
+
+class Button(models.Model):
+    """One click runs several actions: on the open card, or across the board."""
+
+    CARD, BOARD = "card", "board"
+    KINDS = [(CARD, "Card button"), (BOARD, "Board button")]
+    BOARD_ACTIONS = [
+        ("create_card", "create card … in list…"),
+        ("move_all", "move every card from list… to list…"),
+        ("archive_done", "archive every complete card"),
+        ("sort_due", "sort list… by due date"),
+    ]
+
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="buttons")
+    kind = models.CharField(max_length=10, choices=KINDS, default=CARD)
+    name = models.CharField(max_length=40)
+    icon = models.CharField(max_length=8, blank=True)
+    actions = models.JSONField(default=list)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    run_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return self.name
