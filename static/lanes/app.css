@@ -787,3 +787,18 @@ button.colour-dot { width: 24px; height: 24px; border-radius: 50%; cursor: point
 .theme-opt { border: 0; background: none; text-align: left; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
 .theme-opt:hover { background: var(--surface-3); }
 .theme-opt.on { background: var(--surface-3); font-weight: 700; }
+
+/* ---------- map view ---------- */
+.map-view { padding: 12px; height: calc(100vh - 150px); }
+.map-layout { display: grid; grid-template-columns: 1fr 300px; gap: 12px; height: 100%; }
+.map-canvas { border-radius: 10px; overflow: hidden; min-height: 360px; background: var(--surface-2); }
+.map-side { background: var(--surface); border-radius: 10px; padding: 12px; overflow-y: auto; color: var(--text); }
+.map-side h3 { margin: 0 0 8px; font-size: 14px; }
+.map-row { display: grid; gap: 2px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 6px; padding: 8px; color: var(--text); cursor: pointer; font: inherit; }
+.map-row:hover { background: var(--surface-2); }
+.map-row small { color: var(--text-2); }
+.map-row.done b { text-decoration: line-through; opacity: .7; }
+.map-empty { max-width: 560px; margin: 40px auto; }
+.map-pop { font-size: 13px; line-height: 1.5; color: #172b4d; }
+.map-pop .btn { margin-top: 6px; }
+@media (max-width: 760px) { .map-layout { grid-template-columns: 1fr; grid-template-rows: 60vh auto; } .map-view { height: auto; } }

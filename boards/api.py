@@ -538,7 +538,10 @@ def card_field_set(request, card_id):
     if value is None:
         CardFieldValue.objects.filter(card=card, field=field).delete()
     else:
-        CardFieldValue.objects.update_or_create(card=card, field=field, defaults={"value": value})
+        cfv, _ = CardFieldValue.objects.update_or_create(card=card, field=field, defaults={"value": value})
+        if field.kind == CustomField.LOCATION:
+            from . import geo
+            geo.place(cfv)
     return card_response(card.pk, request)
 
 

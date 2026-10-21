@@ -304,6 +304,10 @@ class CardFieldValue(models.Model):
     card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="field_values")
     field = models.ForeignKey(CustomField, on_delete=models.CASCADE, related_name="values")
     value = models.JSONField()
+    # Location fields: map coordinates, looked up once per address (see geo.py)
+    lat = models.FloatField(null=True, blank=True)
+    lng = models.FloatField(null=True, blank=True)
+    geocoded_for = models.CharField(max_length=300, blank=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["card", "field"], name="uniq_card_field")]

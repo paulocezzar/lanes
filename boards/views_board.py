@@ -227,3 +227,34 @@ def board_dashboard(request, board_id=None):
 
 def visible_scope_boards(user):
     return permissions.visible_boards(user).filter(is_template=False)
+
+
+@login_required
+def board_map(request, board_id=None):
+    """Cards with a location field, as pins on a map."""
+    import time
+
+    from . import geo
+    from .models import CardFieldValue, CustomField
+    board, ctx, qs = _scope(request, board_id, "map")
+    values = (CardFieldValue.objects.filter(card__in=qs, field__kind=CustomField.LOCATION)
+              .select_related("field", "card__list__board").order_by("card__list__board__title", "card__title"))
+    budget = time.monotonic() + 6          # look up a few new addresses per visit, never hang the page
+    pins, unplaced = [], []
+    for v in values[:1000]:
+        geo.place(v, budget_until=budget)
+        c = v.card
+        row = {"card": c, "field": v.field.name, "where": v.value}
+        if v.lat is not None:
+            pins.append({**row, "lat": v.lat, "lng": v.lng})
+        else:
+            unplaced.append(row)
+    ctx.update({
+        "pins": pins,
+        "pins_json": [{"id": p["card"].pk, "title": p["card"].title, "where": str(p["where"]), "field": p["field"],
+                       "list": p["card"].list.title, "board": p["card"].list.board.title,
+                       "done": p["card"].is_complete, "lat": p["lat"], "lng": p["lng"]} for p in pins],
+        "unplaced": unplaced,
+        "has_location_field": (board.custom_fields.filter(kind=CustomField.LOCATION).exists() if board else True),
+    })
+    return render(request, "boards/view_map.html", ctx)

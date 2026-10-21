@@ -13,7 +13,7 @@
     <nav class="view-tabs" aria-label="Views">
       {% for key, label, url_name in view_tabs %}<a href="{% url url_name board.pk %}" class="{% if key == view %}on{% endif %}">{{ label }}</a>{% endfor %}
     </nav>
-    {% if view == "calendar" or view == "table" or view == "timeline" or view == "dashboard" %}<a class="btn light sm all-toggle" href="{% url 'all_'|add:view %}" title="Show cards from every board you can see">All boards</a>{% endif %}
+    {% if view == "calendar" or view == "table" or view == "timeline" or view == "dashboard" or view == "map" %}<a class="btn light sm all-toggle" href="{% url 'all_'|add:view %}" title="Show cards from every board you can see">All boards</a>{% endif %}
     <div class="board-head-right">
       {% if view == "board" %}
       <div class="pop-wrap filter-wrap">

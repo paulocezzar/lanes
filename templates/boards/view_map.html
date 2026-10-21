@@ -1,0 +1,69 @@
+{% extends base_template %}
+{% load static %}
+{% block board_body %}
+<div class="view-wrap map-view">
+  {% if not has_location_field %}
+  <div class="dash-card map-empty">
+    <h3>📍 Put cards on a map</h3>
+    <p>Add a <b>Location</b> custom field to this board (Menu → Fields → kind “Location”), then type an address or postcode on any card. Cards with a location show up here as pins.</p>
+  </div>
+  {% else %}
+  <div class="map-layout">
+    <div id="lanes-map" class="map-canvas" aria-label="Map of cards"></div>
+    <aside class="map-side">
+      <h3>{{ pins|length }} card{{ pins|length|pluralize }} on the map</h3>
+      {% for p in pins %}
+      <button class="map-row{% if p.card.is_complete %} done{% endif %}" data-map-focus="{{ p.card.pk }}">
+        <b>{{ p.card.title }}</b><small>📍 {{ p.where }}{% if not board %} · {{ p.card.list.board.title }}{% endif %} · {{ p.card.list.title }}</small>
+      </button>
+      {% empty %}<p class="muted small">No cards have a location yet. Open a card and fill in its location field.</p>{% endfor %}
+      {% if unplaced %}
+      <h4 class="section-label">Couldn't find on the map</h4>
+      {% for u in unplaced %}
+      <button class="map-row" data-card-open="{{ u.card.pk }}"><b>{{ u.card.title }}</b><small>“{{ u.where }}” — try a full postcode</small></button>
+      {% endfor %}
+      {% endif %}
+    </aside>
+  </div>
+  {{ pins_json|json_script:"map-pins" }}
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}{{ block.super }}
+<link rel="stylesheet" href="{% static 'lanes/vendor/leaflet/leaflet.css' %}">
+<script src="{% static 'lanes/vendor/leaflet/leaflet.js' %}"></script>
+<script>
+(() => {
+  const el = document.getElementById('lanes-map');
+  const data = document.getElementById('map-pins');
+  if (!el || !data || !window.L) return;
+  L.Icon.Default.imagePath = '{% static "lanes/vendor/leaflet/images/" %}';
+  const pins = JSON.parse(data.textContent);
+  const map = L.map(el, { scrollWheelZoom: true });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const markers = {};
+  // several cards at one address: spread them a hair so each pin can be clicked
+  const seen = {};
+  pins.forEach(p => {
+    const k = `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+    const n = seen[k] = (seen[k] || 0) + 1;
+    const lat = p.lat + (n - 1) * 0.00012, lng = p.lng + (n - 1) * 0.00012;
+    const m = L.marker([lat, lng], { title: p.title, opacity: p.done ? 0.55 : 1 }).addTo(map);
+    m.bindPopup(`<div class="map-pop"><b>${esc(p.title)}</b><br><small>${esc(p.board)} › ${esc(p.list)}</small><br>📍 ${esc(p.where)}<br>
+      <button class="btn primary sm" data-card-open="${p.id}">Open card</button></div>`);
+    markers[p.id] = m;
+  });
+  if (pins.length) map.fitBounds(L.latLngBounds(pins.map(p => [p.lat, p.lng])).pad(0.2), { maxZoom: 14 });
+  else map.setView([51.16, -2.58], 9);   // Somerset
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-map-focus]');
+    if (!b) return;
+    const m = markers[b.dataset.mapFocus];
+    if (m) { map.setView(m.getLatLng(), Math.max(map.getZoom(), 14)); m.openPopup(); }
+  });
+})();
+</script>
+{% endblock %}

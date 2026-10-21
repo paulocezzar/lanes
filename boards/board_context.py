@@ -12,6 +12,7 @@ VIEW_TABS = [
     ("table", "Table", "board_table"),
     ("timeline", "Timeline", "board_timeline"),
     ("dashboard", "Dashboard", "board_dashboard"),
+    ("map", "Map", "board_map"),
 ]
 
 
@@ -61,6 +62,7 @@ ALL_TABS = [
     ("table", "Table", "all_table"),
     ("timeline", "Timeline", "all_timeline"),
     ("dashboard", "Dashboard", "all_dashboard"),
+    ("map", "Map", "all_map"),
 ]
 
 

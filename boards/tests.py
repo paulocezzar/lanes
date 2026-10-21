@@ -1056,3 +1056,40 @@ class WatchTests(TestCase):
         self.post(self.c, f"/api/cards/{self.card.pk}/watch/")
         self.post(self.c, f"/api/cards/{self.card.pk}/move/", {"list_id": self.l2.pk})
         self.assertFalse(Notification.objects.filter(recipient=self.owner).exists())
+
+
+class MapTests(TestCase):
+    def setUp(self):
+        from .models import CustomField
+        self.ws = Workspace.objects.create(name="Bakery M")
+        self.u = User.objects.create_user("map@x.com", "pw", first_name="Map")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.board = Board.objects.create(workspace=self.ws, title="Deliveries")
+        BoardMember.objects.create(board=self.board, user=self.u, role="admin")
+        self.lst = List.objects.create(board=self.board, title="Today")
+        self.card = Card.objects.create(list=self.lst, title="Drop at farm shop")
+        self.field = CustomField.objects.create(board=self.board, name="Where", kind="location")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def test_location_is_geocoded_once_and_pinned(self):
+        from unittest import mock
+        from . import geo
+        with mock.patch.object(geo, "lookup", return_value=(51.16, -2.58)) as lk:
+            r = self.c.post(f"/api/cards/{self.card.pk}/fields/",
+                            json.dumps({"field_id": self.field.pk, "value": "BA4 6NT"}), content_type="application/json")
+            self.assertEqual(r.status_code, 200)
+            page = self.c.get(f"/b/{self.board.pk}/map/")
+            self.assertEqual(lk.call_count, 1)        # not looked up again on the map page
+        self.assertContains(page, "Drop at farm shop")
+        self.assertContains(page, "51.16")
+        self.assertEqual(self.c.get("/all/map/").status_code, 200)
+
+    def test_latlng_text_and_unplaced(self):
+        from . import geo
+        self.assertEqual(geo.lookup("51.5, -0.12"), (51.5, -0.12))
+        from unittest import mock
+        with mock.patch.object(geo, "lookup", return_value=None):
+            self.c.post(f"/api/cards/{self.card.pk}/fields/",
+                        json.dumps({"field_id": self.field.pk, "value": "nowhere"}), content_type="application/json")
+            page = self.c.get(f"/b/{self.board.pk}/map/")
+        self.assertContains(page, "Couldn")
