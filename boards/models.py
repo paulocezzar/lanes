@@ -561,6 +561,7 @@ class Notification(models.Model):
     dedupe_key = models.CharField(max_length=120, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     read_at = models.DateTimeField(null=True, blank=True)
+    emailed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -715,6 +716,10 @@ class AuditEvent(models.Model):
         "board_archived": "archived the board {board}",
         "board_restored": "restored the board {board}",
         "account_off": "switched off the account of {name}",
+        "password_reset_requested": "asked for a password reset email for {email}",
+        "ms_login": "signed in with Microsoft",
+        "ms_account_created": "got a Lanes account from Microsoft sign-in",
+        "invites_sent": "emailed {count} invites",
         "people_imported": "added {count} department memberships from a spreadsheet ({new} new accounts)",
         "account_on": "switched the account of {name} back on",
         "two_step_on": "turned on two-step sign-in",
@@ -772,6 +777,11 @@ class CompanySettings(models.Model):
     create_boards = models.CharField(max_length=20, choices=CREATE_CHOICES, default=EVERYONE)
     private_boards = models.CharField(max_length=20, choices=PRIVATE_CHOICES, default=BOARD_ADMINS)
     require_two_step = models.CharField(max_length=10, choices=TWO_STEP_CHOICES, default="off")
+    MICROSOFT_CHOICES = [("off", "Off"),
+                         ("allowed", "Allowed — staff can use Microsoft or a Lanes password"),
+                         ("required", "Required for staff — Lanes passwords only for guests and company admins")]
+    microsoft_login = models.CharField(max_length=10, choices=MICROSOFT_CHOICES, default="allowed")
+    microsoft_auto_create = models.BooleanField(default=False)   # make accounts for anyone in the directory
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
 
@@ -779,3 +789,22 @@ class CompanySettings(models.Model):
     def get(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class OutgoingEmail(models.Model):
+    """Emails waiting to go out. The cron job sends them, so a big batch
+    (e.g. 300 invites) never holds up a web request."""
+
+    to = models.EmailField()
+    subject = models.CharField(max_length=200)
+    text = models.TextField()
+    html = models.TextField(blank=True)
+    kind = models.CharField(max_length=20, blank=True)       # invite, notification, digest…
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    error = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [models.Index(fields=["sent_at", "created_at"])]

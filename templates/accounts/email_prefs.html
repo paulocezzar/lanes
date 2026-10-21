@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Email · Lanes{% endblock %}
+{% block content %}
+<main class="home narrow">
+  <a class="back-link" href="{% url 'home' %}">← Boards</a>
+  <h1 class="page-title">Email notifications</h1>
+  <section class="panel">
+    {% if not email_enabled %}<p class="warn-note">Lanes isn't set up to send email yet, so this choice will apply once it is.</p>{% endif %}
+    <form method="post" class="stack wide">{% csrf_token %}
+      <p>When something happens that's in your 🔔 — you're assigned, mentioned, someone comments on your card, a due date is close — Lanes can email you too.</p>
+      {% for key, label in prefs %}
+      <label class="radio-row"><input type="radio" name="email_notifications" value="{{ key }}" {% if user.email_notifications == key %}checked{% endif %}> {{ label }}</label>
+      {% endfor %}
+      <p class="muted small">“As they happen” only emails things you haven't already seen in Lanes, grouped so you don't get one email per change. The morning summary arrives around 7am with your cards due that day.</p>
+      <div><button class="btn primary">Save</button></div>
+    </form>
+  </section>
+</main>
+{% endblock %}

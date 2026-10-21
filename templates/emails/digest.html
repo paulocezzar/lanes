@@ -1,0 +1,10 @@
+{% extends "emails/_base.html" %}
+{% block body %}
+<p>Good morning {{ user.first_name|default:"" }} — here's your day on Lanes.</p>
+{% if due %}<h3 style="font-size:15px;margin:16px 0 6px">Due today or overdue</h3>
+{% for c in due %}<div style="padding:6px 0"><a href="{{ c.link }}" style="color:#172b4d"><b>{{ c.title }}</b></a> <span style="font-size:12px;color:{% if c.overdue %}#c9372c{% else %}#626f86{% endif %}">{% if c.overdue %}overdue · {% endif %}{{ c.when }}</span><div style="font-size:12px;color:#626f86">{{ c.where }}</div></div>{% endfor %}{% endif %}
+{% if items %}<h3 style="font-size:15px;margin:16px 0 6px">New since yesterday</h3>
+{% for i in items %}<div style="border-top:1px solid #dcdfe4;padding:8px 0"><a href="{{ i.link }}" style="color:#172b4d;text-decoration:none"><b>{{ i.who }}</b> {{ i.text }}</a><div style="font-size:12px;color:#626f86">{% if i.where %}{{ i.where }} · {% endif %}{{ i.when }}</div></div>{% endfor %}{% endif %}
+<p><a href="{{ site_url }}/planner/" style="display:inline-block;background:#0c66e4;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Open my Planner</a></p>
+{% endblock %}
+{% block footer %}<a href="{{ prefs }}">Change how often Lanes emails you</a>.{% endblock %}

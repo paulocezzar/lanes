@@ -1,0 +1,12 @@
+{% extends "emails/_base.html" %}
+{% block body %}
+<p>Hi {{ user.first_name|default:"there" }},</p>
+<p>{% if inviter %}<b>{{ inviter.display_name }}</b> has{% else %}You've been{% endif %} {% if inviter %}added you to{% else %}added to{% endif %} Lanes{% if where %} — <b>{{ where }}</b>{% endif %}. Lanes is where our teams keep their boards, cards and to-dos.</p>
+{% if microsoft %}<p>Sign in with your work Microsoft account:</p>
+<p><a href="{{ login }}" style="display:inline-block;background:#0c66e4;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Open Lanes</a></p>
+<p style="font-size:13px;color:#626f86">Or <a href="{{ link }}">set a Lanes password</a> instead.</p>
+{% else %}<p>Choose a password to get started:</p>
+<p><a href="{{ link }}" style="display:inline-block;background:#0c66e4;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Set my password</a></p>
+<p style="font-size:13px;color:#626f86">Your sign-in is <b>{{ user.email }}</b>. The link works for 7 days. After that, use “Forgot your password?” on <a href="{{ login }}">the sign-in page</a>.</p>{% endif %}
+{% endblock %}
+{% block footer %}You're getting this because someone at your company added you to Lanes.{% endblock %}

@@ -9,6 +9,7 @@
   <section class="dash-card stack">
     <h3>Done ✓</h3>
     <p><b>{{ created|length }}</b> new account{{ created|length|pluralize }} created and <b>{{ added }}</b> department membership{{ added|pluralize }} added.{% if new_depts %} New departments: {{ new_depts|join:", " }}.{% endif %}</p>
+    {% if invites_queued %}<p>✉️ Invites are on their way to {{ invites_queued }} {% if invites_queued == 1 %}person{% else %}people{% endif %} — they go out over the next few minutes, each with a link to set their own password.</p>{% endif %}
     {% if created %}
     <div class="warn-note">Download the sign-in details now — the temporary passwords are only available once. Everyone can change their password from their profile menu after signing in.</div>
     <div class="row"><a class="btn primary" href="?download=1">⬇ Download new accounts and passwords (CSV)</a></div>
@@ -41,6 +42,7 @@
     </div>
     {% if n_new or n_add %}
     <form method="post" class="row">{% csrf_token %}<input type="hidden" name="step" value="confirm">
+      {% if email_enabled and n_new %}<label class="check-inline dark"><input type="checkbox" name="send_invites" checked> Email the {{ n_new }} new {% if n_new == 1 %}person{% else %}people{% endif %} an invite</label>{% endif %}
       <button class="btn primary">Add {{ n_new|add:n_add }} {% if n_new|add:n_add == 1 %}person{% else %}people{% endif %}</button>
       <a class="btn ghost" href="{% url 'people_import' %}">Start again</a>
     </form>

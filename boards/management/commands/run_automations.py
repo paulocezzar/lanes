@@ -14,4 +14,7 @@ class Command(BaseCommand):
         n = run_due_schedules()
         d = run_due_rules()
         r = send_due_reminders()
-        self.stdout.write(f"Created {n} recurring card{'s' if n != 1 else ''}; sent {r} due reminder{'s' if r != 1 else ''}; ran {d} due-date rule{'s' if d != 1 else ''}.")
+        from boards import mailer
+        en, ed, es = mailer.run()
+        self.stdout.write(f"Created {n} recurring card{'s' if n != 1 else ''}; sent {r} due reminder{'s' if r != 1 else ''}; ran {d} due-date rule{'s' if d != 1 else ''}; "
+                          f"emails: {en} notification, {ed} digest, {es} sent.")

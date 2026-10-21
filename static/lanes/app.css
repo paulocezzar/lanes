@@ -970,3 +970,12 @@ a.hbar-label:hover { text-decoration: underline; }
 .company-table tr.muted td { color: var(--text-2); }
 .company > section, .company > form { width: 100%; box-sizing: border-box; }
 .company .stack { max-width: none; }
+.stack.wide { max-width: none; }
+.radio-row { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+.ms-btn { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #1b1b1b; border: 1px solid #8c8c8c; border-radius: 6px; padding: 9px 12px; font-weight: 600; text-decoration: none; }
+.ms-btn:hover { background: #f3f3f3; }
+.ms-logo { display: grid; grid-template-columns: 9px 9px; gap: 2px; }
+.ms-logo i { width: 9px; height: 9px; display: block; }
+.or-line { display: flex; align-items: center; gap: 10px; color: var(--text-2); font-size: 12px; margin: 14px 0; }
+.or-line::before, .or-line::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.invite-check { grid-column: 1 / -1; }

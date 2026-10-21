@@ -1,0 +1,12 @@
+{% extends "emails/_base.html" %}
+{% block body %}
+<p>Hi {{ user.first_name|default:"there" }}, here's what's new:</p>
+{% for i in items %}
+<div style="border-top:1px solid #dcdfe4;padding:12px 0">
+  <a href="{{ i.link }}" style="color:#172b4d;text-decoration:none"><b>{{ i.who }}</b> {{ i.text }}</a>
+  {% if i.excerpt %}<div style="color:#44546f;font-style:italic;margin-top:4px">“{{ i.excerpt|truncatechars:200 }}”</div>{% endif %}
+  <div style="font-size:12px;color:#626f86;margin-top:4px">{% if i.where %}{{ i.where }} · {% endif %}{{ i.when }} · <a href="{{ i.link }}">Open</a></div>
+</div>
+{% endfor %}
+{% endblock %}
+{% block footer %}Reply in Lanes rather than to this email. <a href="{{ prefs }}">Change how often Lanes emails you</a>.{% endblock %}

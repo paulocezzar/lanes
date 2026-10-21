@@ -91,6 +91,10 @@ def workspace_member_add(request, workspace_id):
         person = User.objects.create_user(email=email, password=password, first_name=first, last_name=last)
         request.session["new_account"] = {"workspace": ws.pk, "name": person.display_name,
                                           "email": email, "password": password}
+        if request.POST.get("send_invite"):
+            from . import mailer
+            e = mailer.invite(person, request.user, ws.name)
+            request.session["new_account"]["emailed"] = bool(e and e.sent_at)
         audit.record(request, "dept_account_created", workspace=ws, target=person)
     elif not person.is_active:
         messages.error(request, f"{person.display_name}'s account is switched off. Ask a company admin to reactivate it.")

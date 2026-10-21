@@ -44,6 +44,7 @@
             {% for key, label in user.THEMES %}<button class="theme-opt{% if user.theme == key %} on{% endif %}" data-theme-set="{{ key }}">{% if key == "light" %}☀️{% elif key == "dark" %}🌙{% else %}💻{% endif %} {{ label }}</button>{% endfor %}
           </div>
           <a class="menu-item" href="{% url 'password_change' %}">Change password</a>
+          <a class="menu-item" href="{% url 'email_prefs' %}">Email notifications</a>
           <a class="menu-item" href="{% url 'two_step_setup' %}">Two-step sign-in {% if user.totp_enabled %}<span class="ok-pill">On</span>{% endif %}</a>
           <a class="menu-item" href="{% url 'export_all' %}">Export all my boards (JSON)</a>
           <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="menu-item">Log out</button></form>

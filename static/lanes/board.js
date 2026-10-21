@@ -585,7 +585,7 @@
     shareForm.email.value = '';
     if (data.new_account) {
       const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-      accountBox.innerHTML = `<b>Guest account created.</b> Send them these details — the password is shown only once:
+      accountBox.innerHTML = `<b>Guest account created.</b> ${data.new_account.emailed ? 'We\'ve emailed them an invite. If it doesn\'t arrive, send' : 'Send'} them these details — the password is shown only once:
         <div class="cred"><span>Sign in at</span><code>${esc(location.origin)}/login/</code></div>
         <div class="cred"><span>Email</span><code>${esc(data.new_account.email)}</code></div>
         <div class="cred"><span>Temporary password</span><code>${esc(data.new_account.password)}</code></div>

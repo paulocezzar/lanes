@@ -39,6 +39,11 @@ class User(AbstractUser):
     totp_enabled = models.BooleanField(default=False)
     totp_last_step = models.BigIntegerField(default=0)        # stops the same code being used twice
     recovery_codes = models.JSONField(default=list, blank=True)  # hashed, one-time
+    EMAIL_PREFS = [("instant", "As they happen (grouped, every few minutes)"),
+                   ("daily", "Once a day — a morning summary"), ("off", "Never — just the bell in Lanes")]
+    email_notifications = models.CharField(max_length=10, choices=EMAIL_PREFS, default="instant")
+    last_digest_on = models.DateField(null=True, blank=True)
+    ms_oid = models.CharField(max_length=64, blank=True, db_index=True)   # Microsoft account id, once linked
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]

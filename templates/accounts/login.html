@@ -14,6 +14,7 @@
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn primary block">Log in</button>
     </form>
+    {% if email_enabled %}<p class="small"><a href="{% url 'password_reset' %}">Forgot your password?</a></p>{% endif %}
   </div>
 </main>
 {% endblock %}

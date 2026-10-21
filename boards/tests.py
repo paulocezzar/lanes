@@ -1623,3 +1623,96 @@ class PeopleImportTests(TestCase):
         self.assertEqual(self.c.get("/company/people/import/?template=1").status_code, 200)
         staff = Client(); staff.force_login(self.existing)
         self.assertEqual(staff.get("/company/people/import/").status_code, 404)
+
+
+class EmailTests(TestCase):
+    def setUp(self):
+        from django.test import override_settings
+        self.override = override_settings(EMAIL_ENABLED=True, EMAIL_VIA="test",
+                                          EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+                                          SITE_URL="https://lanes.example")
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        self.ws = Workspace.objects.create(name="Bakery E")
+        self.boss = User.objects.create_superuser("boss4@x.com", "pw", first_name="Bo")
+        self.u = User.objects.create_user("e@x.com", "pw-12345", first_name="Eve")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.boss, role="admin")
+        self.board = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=self.board, user=self.u)
+        BoardMember.objects.create(board=self.board, user=self.boss, role="admin")
+        self.card = Card.objects.create(list=List.objects.create(board=self.board, title="L"), title="Bake")
+
+    def test_notification_emails_grouped_and_once(self):
+        from datetime import timedelta
+        from django.core import mail
+        from django.utils import timezone
+        from . import mailer, notify
+        notify.send(self.u, "assigned", actor=self.boss, card=self.card, text="assigned you to Bake")
+        notify.send(self.u, "commented", actor=self.boss, card=self.card, text="commented on Bake", excerpt="hi")
+        self.assertEqual(mailer.run()[0], 0)                       # too fresh (2-minute grace)
+        later = timezone.now() + timedelta(minutes=3)
+        self.assertEqual(mailer.run(later)[0], 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("2 new updates", mail.outbox[0].subject)
+        self.assertIn("https://lanes.example/notifications/", mail.outbox[0].body)
+        self.assertEqual(mailer.run(later)[0], 0)                  # not again
+        # read in Lanes → no email; "off" → no email
+        n = notify.send(self.u, "assigned", actor=self.boss, card=self.card, text="x", dedupe_key="k1")
+        n.read_at = timezone.now(); n.save()
+        self.u.email_notifications = "off"; self.u.save()
+        notify.send(self.u, "assigned", actor=self.boss, card=self.card, text="y", dedupe_key="k2")
+        mailer.run(later + timedelta(minutes=5))
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_daily_digest(self):
+        from datetime import timedelta
+        from django.core import mail
+        from django.utils import timezone
+        from . import mailer
+        self.u.email_notifications = "daily"; self.u.save()
+        self.card.members.add(self.u)
+        self.card.due_at = timezone.now() + timedelta(hours=3); self.card.save()
+        eight = timezone.localtime().replace(hour=8, minute=0)
+        mailer.run(eight)
+        self.assertTrue(any("summary" in m.subject for m in mail.outbox))
+        n = len(mail.outbox); mailer.run(eight + timedelta(minutes=30))
+        self.assertEqual(len(mail.outbox), n)                      # once a day
+
+    def test_invite_and_set_password_and_forgot(self):
+        from django.core import mail
+        c = Client(); c.force_login(self.boss)
+        c.post(f"/departments/{self.ws.pk}/people/add/", {"email": "new@x.com", "first_name": "Nia",
+                                                           "role": "member", "send_invite": "on"})
+        self.assertEqual(len(mail.outbox), 1)
+        body = mail.outbox[0].body
+        link = [l for l in body.split() if "/password/set/" in l][0].replace("https://lanes.example", "")
+        anon = Client()
+        r = anon.get(link, follow=True)
+        self.assertContains(r, "Choose a password")
+        r = anon.post(r.redirect_chain[-1][0], {"new_password1": "Rye-bread-2026", "new_password2": "Rye-bread-2026"})
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(Client().login(username="new@x.com", password="Rye-bread-2026"))
+        # forgot password
+        self.assertContains(Client().get("/login/"), "Forgot your password")
+        Client().post("/password/forgot/", {"email": "e@x.com"})
+        self.assertIn("Reset your Lanes password", mail.outbox[-1].subject)
+
+    def test_bulk_invites_are_queued_and_preferences_page(self):
+        from django.core import mail
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .models import OutgoingEmail
+        c = Client(); c.force_login(self.boss)
+        c.post("/company/people/import/", {"file": SimpleUploadedFile(
+            "p.csv", b"First name,Email,Department\nA,a1@x.com,Bakery E\nB,b1@x.com,Bakery E\n")})
+        c.post("/company/people/import/", {"step": "confirm", "send_invites": "on"})
+        self.assertEqual(OutgoingEmail.objects.filter(sent_at__isnull=True).count(), 2)
+        self.assertEqual(len(mail.outbox), 0)                       # sent by the job, not the page
+        from . import mailer
+        mailer.flush()
+        self.assertEqual(len(mail.outbox), 2)
+        e = Client(); e.force_login(self.u)
+        e.post("/account/email/", {"email_notifications": "daily"})
+        self.u.refresh_from_db(); self.assertEqual(self.u.email_notifications, "daily")
+        r = c.post("/company/settings/", {"action": "test_email"}, follow=True)
+        self.assertContains(r, "Test email sent")

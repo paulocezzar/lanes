@@ -5,6 +5,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from accounts import twofactor
+from accounts import views as accounts_views
 from accounts.views import set_theme
 
 def _admin_login(request, extra_context=None):
@@ -32,6 +33,13 @@ urlpatterns = [
     path("account/theme/", set_theme, name="set_theme"),
     path("password/", auth_views.PasswordChangeView.as_view(
         template_name="accounts/password_change.html", success_url="/password/done/"), name="password_change"),
+    path("password/forgot/", accounts_views.ForgotPasswordView.as_view(), name="password_reset"),
+    path("password/forgot/sent/", auth_views.PasswordResetDoneView.as_view(
+        template_name="accounts/password_reset_sent.html"), name="password_reset_done"),
+    path("password/set/<uidb64>/<token>/", accounts_views.SetPasswordView.as_view(), name="password_reset_confirm"),
+    path("password/set/done/", auth_views.PasswordResetCompleteView.as_view(
+        template_name="accounts/password_set_done.html"), name="password_reset_complete"),
+    path("account/email/", accounts_views.email_prefs, name="email_prefs"),
     path("password/done/", auth_views.PasswordChangeDoneView.as_view(
         template_name="accounts/password_done.html"), name="password_change_done"),
     path("", include("boards.urls")),

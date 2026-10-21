@@ -1,0 +1,9 @@
+Hi {{ user.first_name|default:"there" }},
+
+{% if inviter %}{{ inviter.display_name }} has added you to{% else %}You've been added to{% endif %} Lanes{% if where %} — {{ where }}{% endif %}. Lanes is where our teams keep their boards, cards and to-dos.
+
+{% if microsoft %}Sign in with your work Microsoft account: {{ login }}
+Or set a Lanes password instead: {{ link }}{% else %}Choose a password to get started:
+{{ link }}
+
+Your sign-in is {{ user.email }}. The link works for 7 days. After that, use "Forgot your password?" on {{ login }}{% endif %}

@@ -169,6 +169,9 @@ def people(request):
 @login_required
 def settings_page(request):
     _admin_only(request)
+    from django.conf import settings as dj_settings
+
+    from accounts import microsoft
     from django.contrib import messages
     from django.shortcuts import redirect
     from . import audit
@@ -184,12 +187,35 @@ def settings_page(request):
         ("create_boards", "Who can create boards", CompanySettings.CREATE_CHOICES, ""),
         ("private_boards", "Who can make a board private (hidden from its department)", CompanySettings.PRIVATE_CHOICES,
          "Company admins can always see every board."),
+        ("microsoft_login", "Sign in with Microsoft", CompanySettings.MICROSOFT_CHOICES,
+         "Microsoft handles its own two-step checks, so Lanes doesn't ask again. “Required” means leavers lose access "
+         "as soon as IT disables their Microsoft account."),
+        ("microsoft_auto_create", "Anyone in the company's Microsoft directory can sign in",
+         [("no", "No — only people who already have a Lanes account"),
+          ("yes", "Yes — create a Lanes account the first time they sign in (an admin adds them to a department)")], ""),
     ]
+    if request.method == "POST" and request.POST.get("action") == "test_email":
+        from django.conf import settings as dj
+        from django.core.mail import send_mail
+        try:
+            send_mail("Lanes test email", "If you can read this, Lanes can send email. 🎉", dj.DEFAULT_FROM_EMAIL,
+                      [request.user.email])
+            messages.success(request, f"Test email sent to {request.user.email}. Check your inbox (and junk folder).")
+        except Exception as e:
+            messages.error(request, f"Sending failed: {str(e)[:200]}")
+        return redirect("company_settings")
     if request.method == "POST":
         changes = []
         for name, label, choices, _ in fields:
             value = request.POST.get(name)
-            if value in dict(choices) and value != getattr(cs, name):
+            current = getattr(cs, name)
+            if isinstance(current, bool):
+                if value not in ("yes", "no") or (value == "yes") == current:
+                    continue
+                setattr(cs, name, value == "yes")
+                changes.append(f"{label.lower()} → {value}")
+                continue
+            if value in dict(choices) and value != current:
                 setattr(cs, name, value)
                 changes.append(f"{label.split(' (')[0].lower()} → {dict(choices)[value].split(' —')[0].lower()}")
         if changes:
@@ -200,7 +226,11 @@ def settings_page(request):
         return redirect("company_settings")
     return render(request, "boards/company_settings.html", {
         "tab": "settings", "cs": cs,
-        "fields": [{"name": n, "label": l, "choices": c, "help": h, "value": getattr(cs, n)} for n, l, c, h in fields],
+        "fields": [{"name": n, "label": l, "choices": c, "help": h,
+                    "value": ("yes" if getattr(cs, n) else "no") if isinstance(getattr(cs, n), bool) else getattr(cs, n)}
+                   for n, l, c, h in fields],
+        "email_via": dj_settings.EMAIL_VIA,
+        "ms_configured": microsoft.configured(),
     })
 
 
@@ -240,6 +270,13 @@ def people_import(request):
             return redirect("people_import")
         created, added, new_depts = pi.apply(items, request.user)
         audit.record(request, "people_imported", count=added, new=len(created))
+        if request.POST.get("send_invites") and created:
+            from . import mailer
+            for c in created:
+                u = User.objects.get(email=c["email"])
+                mailer.invite(u, request.user, c["dept"], now=False)
+            ctx["invites_queued"] = len(created)
+            audit.record(request, "invites_sent", count=len(created))
         request.session["import_credentials"] = created
         ctx.update({"done": True, "created": created, "added": added, "new_depts": new_depts})
         return render(request, "boards/company_import.html", ctx)

@@ -8,7 +8,8 @@
   {% if new_account %}
   <div class="callout">
     <strong>{% if new_account.reset %}New temporary password for {{ new_account.name }}{% else %}Account created for {{ new_account.name }}{% endif %}</strong>
-    <p>Give them these details. The password is only shown once — they can change it from their profile menu after logging in.</p>
+    {% if new_account.emailed %}<p>✉️ We've emailed them a link to set their own password. If it doesn't arrive, give them these details instead — the password is only shown once:</p>
+    {% else %}<p>Give them these details. The password is only shown once — they can change it from their profile menu after logging in.</p>{% endif %}
     <dl class="creds">
       <dt>Web address</dt><dd>{{ request.scheme }}://{{ request.get_host }}</dd>
       <dt>Email</dt><dd>{{ new_account.email }}</dd>
@@ -29,6 +30,7 @@
         <select name="role">{% for key, name in roles %}<option value="{{ key }}" {% if key == 'member' %}selected{% endif %}>{{ name }}</option>{% endfor %}</select>
       </label>
       <button class="btn primary">Add</button>
+      {% if email_enabled %}<label class="check-inline dark small invite-check"><input type="checkbox" name="send_invite" checked> Email new people an invite</label>{% endif %}
     </form>
     <p class="hint">If they already have a Lanes account they're just added to {{ workspace.name }}. If not, an account is created with a temporary password. Department admins can add and remove people and see every board in the department.</p>
   </section>

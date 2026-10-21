@@ -1,0 +1,8 @@
+Hi {{ user.first_name|default:"there" }}, here's what's new on Lanes:
+{% for i in items %}
+- {{ i.who }} {{ i.text }}{% if i.excerpt %}
+  "{{ i.excerpt|truncatechars:200 }}"{% endif %}
+  {% if i.where %}{{ i.where }} · {% endif %}{{ i.when }}
+  {{ i.link }}
+{% endfor %}
+Change how often Lanes emails you: {{ prefs }}

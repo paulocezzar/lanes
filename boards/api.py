@@ -434,6 +434,9 @@ def board_share(request, board_id):
                                           first_name=(request.data.get("first_name") or "").strip()[:150],
                                           last_name=(request.data.get("last_name") or "").strip()[:150])
         new_account = {"email": email, "password": password}
+        from . import mailer
+        e = mailer.invite(person, request.user, f"the board {board.title}")
+        new_account["emailed"] = bool(e and e.sent_at)
     role = request.data.get("role") if request.data.get("role") in dict(BoardMember.ROLES) else BoardMember.MEMBER
     if person.is_guest and role == BoardMember.ADMIN:
         role = BoardMember.MEMBER

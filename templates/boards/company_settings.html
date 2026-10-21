@@ -14,5 +14,17 @@
     {% endfor %}
     <div class="row"><button class="btn primary">Save settings</button>{% if cs.updated_by %}<small class="muted">Last changed by {{ cs.updated_by.display_name }}, {{ cs.updated_at|timesince }} ago</small>{% endif %}</div>
   </form>
+  <section class="dash-card settings-form">
+    <div class="setting">
+      <b>Email</b>
+      {% if email_via %}<span>Sending through <b>{{ email_via }}</b>.</span>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="test_email"><button class="btn sm">Send me a test email</button></form>
+      {% else %}<span class="muted">Not set up yet — Lanes can't send invites, password resets or notification emails. See the README (“Email”) for the settings to add on Render.</span>{% endif %}
+    </div>
+    <div class="setting">
+      <b>Microsoft sign-in</b>
+      {% if ms_configured %}<span>Connected to your Microsoft 365 directory.</span>{% else %}<span class="muted">Not connected yet — needs an app registration in Microsoft Entra (see the README, “Microsoft sign-in”).</span>{% endif %}
+    </div>
+  </section>
 </main>
 {% endblock %}

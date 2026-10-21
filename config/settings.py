@@ -123,6 +123,39 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 
+# Public address of Lanes, used for links in emails (the cron job has no request to read it from).
+SITE_URL = (os.environ.get("SITE_URL") or (f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}"
+            if os.environ.get("RENDER_EXTERNAL_HOSTNAME") else "http://localhost:8000")).rstrip("/")
+
+# Microsoft Entra ID (Microsoft 365) app registration — used for "Sign in with
+# Microsoft" and, if MS_MAIL_SENDER is set, for sending email through Microsoft 365.
+MS_TENANT_ID = os.environ.get("MS_TENANT_ID", "")
+MS_CLIENT_ID = os.environ.get("MS_CLIENT_ID", "")
+MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET", "")
+MS_MAIL_SENDER = os.environ.get("MS_MAIL_SENDER", "")      # e.g. lanes@thenewt.co.uk
+
+# Email. Either a normal SMTP service (EMAIL_HOST…) or Microsoft 365 via Graph
+# (MS_MAIL_SENDER + the app registration above). Without either, nothing is sent.
+if os.environ.get("EMAIL_HOST"):
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = os.environ["EMAIL_HOST"]
+    EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+    EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+    EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+    EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
+    EMAIL_TIMEOUT = 20
+    EMAIL_ENABLED, EMAIL_VIA = True, f"SMTP ({EMAIL_HOST})"
+elif MS_MAIL_SENDER and MS_TENANT_ID and MS_CLIENT_ID and MS_CLIENT_SECRET:
+    EMAIL_BACKEND = "accounts.graph_mail.GraphEmailBackend"
+    EMAIL_ENABLED, EMAIL_VIA = True, "Microsoft 365"
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend" if DEBUG else \
+        "django.core.mail.backends.dummy.EmailBackend"
+    EMAIL_ENABLED, EMAIL_VIA = False, ""
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL") or (f"Lanes <{MS_MAIL_SENDER}>" if MS_MAIL_SENDER
+                                                               else "Lanes <lanes@localhost>")
+PASSWORD_RESET_TIMEOUT = 7 * 24 * 3600     # invite / reset links last a week
+
 # Send errors (with tracebacks) to the console so they appear in Render's logs.
 LOGGING = {
     "version": 1,

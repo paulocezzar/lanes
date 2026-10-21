@@ -1,0 +1,12 @@
+Good morning {{ user.first_name|default:"" }} — here's your day on Lanes.
+{% if due %}
+DUE TODAY OR OVERDUE{% for c in due %}
+- {{ c.title }} ({% if c.overdue %}overdue, {% endif %}{{ c.when }}) — {{ c.where }}
+  {{ c.link }}{% endfor %}
+{% endif %}{% if items %}
+NEW SINCE YESTERDAY{% for i in items %}
+- {{ i.who }} {{ i.text }}{% if i.where %} ({{ i.where }}){% endif %}
+  {{ i.link }}{% endfor %}
+{% endif %}
+Your Planner: {{ site_url }}/planner/
+Change how often Lanes emails you: {{ prefs }}
