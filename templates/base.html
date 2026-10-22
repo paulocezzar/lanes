@@ -41,17 +41,32 @@
       {% if user.is_staff %}<a class="btn ghost sm" href="{% url 'admin:index' %}">Admin</a>{% endif %}
       <details class="menu">
         <summary class="avatar lg" style="--h:{{ user.avatar_hue }}" title="{{ user.display_name }}">{{ user.initials }}</summary>
-        <div class="menu-panel right">
-          <div class="menu-head">{{ user.display_name }}<small>{{ user.email }}</small></div>
-          <div class="theme-pick" role="group" aria-label="Theme">
-            {% for key, label in user.THEMES %}<button class="theme-opt{% if user.theme == key %} on{% endif %}" data-theme-set="{{ key }}">{% if key == "light" %}☀️{% elif key == "dark" %}🌙{% else %}💻{% endif %} {{ label }}</button>{% endfor %}
+        <div class="menu-panel right acct-menu">
+          <div class="menu-label">Account</div>
+          <div class="acct-head"><span class="avatar lg" style="--h:{{ user.avatar_hue }}">{{ user.initials }}</span>
+            <span><b>{{ user.display_name }}</b><small>{{ user.email }}</small></span></div>
+          <a class="menu-item" href="{% url 'password_change' %}">{% include "boards/_icon.html" with i="key" %}Change password</a>
+          <a class="menu-item" href="{% url 'two_step_setup' %}">{% include "boards/_icon.html" with i="shield" %}Two-step sign-in {% if user.totp_enabled %}<span class="ok-pill">On</span>{% endif %}</a>
+          <hr>
+          <div class="menu-label">Lanes</div>
+          <a class="menu-item" href="{% url 'my_cards' %}">{% include "boards/_icon.html" with i="card" %}My cards</a>
+          <a class="menu-item" href="{% url 'notifications' %}">{% include "boards/_icon.html" with i="bell" %}Notifications</a>
+          <a class="menu-item" href="{% url 'email_prefs' %}">{% include "boards/_icon.html" with i="mail" %}Email notifications</a>
+          <div class="sub-wrap">
+            <button type="button" class="menu-item has-sub" data-sub-toggle aria-expanded="false">{% include "boards/_icon.html" with i="theme" %}Theme<span class="sub-chev">{% include "boards/_icon.html" with i="chev" %}</span></button>
+            <div class="submenu" data-submenu hidden role="radiogroup" aria-label="Theme">
+              {% for key, label in user.THEMES %}
+              <button type="button" class="theme-row{% if user.theme == key %} on{% endif %}" data-theme-set="{{ key }}" role="radio" aria-checked="{% if user.theme == key %}true{% else %}false{% endif %}">
+                <i class="radio-dot"></i><span class="theme-thumb t-{{ key }}"><i></i><i></i><i></i></span>{% if key == "system" %}Match system{% else %}{{ label }}{% endif %}
+              </button>{% endfor %}
+            </div>
           </div>
-          <button type="button" class="menu-item" data-colourblind="{{ user.colourblind|yesno:'0,1' }}">{% if user.colourblind %}Turn off colour-blind friendly mode{% else %}Enable colour-blind friendly mode{% endif %}</button>
-          <a class="menu-item" href="{% url 'password_change' %}">Change password</a>
-          <a class="menu-item" href="{% url 'email_prefs' %}">Email notifications</a>
-          <a class="menu-item" href="{% url 'two_step_setup' %}">Two-step sign-in {% if user.totp_enabled %}<span class="ok-pill">On</span>{% endif %}</a>
-          <a class="menu-item" href="{% url 'export_all' %}">Export all my boards (JSON)</a>
-          <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="menu-item">Log out</button></form>
+          <button type="button" class="menu-item" data-colourblind="{{ user.colourblind|yesno:'0,1' }}">{% include "boards/_icon.html" with i="palette" %}<span data-cb-label>{% if user.colourblind %}Turn off colour-blind friendly mode{% else %}Enable colour-blind friendly mode{% endif %}</span></button>
+          <a class="menu-item" href="{% url 'export_all' %}">{% include "boards/_icon.html" with i="download" %}Export all my boards</a>
+          <hr>
+          <button type="button" class="menu-item" data-show-shortcuts>{% include "boards/_icon.html" with i="keyboard" %}Shortcuts <kbd class="menu-kbd">?</kbd></button>
+          <hr>
+          <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="menu-item">{% include "boards/_icon.html" with i="leave" %}Log out</button></form>
         </div>
       </details>
     </div>
@@ -67,10 +82,20 @@
     document.querySelectorAll('[data-theme-set]').forEach(b => b.addEventListener('click', async () => {
       const theme = b.dataset.themeSet;
       document.documentElement.dataset.theme = theme;
-      document.querySelectorAll('[data-theme-set]').forEach(x => x.classList.toggle('on', x === b));
+      document.querySelectorAll('[data-theme-set]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
       const fd = new FormData(); fd.append('theme', theme);
       await fetch('{% url "set_theme" %}', { method: 'POST', body: fd, credentials: 'same-origin',
         headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
+    }));
+    document.querySelectorAll('[data-sub-toggle]').forEach(t => t.addEventListener('click', e => {
+      e.preventDefault();
+      const sub = t.parentElement.querySelector('[data-submenu]');
+      sub.hidden = !sub.hidden;
+      t.setAttribute('aria-expanded', !sub.hidden);
+    }));
+    document.querySelectorAll('[data-show-shortcuts]').forEach(b => b.addEventListener('click', () => {
+      b.closest('details')?.removeAttribute('open');
+      document.getElementById('shortcuts-dialog')?.showModal();
     }));
   </script>
   <script src="{% static 'lanes/ui.js' %}"></script>

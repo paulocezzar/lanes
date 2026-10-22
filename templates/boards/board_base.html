@@ -124,32 +124,45 @@
 </dialog>
 {% endif %}
 <aside class="drawer" id="drawer" hidden>
-  <div class="drawer-head"><h3>Menu</h3><button class="icon-btn" data-close-drawer>{% include "boards/_icon.html" with i="close" %}</button></div>
-  <div class="drawer-tabs">
-    <button class="on" data-tab="about">About</button>
-    <button data-tab="activity">Activity</button>
-    <button data-tab="archived">Archived</button>
-    {% if can_edit %}<button data-tab="labels">Labels</button><button data-tab="fields">Fields</button>{% endif %}
-    <button data-tab="copy">Copy</button>
-    <button data-tab="export">Export</button>
-    {% if can_manage %}<button data-tab="settings">Settings</button>{% endif %}
+  <div class="drawer-head">
+    <button class="icon-btn" data-drawer-back title="Back" aria-label="Back" hidden>{% include "boards/_icon.html" with i="back" %}</button>
+    <h3 data-drawer-title>Menu</h3>
+    <button class="icon-btn" data-close-drawer title="Close" aria-label="Close">{% include "boards/_icon.html" with i="close" %}</button>
   </div>
-  <div class="drawer-pane" data-pane="about">
-    <h4 class="section-label">About this board</h4>
+  <nav class="drawer-pane mlist" data-pane="home" aria-label="Board menu">
+    {% if me %}<button class="mitem" data-menu-share>{% include "boards/_icon.html" with i="share" %}<span>Share</span>
+      <span class="mitem-end avatar-stack sm">{% for u in people|slice:":3" %}{% include "boards/_avatar.html" %}{% endfor %}</span></button>
+    <hr>{% endif %}
+    <button class="mitem" data-goto="about" data-title="About this board">{% include "boards/_icon.html" with i="info" %}<span>About this board<small>{% if board.description %}{{ board.description|truncatechars:48 }}{% else %}Add a description to your board{% endif %}</small></span></button>
+    <button class="mitem" {% if can_manage %}data-goto="visibility" data-title="Visibility"{% else %}disabled{% endif %}>{% if board.visibility == "private" %}{% include "boards/_icon.html" with i="lock" %}{% else %}{% include "boards/_icon.html" with i="people" %}{% endif %}<span>Visibility: {% if board.visibility == "private" %}Private{% else %}Department{% endif %}</span></button>
+    <button class="mitem" data-goto="export" data-title="Print, export, and share">{% include "boards/_icon.html" with i="export" %}<span>Print, export, and share</span></button>
+    {% if me %}<button class="mitem" data-menu-star>{% include "boards/_icon.html" with i="star" %}<span data-menu-star-label>{% if me.starred %}Unstar{% else %}Star{% endif %}</span></button>{% endif %}
+    <hr>
+    {% if can_manage %}<button class="mitem" data-goto="settings" data-title="Settings">{% include "boards/_icon.html" with i="gear" %}<span>Settings</span></button>
+    <button class="mitem" data-goto="background" data-title="Change background"><span class="mitem-swatch bg-{{ board.background }}"></span><span>Change background</span></button>{% endif %}
+    {% if can_edit %}<button class="mitem" data-goto="fields" data-title="Custom fields">{% include "boards/_icon.html" with i="field" %}<span>Custom fields</span></button>{% endif %}
+    <hr>
+    <a class="mitem" href="{% url 'board_automation' board.pk %}">{% include "boards/_icon.html" with i="bolt" %}<span>Automation</span></a>
+    {% if can_edit %}<button class="mitem" data-goto="labels" data-title="Labels">{% include "boards/_icon.html" with i="label" %}<span>Labels</span></button>{% endif %}
+    <button class="mitem" data-goto="activity" data-title="Activity">{% include "boards/_icon.html" with i="history" %}<span>Activity</span></button>
+    <button class="mitem" data-goto="archived" data-title="Archived items">{% include "boards/_icon.html" with i="archive" %}<span>Archived items</span></button>
+    <hr>
+    <button class="mitem" data-menu-watch>{% include "boards/_icon.html" with i="eye" %}<span data-menu-watch-label>{% if watching_board %}Watching ✓{% else %}Watch{% endif %}</span></button>
+    {% if view == "board" %}<button class="mitem" data-collapse-all>{% include "boards/_icon.html" with i="collapse" %}<span>Collapse all lists</span></button>
+    <button class="mitem" data-expand-all>{% include "boards/_icon.html" with i="expand" %}<span>Expand all lists</span></button>{% endif %}
+    <button class="mitem" data-goto="copy" data-title="Copy board">{% include "boards/_icon.html" with i="copy" %}<span>Copy board</span></button>
+    {% if me %}<button class="mitem" data-leave-board>{% include "boards/_icon.html" with i="leave" %}<span>Leave board</span></button>{% endif %}
+    {% if can_manage %}<hr><button class="mitem" data-archive-board>{% include "boards/_icon.html" with i="minus" %}<span>Close board</span></button>{% endif %}
+    <p class="muted small mlist-foot">Made by {{ board.created_by.display_name|default:"—" }} · {{ board.created_at|date:"j M Y" }} · {{ board.workspace.name }}</p>
+  </nav>
+  <div class="drawer-pane" data-pane="about" hidden>
+    <h4 class="section-label">Description</h4>
     {% if can_manage %}
     <form data-board-about class="stack wide">
       <textarea name="description" rows="5" placeholder="What's this board for? Who should use it? Any rules for the lists?">{{ board.description }}</textarea>
       <div><button class="btn primary sm">Save</button></div>
     </form>
     {% else %}<div class="desc-read md">{% if board.description %}{{ board.description|md }}{% else %}<span class="muted">No description yet.</span>{% endif %}</div>{% endif %}
-    <h4 class="section-label">Board tools</h4>
-    <div class="row wrap">
-      <button class="btn sm" data-collapse-all>Collapse all lists</button>
-      <button class="btn sm ghost" data-expand-all>Expand all lists</button>
-      <button class="btn sm ghost" data-copy-board-link>🔗 Copy link to board</button>
-      {% if me %}<button class="btn sm ghost danger-text" data-leave-board>Leave board</button>{% endif %}
-    </div>
-    <p class="muted small">Made by {{ board.created_by.display_name|default:"—" }} · {{ board.created_at|date:"j M Y" }} · {{ board.workspace.name }}</p>
   </div>
   <div class="drawer-pane" data-pane="activity" hidden>
     <div class="seg-tabs" role="tablist"><button class="on" data-act-tab="all">All</button><button data-act-tab="comments">Comments</button></div>
@@ -228,6 +241,8 @@
   </div>
   {% endif %}
   <div class="drawer-pane" data-pane="export" hidden>
+    <h4 class="section-label">Print and share</h4>
+    <div class="row wrap"><button class="btn sm" type="button" data-print-board>🖨 Print</button><button class="btn sm ghost" type="button" data-copy-board-link>🔗 Copy link to board</button></div>
     <h4 class="section-label">Export this board</h4>
     <a class="btn" href="{% url 'board_csv' board.pk %}">⬇ Spreadsheet (CSV, opens in Excel)</a>
     <a class="btn ghost" href="{% url 'board_json' board.pk %}">⬇ Full data (JSON)</a>
@@ -276,16 +291,18 @@
     <h4 class="section-label">Template</h4>
     <label class="check-inline dark"><input type="checkbox" data-board-template {% if board.is_template %}checked{% endif %}> Use this board as a template</label>
     <p class="muted small">Templates appear on everyone's Boards page so they can start new boards from them.</p>
-    <h4 class="section-label">Background</h4>
+  </div>
+  <div class="drawer-pane" data-pane="background" hidden>
+    <p class="muted small">Pick a background for everyone on this board.</p>
     <div class="bg-picker">
       {% for key, name in board.BACKGROUNDS %}<button class="bg-swatch bg-{{ key }}{% if key == board.background %} on{% endif %}" data-bg="{{ key }}" title="{{ name }}"></button>{% endfor %}
     </div>
-    <h4 class="section-label">Visibility</h4>
+  </div>
+  <div class="drawer-pane" data-pane="visibility" hidden>
+    <p class="muted small">Who can find and open this board.</p>
     <select data-visibility>
       {% for key, name in board.VISIBILITY %}<option value="{{ key }}" {% if key == board.visibility %}selected{% endif %} {% if key == "private" and not can_private and board.visibility != "private" %}disabled{% endif %}>{{ name }}{% if key == "private" and not can_private and board.visibility != "private" %} (only {{ "private_boards"|who_can }}){% endif %}</option>{% endfor %}
     </select>
-    <h4 class="section-label">Archive board</h4>
-    <button class="btn danger" data-archive-board>Archive this board</button>
   </div>
   {% endif %}
 </aside>

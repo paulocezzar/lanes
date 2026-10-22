@@ -726,15 +726,40 @@
       });
     } catch { /* keep what's there */ }
   }
+  // The menu is a list (Trello-style); each item opens its own panel with a back arrow.
+  function drawerGo(pane, title) {
+    $$('[data-pane]', drawer).forEach(p => (p.hidden = p.dataset.pane !== pane));
+    const t = $('[data-drawer-title]', drawer);
+    if (t) t.textContent = pane === 'home' ? 'Menu' : (title || 'Menu');
+    const back = $('[data-drawer-back]', drawer);
+    if (back) back.hidden = pane === 'home';
+    drawer.scrollTop = 0;
+  }
+  window.LanesDrawerGo = (pane, title) => { drawer.hidden = false; drawerGo(pane, title); };
   $('[data-open-drawer]')?.addEventListener('click', () => {
     drawer.hidden = !drawer.hidden;
-    if (!drawer.hidden) refreshDrawer();
+    if (!drawer.hidden) { drawerGo('home'); refreshDrawer(); }
   });
   $('[data-close-drawer]')?.addEventListener('click', () => (drawer.hidden = true));
-  $$('[data-tab]', drawer).forEach(tab => tab.addEventListener('click', () => {
-    $$('[data-tab]', drawer).forEach(t => t.classList.toggle('on', t === tab));
-    $$('[data-pane]', drawer).forEach(p => (p.hidden = p.dataset.pane !== tab.dataset.tab));
-  }));
+  $('[data-drawer-back]', drawer)?.addEventListener('click', () => drawerGo('home'));
+  drawer.addEventListener('click', async e => {
+    const go = e.target.closest('[data-goto]');
+    if (go) return drawerGo(go.dataset.goto, go.dataset.title);
+    if (e.target.closest('[data-menu-share]')) { drawer.hidden = true; return share.showModal(); }
+    if (e.target.closest('[data-print-board]')) { drawer.hidden = true; return setTimeout(() => window.print(), 50); }
+    if (e.target.closest('[data-menu-star]')) {
+      const data = await post(`/api/boards/${boardId}/star/`);
+      $('[data-star]')?.classList.toggle('on', data.starred);
+      $('[data-menu-star-label]', drawer).textContent = data.starred ? 'Unstar' : 'Star';
+      return toast(data.starred ? '⭐ Starred — it shows at the top of your Boards page.' : 'Unstarred.');
+    }
+    if (e.target.closest('[data-menu-watch]')) {
+      const data = await post(`/api/boards/${boardId}/watch/`);
+      $('[data-watch-board]')?.classList.toggle('on', data.watching);
+      $('[data-menu-watch-label]', drawer).textContent = data.watching ? 'Watching ✓' : 'Watch';
+      return toast(data.watching ? 'Watching this board. Changes will show in your 🔔.' : 'Stopped watching this board.');
+    }
+  });
   drawer.addEventListener('click', async e => {
     const link = e.target.closest('[data-card-link]');
     if (link) { e.preventDefault(); return openCard(link.dataset.cardLink); }
@@ -1190,8 +1215,7 @@
     }
     if (e.target.closest('[data-vis-public]')) {
       visPop.hidden = true;
-      drawer.hidden = false;
-      $('[data-tab="settings"]', drawer)?.click();
+      window.LanesDrawerGo('settings', 'Settings');
     }
   });
 

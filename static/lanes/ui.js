@@ -81,7 +81,8 @@ document.addEventListener('click', async e => {
   document.documentElement.classList.toggle('cb', on);
   document.querySelectorAll('[data-colourblind]').forEach(x => {
     x.dataset.colourblind = on ? '0' : '1';
-    x.textContent = on ? 'Turn off colour-blind friendly mode' : 'Enable colour-blind friendly mode';
+    const label = x.querySelector('[data-cb-label]') || x;
+    label.textContent = on ? 'Turn off colour-blind friendly mode' : 'Enable colour-blind friendly mode';
   });
 });
 

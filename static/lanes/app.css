@@ -1131,3 +1131,63 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .menu-label { display: block; padding: 8px 12px 2px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
 .view-add { position: relative; }
 .view-add-pop { left: 0; right: auto; width: 280px; display: grid; gap: 8px; z-index: 30; }
+
+/* ---------- Board menu (Trello-style list) ---------- */
+#drawer .drawer-head { display: grid; grid-template-columns: 32px 1fr 32px; gap: 6px; }
+#drawer .drawer-head h3 { text-align: center; }
+#drawer .drawer-head [data-drawer-back][hidden] { display: inline-flex !important; visibility: hidden; }
+.mlist { gap: 0; padding: 8px; }
+.mlist hr { border: 0; border-top: 1px solid var(--border); margin: 6px 4px; width: auto; }
+.mitem { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: none;
+  color: var(--text); font: inherit; font-size: 14px; text-align: left; text-decoration: none; cursor: pointer; }
+.mitem:hover { background: var(--surface-2); }
+.mitem:disabled { cursor: default; opacity: .75; }
+.mitem:disabled:hover { background: none; }
+.mitem > .ic { width: 18px; height: 18px; flex: none; color: var(--text-2); }
+.mitem > span:not(.mitem-swatch):not(.mitem-end) { flex: 1; min-width: 0; }
+.mitem small { display: block; font-size: 12px; color: var(--text-2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mitem-end { margin-left: auto; flex: none; }
+.mitem-swatch { width: 18px; height: 18px; border-radius: 4px; flex: none; }
+.mlist-foot { padding: 8px 10px 2px; }
+.avatar-stack.sm .avatar { width: 22px; height: 22px; font-size: 9px; }
+
+@media print {
+  .topbar, .board-head .board-head-right, .drawer, .inbox-drawer, .list-foot, .tile-edit, .toasts { display: none !important; }
+  .lists { overflow: visible; flex-wrap: wrap; }
+  .board { background: #fff !important; }
+}
+
+/* ---------- Account menu (Trello-style) ---------- */
+.acct-menu { min-width: 300px; padding: 8px; }
+.acct-menu hr { border: 0; border-top: 1px solid var(--border); margin: 6px 2px; }
+.acct-menu .menu-label { padding: 6px 10px 4px; }
+.acct-head { display: flex; align-items: center; gap: 12px; padding: 6px 10px 10px; }
+.acct-head .avatar.lg { width: 40px; height: 40px; font-size: 15px; }
+.acct-head b { display: block; font-weight: 600; }
+.acct-head small { display: block; color: var(--text-2); font-size: 12px; }
+.acct-menu .menu-item { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--text); text-decoration: none; }
+.acct-menu .menu-item > .ic { width: 18px; height: 18px; color: var(--text-2); flex: none; }
+.acct-menu form { margin: 0; }
+.menu-kbd { margin-left: auto; font-size: 11px; }
+.sub-wrap { position: relative; }
+.has-sub .sub-chev { margin-left: auto; display: inline-flex; }
+.has-sub .sub-chev .ic { width: 16px; height: 16px; transition: transform .15s; }
+.has-sub[aria-expanded="true"] { background: var(--surface-3); }
+.has-sub[aria-expanded="true"] .sub-chev .ic { transform: rotate(180deg); }
+.submenu { position: absolute; right: calc(100% + 10px); top: -8px; width: 260px; padding: 6px; background: var(--surface-2);
+  border-radius: 10px; box-shadow: var(--shadow); display: grid; gap: 2px; z-index: 2; }
+.theme-row { display: flex; align-items: center; gap: 12px; padding: 8px; border: 0; border-radius: 8px; background: none;
+  color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.theme-row:hover { background: var(--surface-3); }
+.theme-row.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.radio-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--text-2); flex: none; }
+.theme-row.on .radio-dot { border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--surface-2); background: var(--accent); }
+.theme-thumb { width: 64px; height: 44px; border-radius: 5px; border: 1px solid var(--border); display: grid; grid-template-columns: 14px 1fr; grid-template-rows: 8px 1fr; gap: 3px; padding: 3px; flex: none; }
+.theme-thumb i { border-radius: 2px; }
+.theme-thumb i:nth-child(1) { grid-column: 1 / 3; }
+.theme-thumb.t-light { background: #fff; } .theme-thumb.t-light i { background: #dfe1e6; }
+.theme-thumb.t-dark { background: #1d2125; } .theme-thumb.t-dark i { background: #3b4048; }
+.theme-thumb.t-system { background: linear-gradient(90deg, #1d2125 50%, #fff 50%); } .theme-thumb.t-system i { background: #8c9bab; }
+@media (max-width: 760px) {
+  .submenu { position: static; width: auto; box-shadow: none; padding: 2px 0 2px 20px; background: none; }
+}
