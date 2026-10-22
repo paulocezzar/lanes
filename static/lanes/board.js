@@ -533,6 +533,8 @@
       if (!await LanesUI.confirm('Delete this checklist?', { ok: 'Delete', danger: true })) return;
       return post(`/api/checklists/${t.closest('[data-checklist]').dataset.checklist}/`, { delete: true }).then(applyCard);
     }
+    const clr = t.closest('[data-item-clear]');
+    if (clr) return post(`/api/items/${clr.dataset.itemClear}/`, { due_at: '' }).then(applyCard);
     const delItem = t.closest('[data-delete-item]');
     if (delItem) return post(`/api/items/${delItem.dataset.deleteItem}/`, { delete: true }).then(applyCard);
     const rmMirror = t.closest('[data-remove-mirror]');
@@ -644,7 +646,8 @@
     if (f.matches('[data-item-meta]')) {
       e.preventDefault();
       return post(`/api/items/${f.dataset.itemMeta}/`,
-        { assignee_id: f.assignee_id.value ? +f.assignee_id.value : null, due_at: f.due_at.value }).then(applyCard);
+        { assignee_id: f.assignee_id.value ? +f.assignee_id.value : null, due_at: f.due_at.value,
+          reminder_minutes: +f.reminder_minutes.value }).then(d => { applyCard(d); toast(f.assignee_id.value ? 'Saved — they\'ve been notified.' : 'Saved.'); });
     }
     if (f.matches('[data-label-new]')) {
       e.preventDefault();

@@ -2266,3 +2266,29 @@ class CalendarTrelloTests(TestCase):
         self.c.post(f"/api/boards/{self.board.pk}/lists/", json.dumps({"title": "Middle", "position": 3}),
                     content_type="application/json")
         self.assertEqual([l.title for l in self.board.lists.order_by("position")], ["First", "A", "Middle", "B"])
+
+
+class ItemReminderTests(TestCase):
+    def test_item_assign_due_and_reminder(self):
+        from datetime import timedelta
+        from .models import Checklist, ChecklistItem
+        from .notify import send_due_reminders
+        ws = Workspace.objects.create(name="Bakery IR")
+        boss = User.objects.create_user("ir@x.com", "pw"); baker = User.objects.create_user("ir2@x.com", "pw")
+        b = Board.objects.create(workspace=ws, title="B")
+        for u in (boss, baker):
+            BoardMember.objects.create(board=b, user=u, role="admin")
+        card = Card.objects.create(list=List.objects.create(board=b, title="L"), title="Sourdough")
+        item = ChecklistItem.objects.create(checklist=Checklist.objects.create(card=card, title="Steps"), text="Shape")
+        c = Client(); c.force_login(boss)
+        due = (timezone.localtime() + timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M")
+        r = c.post(f"/api/items/{item.pk}/", json.dumps({"assignee_id": baker.pk, "due_at": due, "reminder_minutes": 60}),
+                   content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content)
+        item.refresh_from_db()
+        self.assertEqual((item.assignee, item.reminder_minutes), (baker, 60))
+        self.assertTrue(Notification.objects.filter(recipient=baker, kind="item_assigned").exists())
+        self.assertEqual(send_due_reminders(), 0)                       # 3h away, reminder 1h before
+        ChecklistItem.objects.filter(pk=item.pk).update(due_at=timezone.now() + timedelta(minutes=40))
+        self.assertEqual(send_due_reminders(), 1)
+        self.assertContains(c.get(f"/cards/{card.pk}/"), "Set due date reminder")

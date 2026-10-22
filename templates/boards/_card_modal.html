@@ -254,17 +254,23 @@
           <li class="item{% if item.is_done %} done{% endif %}">
             <input type="checkbox" data-item="{{ item.pk }}" {% if item.is_done %}checked{% endif %} {% if not can_edit %}disabled{% endif %} aria-label="{{ item.text }}">
             <span class="item-text">{{ item.text }}</span>
-            {% if item.due_at %}<span class="badge sm due-{{ item.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ item.due_at|date:"j M" }}</span>{% endif %}
+            {% if item.due_at %}<span class="badge sm due-{{ item.due_state|default:'none' }}" title="Due {{ item.due_at|date:'D j M, H:i' }}">{% include "boards/_icon.html" with i="clock" %}{{ item.due_at|date:"j M, H:i" }}</span>{% endif %}
             {% if item.assignee %}{% include "boards/_avatar.html" with u=item.assignee size="sm" %}{% endif %}
             {% if can_edit %}
             <details class="item-more">
-              <summary class="icon-btn xs" title="Assign or set a due date">{% include "boards/_icon.html" with i="person" %}</summary>
+              <summary class="item-tools" title="Assign someone, set a due date and reminder">
+                <span class="icon-btn xs" title="Due date">{% include "boards/_icon.html" with i="clock" %}</span>
+                <span class="icon-btn xs" title="Assign">{% include "boards/_icon.html" with i="person" %}</span>
+              </summary>
               <form class="item-pop" data-item-meta="{{ item.pk }}">
-                <label>Assigned to
+                <div class="pop-head">Checklist item</div>
+                <label>Assign to
                   <select name="assignee_id"><option value="">Nobody</option>{% for u in people %}<option value="{{ u.pk }}" {% if u.pk == item.assignee_id %}selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select>
                 </label>
-                <label>Due<input type="datetime-local" name="due_at" value="{% if item.due_at %}{{ item.due_at|date:'Y-m-d\TH:i' }}{% endif %}"></label>
-                <div class="row"><button class="btn primary sm">Save</button></div>
+                <label>Due date<input type="datetime-local" name="due_at" value="{% if item.due_at %}{{ item.due_at|date:'Y-m-d\TH:i' }}{% endif %}"></label>
+                <label>Set due date reminder<select name="reminder_minutes">{% for k, v in card.REMINDERS %}<option value="{{ k }}" {% if k == item.reminder_minutes %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+                <p class="muted small">Reminders go to the person assigned to this item.</p>
+                <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-item-clear="{{ item.pk }}">Remove date</button></div>
               </form>
             </details>
             <button class="icon-btn xs item-del" data-delete-item="{{ item.pk }}" title="Delete item">{% include "boards/_icon.html" with i="close" %}</button>

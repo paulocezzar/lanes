@@ -162,10 +162,13 @@ def send_due_reminders(now=None):
         for u in people.values():
             if send(u, Notification.DUE_SOON, card=c, text=text, dedupe_key=key):
                 sent += 1
-    items = (ChecklistItem.objects.filter(due_at__gt=now, due_at__lte=soon, is_done=False, assignee__isnull=False,
+    items = (ChecklistItem.objects.filter(due_at__gt=now - timedelta(minutes=15), due_at__lte=now + timedelta(days=2),
+                                          is_done=False, assignee__isnull=False, reminder_minutes__gte=0,
                                           checklist__card__is_archived=False, checklist__card__is_template=False)
              .select_related("assignee", "checklist__card__list__board"))
     for it in items:
+        if it.due_at - timedelta(minutes=it.reminder_minutes) > now:
+            continue                                  # not time yet
         c = it.checklist.card
         key = f"itemdue:{it.pk}:{int(it.due_at.timestamp())}"
         when = timezone.localtime(it.due_at).strftime("%a %-d %b, %H:%M")

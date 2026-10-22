@@ -269,6 +269,7 @@ class ChecklistItem(models.Model):
     assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
                                  related_name="assigned_items")
     due_at = models.DateTimeField(null=True, blank=True)
+    reminder_minutes = models.SmallIntegerField(default=1440)   # same choices as Card.REMINDERS; -1 = none
 
     @property
     def due_state(self):

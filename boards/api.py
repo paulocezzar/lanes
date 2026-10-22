@@ -434,6 +434,12 @@ def item_update(request, item_id):
             item.due_at = timezone.make_aware(due) if timezone.is_naive(due) else due
         else:
             item.due_at = None
+    if "reminder_minutes" in request.data:
+        try:
+            r = int(request.data["reminder_minutes"])
+        except (TypeError, ValueError):
+            r = 1440
+        item.reminder_minutes = r if r in dict(Card.REMINDERS) else 1440
     if "is_done" in request.data and bool(request.data["is_done"]) != item.is_done:
         item.is_done = bool(request.data["is_done"])
         item.done_by = request.user if item.is_done else None
