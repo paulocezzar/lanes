@@ -147,6 +147,13 @@ def card_create(request, list_id):
     return card_response(card.pk, request)
 
 
+def _slot(card, lst, position):
+    """1-based position in a list → (before, after) neighbour tokens, ignoring the card itself."""
+    entries = [t for t, _ in sorted(positions._entry_positions(lst, exclude=f"c{card.pk}"), key=lambda e: (e[1], e[0]))]
+    i = max(1, min(int(position), len(entries) + 1)) - 1
+    return (entries[i - 1] if i > 0 else None), (entries[i] if i < len(entries) else None)
+
+
 @api
 def card_move(request, card_id):
     card = _card(request, card_id)
@@ -162,13 +169,24 @@ def card_move(request, card_id):
             raise ApiError("You can't add cards to that board.", 403)
         from .copying import transfer_card
         transfer_card(card, new_list, user=request.user)
+        if request.data.get("position"):
+            card.refresh_from_db()
+            positions.place_in_list(card, new_list, *_slot(card, new_list, request.data["position"]))
+            card.save(update_fields=["position"])
         automation.fire(card, Rule.ADDED, list_=new_list, actor=request.user)
         data = card_response(card.pk, request)
         data["moved_board"] = new_list.board_id
         return data
     card.list = new_list
-    positions.place_in_list(card, new_list, request.data.get("before", request.data.get("before_id")),
-                            request.data.get("after", request.data.get("after_id")))
+    if request.data.get("position"):
+        try:
+            before, after = _slot(card, new_list, request.data["position"])
+        except (TypeError, ValueError):
+            raise ApiError("Pick a position.")
+        positions.place_in_list(card, new_list, before, after)
+    else:
+        positions.place_in_list(card, new_list, request.data.get("before", request.data.get("before_id")),
+                                request.data.get("after", request.data.get("after_id")))
     card.save(update_fields=["list", "position", "updated_at"])
     if new_list.pk != old_list.pk:
         log(card.list.board, request.user, "card_moved", card=card, **{"from": old_list.title, "to": new_list.title})

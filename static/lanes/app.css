@@ -1191,3 +1191,31 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 @media (max-width: 760px) {
   .submenu { position: static; width: auto; box-shadow: none; padding: 2px 0 2px 20px; background: none; }
 }
+
+/* ---------- Complete tick on card fronts (slides in on hover) ---------- */
+.tile-title { display: flex; align-items: flex-start; }
+.tile-title-text { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.tile-check { flex: none; width: 0; height: 16px; margin: 2px 0 0; padding: 0; border: 0; border-radius: 50%; background: none;
+  opacity: 0; overflow: hidden; cursor: pointer; display: inline-grid; place-items: center; color: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-2);
+  transition: width .18s ease, margin-right .18s ease, opacity .15s ease, background-color .15s, box-shadow .15s, transform .15s; }
+.tile-check svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.card-tile:hover .tile-check, .card-tile.kb-current .tile-check, .tile-check.shown { width: 16px; margin-right: 7px; opacity: 1; }
+.tile-check:hover { box-shadow: inset 0 0 0 1.5px var(--text); }
+.card-tile:hover .tile-check:not(.on):hover { color: var(--text-2); }
+.tile-check.on { background: var(--ok); box-shadow: none; color: #10141a; }
+.tile-check.pop { animation: tick-pop .28s ease; }
+@keyframes tick-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@media (hover: none) { .tile-check { width: 16px; margin-right: 7px; opacity: .7; } }
+@media (prefers-reduced-motion: reduce) { .tile-check { transition: none; } .tile-check.pop { animation: none; } }
+
+/* ---------- Move card (list chip at the top of a card) ---------- */
+.list-chip { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  background: var(--surface-3); color: var(--text); }
+.list-chip[class*="lc-"] { color: #172b4d; }
+.list-chip:hover { filter: brightness(1.08); }
+.move-pop { width: 320px; display: grid; gap: 10px; left: 0; right: auto; }
+.move-pop .section-label { margin: 0; }
+.mv-row { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
+.move-pop select { width: 100%; }
+.tile-check:focus-visible { outline: 2px solid var(--accent); }

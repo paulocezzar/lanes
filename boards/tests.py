@@ -2027,11 +2027,11 @@ class TrelloTouches2Tests(TestCase):
     def test_leave_board_and_card_front_flags(self):
         self.card.is_complete = True; self.card.cover_colour = "red"; self.card.save()
         page = self.ca.get(f"/b/{self.board.pk}/")
-        self.assertContains(page, 'class="done-dot"')
+        self.assertContains(page, 'tile-check on shown')
         self.assertContains(page, "tile-cover colour lc-red")
         self.j(self.ca, f"/api/boards/{self.board.pk}/update/", {"show_complete": False, "covers_enabled": False})
         page = self.ca.get(f"/b/{self.board.pk}/")
-        self.assertNotContains(page, 'class="done-dot"')
+        self.assertNotContains(page, 'tile-check on shown')
         self.assertNotContains(page, "tile-cover colour lc-red")
         self.j(self.ca, f"/api/boards/{self.board.pk}/update/", {"covers_enabled": True})
         self.j(self.ca, f"/api/cards/{self.card.pk}/update/", {"cover_full": True})
@@ -2202,3 +2202,31 @@ class TrelloTouches3Tests(TestCase):
         self.assertEqual(self.board.custom_fields.get().options[0], "Highest")
         for v in ("table", "timeline"):
             self.assertContains(self.c.get(f"/b/{self.board.pk}/{v}/"), "data-view-add-form")
+
+
+class MoveCardPositionTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery M")
+        self.u = User.objects.create_user("mv@x.com", "pw")
+        self.board = Board.objects.create(workspace=self.ws, title="Orders")
+        BoardMember.objects.create(board=self.board, user=self.u, role="admin")
+        self.a = List.objects.create(board=self.board, title="A", position=1)
+        self.b = List.objects.create(board=self.board, title="B", position=2)
+        self.cards = [Card.objects.create(list=self.b, title=f"b{i}", position=(i + 1) * 1000) for i in range(3)]
+        self.card = Card.objects.create(list=self.a, title="mover")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def order(self, lst):
+        return [c.title for c in lst.cards.order_by("position")]
+
+    def test_move_to_position(self):
+        mv = lambda pos, lst: self.c.post(f"/api/cards/{self.card.pk}/move/", json.dumps({"list_id": lst.pk, "position": pos}),
+                                          content_type="application/json")
+        self.assertEqual(mv(2, self.b).status_code, 200)
+        self.assertEqual(self.order(self.b), ["b0", "mover", "b1", "b2"])
+        mv(1, self.b); self.assertEqual(self.order(self.b), ["mover", "b0", "b1", "b2"])
+        mv(4, self.b); self.assertEqual(self.order(self.b), ["b0", "b1", "b2", "mover"])
+        mv(99, self.a); self.assertEqual(self.order(self.a), ["mover"])
+        html = self.c.get(f"/cards/{self.card.pk}/").content.decode()
+        self.assertIn("data-move-tree", html)
+        self.assertIn('data-tile-complete', self.c.get(f"/b/{self.board.pk}/").content.decode())

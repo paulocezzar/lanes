@@ -7,7 +7,7 @@ from . import ai, permissions
 from django.contrib.auth import get_user_model
 
 from .models import (COLOURS, REACTIONS, STICKERS, Activity, BoardMember, Card, CardFieldValue, CardMirror, Checklist,
-                     ChecklistItem, CustomField, Label)
+                     ChecklistItem, CustomField, Label, List)
 
 User = get_user_model()
 
@@ -49,6 +49,26 @@ def render_tile(card, request, mirror=None):
     return render_to_string("boards/_card_tile.html", {"card": card, "mirror": mirror}, request=request)
 
 
+def _move_tree(card, board, user):
+    """Boards → lists (with how many cards each holds) for the Move card picker; this board first."""
+    import json
+
+    from django.db.models import Count, Q
+    from .views_planner import editable_lists
+    groups = editable_lists(user)
+    groups.sort(key=lambda g: (g[0].pk != board.pk, g[0].title.lower()))
+    counts = dict(List.objects.filter(pk__in=[l.pk for _, ls in groups for l in ls])
+                  .annotate(n=Count("cards", filter=Q(cards__is_archived=False))).values_list("pk", "n"))
+    order = list(card.list.cards.filter(is_archived=False).order_by("position", "pk").values_list("pk", flat=True))
+    return json.dumps({
+        "board": board.pk, "list": card.list_id,
+        "position": order.index(card.pk) + 1 if card.pk in order else 1,
+        "boards": [{"id": b.pk, "title": b.title,
+                    "lists": [{"id": l.pk, "title": l.title, "n": counts.get(l.pk, 0)} for l in ls]}
+                   for b, ls in groups],
+    }).replace("</", "<\\/")
+
+
 def render_modal(card, request):
     board = card.list.board
     user = request.user
@@ -71,8 +91,6 @@ def render_modal(card, request):
         "can_see_source": permissions.can_view(board, user),
         "mirrors": mirrors,
         "mirror_targets": [(b, ls) for b, ls in mirror_targets if ls],
-        "move_targets": ([(b, ls) for b, ls in editable_lists(user) if b.pk != board.pk]
-                         if permissions.can_edit(board, user) else []),
         "feed": _feed(card, user),
         "label_colours": Label.COLOURS,
         "fields": _field_rows(card, board),
@@ -88,6 +106,7 @@ def render_modal(card, request):
         "voters": [v.user.display_name for v in card.votes.select_related("user")],
         "watching": card.watches.filter(user=user).exists(),
         "watching_board": board.watches.filter(user=user, card__isnull=True).exists(),
+        "move_tree": _move_tree(card, board, user) if permissions.can_edit(board, user) else None,
         "recent_board_links": [{"url": f"{settings.SITE_URL}/b/{b.pk}/", "title": b.title} for b in
                                permissions.visible_boards(user).filter(pk__in=(user.recent_boards or [])[:6])],
         "copyable_checklists": (Checklist.objects.filter(card__list__board=board, card__is_archived=False)

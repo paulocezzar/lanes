@@ -8,7 +8,7 @@
   {% if card.labels.all %}
   <div class="tile-labels">{% for l in card.labels.all %}<span class="tile-label lc-{{ l.colour }}" title="{{ l }}">{% if l.name %}{{ l.name }}{% endif %}</span>{% endfor %}</div>
   {% endif %}
-  <div class="tile-title">{% if card.is_complete and card.list.board.show_complete %}<span class="done-dot" aria-label="Complete">✓</span>{% endif %}{{ card.title }}</div>
+  <div class="tile-title">{% if public %}{% if card.is_complete and card.list.board.show_complete %}<span class="done-dot" aria-label="Complete">✓</span>{% endif %}{% else %}<button class="tile-check{% if card.is_complete %} on{% if card.list.board.show_complete %} shown{% endif %}{% endif %}" data-tile-complete tabindex="-1" title="{% if card.is_complete %}Mark incomplete{% else %}Mark complete{% endif %}" aria-label="{% if card.is_complete %}Mark incomplete{% else %}Mark complete{% endif %}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 8.3 2.2 2.2 4.8-5"/></svg></button>{% endif %}<span class="tile-title-text">{{ card.title }}</span></div>
   {% with tf=card.tile_fields %}{% if tf %}<div class="tile-fields">{% for v in tf %}<span class="field-badge"><b>{{ v.field.name }}</b> {{ v.display }}</span>{% endfor %}</div>{% endif %}{% endwith %}
   {% with votes=card.votes.all|length %}
   {% if card.due_at or card.description or card.comments.all or counts.1 or card.members.all or card.attachments.all or votes and card.list.board.voting %}

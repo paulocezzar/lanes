@@ -1,11 +1,20 @@
 {% load lanes_extras %}<div class="cm" data-card="{{ card.pk }}">
   <header class="cm-top">
-    {% if can_move %}
-    <label class="list-picker" title="Move to list">
-      <select data-move-list aria-label="List">
-        {% for l in lists %}<option value="{{ l.pk }}" {% if l.pk == card.list_id %}selected{% endif %}>{{ l.title }}</option>{% endfor %}
-      </select>
-    </label>
+    {% if can_move and move_tree %}
+    <div class="pop-wrap">
+      <button class="list-chip{% if card.list.colour %} lc-{{ card.list.colour }}{% endif %}" data-pop="movecard" title="Move card">{{ card.list.title }} <span aria-hidden="true">▾</span></button>
+      <form class="pop move-pop" data-pop-panel="movecard" data-move-form hidden>
+        <div class="pop-head">Move card</div>
+        <p class="section-label">Select destination</p>
+        <label>Board<select name="board" data-mv-board></select></label>
+        <div class="mv-row">
+          <label>List<select name="list" data-mv-list></select></label>
+          <label>Position<select name="position" data-mv-pos></select></label>
+        </div>
+        <button class="btn primary block">Move</button>
+        <script type="application/json" data-move-tree>{{ move_tree|safe }}</script>
+      </form>
+    </div>
     {% else %}<span class="list-picker static">{{ board.title }} › {{ card.list.title }}</span>{% endif %}
     {% if card.is_archived %}<span class="archived-flag">Archived</span>{% endif %}
     <button class="chip-btn watch-btn{% if watching %} on{% endif %}" data-watch-card title="{% if watching_board %}You're watching the whole board{% elif watching %}You'll be notified about changes to this card{% else %}Get notified about changes to this card{% endif %}">👁 {% if watching %}Watching{% else %}Watch{% endif %}{% if watching_board and not watching %} <small>(board)</small>{% endif %}</button>
@@ -89,15 +98,6 @@
             </form>
           </div>
         </div>
-        {% if can_move and move_targets %}
-        <div class="pop-wrap"><button class="chip-btn" data-pop="moveboard" title="Move this card to another board">↗ Move</button>
-          <div class="pop" data-pop-panel="moveboard" hidden>
-            <div class="pop-head">Move to another board</div>
-            <p class="muted small">Comments, checklists and attachments come too. Labels and custom fields are matched by name.</p>
-            <select data-move-board aria-label="Board and list"><option value="">Choose a list…</option>{% for b, ls in move_targets %}<optgroup label="{{ b.title }}">{% for l in ls %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</optgroup>{% endfor %}</select>
-          </div>
-        </div>
-        {% endif %}
         {% if mirror_targets %}
         <div class="pop-wrap"><button class="chip-btn" data-pop="mirror" title="Show this same card on another list or board">🔗 Mirror</button>
           <div class="pop" data-pop-panel="mirror" hidden>

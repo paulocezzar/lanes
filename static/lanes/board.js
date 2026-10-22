@@ -397,12 +397,55 @@
     openPop = null;
   }
 
+  // "List ▾" chip at the top of a card → Move card: Board, List, Position (like Trello)
+  function wireMoveForm(root) {
+    const form = $('[data-move-form]', root);
+    if (!form) return;
+    const tree = JSON.parse($('[data-move-tree]', form).textContent);
+    const bSel = $('[data-mv-board]', form), lSel = $('[data-mv-list]', form), pSel = $('[data-mv-pos]', form);
+    const opt = (v, t, sel) => `<option value="${v}"${sel ? ' selected' : ''}>${String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</option>`;
+    const board = () => tree.boards.find(b => b.id === +bSel.value) || tree.boards[0];
+    function fillPos() {
+      const l = board().lists.find(x => x.id === +lSel.value);
+      const same = l && l.id === tree.list;
+      const n = l ? l.n + (same ? 0 : 1) : 1;
+      pSel.innerHTML = Array.from({ length: Math.max(n, 1) }, (_, i) => opt(i + 1, i + 1, same ? i + 1 === tree.position : i + 1 === n)).join('');
+    }
+    function fillLists() {
+      const b = board();
+      lSel.innerHTML = b.lists.map(l => opt(l.id, l.title, l.id === tree.list)).join('') || opt('', 'No lists');
+      fillPos();
+    }
+    bSel.innerHTML = tree.boards.map(b => opt(b.id, b.title, b.id === tree.board)).join('');
+    fillLists();
+    bSel.addEventListener('change', fillLists);
+    lSel.addEventListener('change', fillPos);
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!lSel.value) return;
+      const otherBoard = +bSel.value !== tree.board;
+      if (otherBoard && !await LanesUI.confirm(`Move this card to ${board().title}?`, { text: 'Comments, checklists and attachments come too. Labels and fields that don\'t exist on that board are dropped.', ok: 'Move' })) return;
+      hidePops();
+      try {
+        const data = await post(`/api/cards/${openCardId}/move/`, { list_id: +lSel.value, position: +pSel.value });
+        if (otherBoard) {
+          $$(`.card-tile[data-card-id="${data.card_id}"]:not([data-mirror-id])`, listsEl).forEach(el => el.remove());
+          refreshCounts(); closeCard();
+          return toast(`Moved to ${board().title}.`);
+        }
+        applyCard(data); forceRefresh();
+        toast('Card moved.');
+      } catch (err) { toast(err.message || 'Could not move the card.'); }
+    });
+  }
+
   function wireModal() {
     const root = $('.cm', dialogBody);
     if (!root) return;
     setTimeout(() => showSummary && showSummary());
     const title = $('[data-card-title]', root);
     if (title) inlineEdit(title, v => cardPost('update', { title: v }));
+    wireMoveForm(root);
 
     const desc = $('[data-description]', root);
     if (desc) {
@@ -1297,6 +1340,19 @@
     const r = b.closest('.card-tile').getBoundingClientRect();
     showQuick(b.closest('.card-tile'), r.right + 6, r.top);
   }, true);
+  // Round tick on the card front (slides in on hover, like Trello) → toggle complete without opening the card.
+  listsEl.addEventListener('click', async e => {
+    const b = e.target.closest('[data-tile-complete]');
+    if (!b) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    if (boardEl.dataset.canEdit !== '1') return;
+    const tile = b.closest('.card-tile');
+    const done = !b.classList.contains('on');
+    b.classList.toggle('on', done); b.classList.add('pop');           // instant feedback; server copy replaces it
+    tile.classList.toggle('is-complete', done);
+    try { await onCard(tile.dataset.cardId, 'update', { is_complete: done }); }
+    catch (err) { b.classList.toggle('on', !done); tile.classList.toggle('is-complete', !done); toast(err.message || 'Could not update the card.'); }
+  }, true);
   listsEl.addEventListener('contextmenu', e => {
     const tile = e.target.closest('.card-tile');
     if (!tile || e.target.closest('input, textarea')) return;
@@ -1322,8 +1378,7 @@
     }
     if (k === 'move') {
       await openCard(id);
-      if ($('[data-pop="moveboard"]', dialogBody)) { showPop('moveboard'); }
-      $('[data-move-list]', dialogBody)?.focus();
+      if ($('[data-pop="movecard"]', dialogBody)) { showPop('movecard'); $('[data-mv-list]', dialogBody)?.focus(); }
       return;
     }
     return openWithPop(id, k);
