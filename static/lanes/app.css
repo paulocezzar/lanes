@@ -1219,3 +1219,49 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .mv-row { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
 .move-pop select { width: 100%; }
 .tile-check:focus-visible { outline: 2px solid var(--accent); }
+
+/* ---------- Calendar, Trello-style: fills the screen ---------- */
+.cal-full { padding: 12px 14px 14px; overflow: hidden; }
+.cal-shell { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--list); border-radius: 12px; overflow: hidden; position: relative; }
+.cal-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.cal-toolbar select { width: auto; font-weight: 600; }
+.cal-toolbar .view-heading { font-size: 16px; margin: 0 0 0 6px; }
+.cal-nav { display: flex; gap: 4px; }
+.cal-spacer { flex: 1; }
+.cal-body { flex: 1; min-height: 0; display: flex; }
+.cal-full .cal { flex: 1; min-width: 0; display: grid; grid-template-rows: repeat(var(--weeks), minmax(110px, 1fr)); border-radius: 0; background: none; overflow-y: auto; }
+.cal-full .cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); min-height: 0; }
+.cal-full .cal-day { min-height: 0; overflow: hidden; padding: 6px; border-top: 0; border-bottom: 1px solid var(--border); }
+.cal-full .cal-day.weekend { background: rgb(255 255 255 / .015); }
+.cal-full .cal-day-top { flex-direction: column; justify-content: flex-start; gap: 0; position: relative; }
+.cal-full .cal-dow { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.cal-full .cal-num { font-size: 13px; font-weight: 700; }
+.cal-full .cal-day.today { box-shadow: inset 0 3px 0 var(--accent); }
+.cal-full .cal-day.today .cal-num { background: none; color: var(--accent); }
+.cal-full .cal-add { position: absolute; right: 0; top: 0; }
+.cal-full .cal-chips { overflow-y: auto; min-height: 0; flex: 1; }
+.cal-weekmode .cal { grid-template-rows: 1fr; }
+.cal-full .cal-side { width: 250px; flex: none; border-radius: 0; border-left: 1px solid var(--border); overflow-y: auto; position: static; }
+.cal-addbar { position: absolute; left: 14px; bottom: 14px; z-index: 20; }
+.cal-add-btn { box-shadow: var(--shadow); display: inline-flex; align-items: center; gap: 6px; }
+.cal-add-btn .ic { width: 16px; height: 16px; }
+.cal-addbar .pop { position: absolute; bottom: calc(100% + 8px); left: 0; top: auto; }
+.cal-add-menu { width: 260px; padding: 6px; }
+.cal-add-pop { width: 330px; display: grid; gap: 10px; }
+.cal-add-pop .pop-head { display: flex; justify-content: center; position: relative; }
+.cal-add-pop .pop-head .icon-btn { position: absolute; right: 0; top: -4px; }
+.cal-dates { display: grid; grid-template-columns: auto 1fr; gap: 10px; }
+.cal-date-row { display: flex; align-items: center; gap: 6px; }
+.cal-date-row input[type=date] { width: 140px; }
+.cal-date-row input[type=time] { width: 92px; }
+.cal-sync-pop { right: 0; left: auto; width: 360px; display: grid; gap: 8px; z-index: 40; }
+.cal-sync-pop .row { display: flex; gap: 6px; }
+.cal-sync-pop input { flex: 1; min-width: 0; font-size: 12px; }
+.cal-toolbar .btn .ic { width: 15px; height: 15px; vertical-align: -3px; }
+@media (max-width: 760px) {
+  .cal-full { overflow: auto; }
+  .cal-full .cal { grid-template-rows: repeat(var(--weeks), minmax(84px, auto)); }
+  .cal-full .cal-side { display: none; }
+  .cal-toolbar .view-heading { width: 100%; order: 9; margin: 4px 0 0; }
+  .cal-sync-pop { width: min(360px, calc(100vw - 32px)); }
+}

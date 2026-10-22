@@ -31,6 +31,7 @@ urlpatterns = [
     path("boards/new/", views.board_create, name="board_create"),
     path("b/<int:board_id>/", views.board_page, name="board"),
     path("all/calendar/", views_board.board_calendar, name="all_calendar"),
+    path("ical/<str:token>/<str:scope>.ics", views_board.ical_feed, name="ical_feed"),
     path("all/table/", views_board.board_table, name="all_table"),
     path("all/timeline/", views_board.board_timeline, name="all_timeline"),
     path("all/dashboard/", views_board.board_dashboard, name="all_dashboard"),

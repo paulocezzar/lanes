@@ -2230,3 +2230,39 @@ class MoveCardPositionTests(TestCase):
         html = self.c.get(f"/cards/{self.card.pk}/").content.decode()
         self.assertIn("data-move-tree", html)
         self.assertIn('data-tile-complete', self.c.get(f"/b/{self.board.pk}/").content.decode())
+
+
+class CalendarTrelloTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Bakery Cal")
+        self.u = User.objects.create_user("cal@x.com", "pw")
+        self.other = User.objects.create_user("cal2@x.com", "pw")
+        self.board = Board.objects.create(workspace=self.ws, title="Orders", visibility="private")
+        BoardMember.objects.create(board=self.board, user=self.u, role="admin")
+        self.a = List.objects.create(board=self.board, title="A", position=1000)
+        self.b = List.objects.create(board=self.board, title="B", position=2000)
+        self.card = Card.objects.create(list=self.a, title="Bake, ice; box", due_at=timezone.now())
+        self.c = Client(); self.c.force_login(self.u)
+
+    def test_week_view_month_picker_and_feed(self):
+        r = self.c.get(f"/b/{self.board.pk}/calendar/?v=week")
+        import re
+        self.assertEqual(len(re.findall(r'class="cal-day[ "]', r.content.decode())), 7)
+        self.assertContains(r, "Bake, ice; box")
+        self.assertContains(r, "data-cal-month")
+        self.u.refresh_from_db()
+        ics = self.c.get(f"/ical/{self.u.ical_token}/b{self.board.pk}.ics")
+        self.assertEqual(ics.status_code, 200)
+        self.assertIn("SUMMARY:Bake\\, ice\; box", ics.content.decode())
+        anon = Client()
+        self.assertEqual(anon.get(f"/ical/{self.u.ical_token}/all.ics").status_code, 200)
+        self.assertEqual(anon.get(f"/ical/nope/all.ics").status_code, 404)
+        self.other.ical_token = "othertoken"; self.other.save()
+        self.assertEqual(anon.get(f"/ical/othertoken/b{self.board.pk}.ics").status_code, 404)   # can't see private board
+
+    def test_add_list_at_position(self):
+        self.c.post(f"/api/boards/{self.board.pk}/lists/", json.dumps({"title": "First", "position": 1}),
+                    content_type="application/json")
+        self.c.post(f"/api/boards/{self.board.pk}/lists/", json.dumps({"title": "Middle", "position": 3}),
+                    content_type="application/json")
+        self.assertEqual([l.title for l in self.board.lists.order_by("position")], ["First", "A", "Middle", "B"])

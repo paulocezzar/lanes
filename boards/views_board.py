@@ -51,7 +51,17 @@ def board_calendar(request, board_id=None):
     board, ctx, qs = _scope(request, board_id, "calendar")
     today = timezone.localdate()
     month = _parse_month(request.GET.get("m"), today)
-    weeks = pycal.Calendar(firstweekday=0).monthdatescalendar(month.year, month.month)
+    mode = "week" if request.GET.get("v") == "week" else "month"
+    if mode == "week":
+        try:
+            anchor = date.fromisoformat(request.GET.get("d", ""))
+        except ValueError:
+            anchor = today if request.GET.get("m") in (None, "") else month
+        monday = anchor - timedelta(days=anchor.weekday())
+        weeks = [[monday + timedelta(days=i) for i in range(7)]]
+        month = monday.replace(day=1) if monday.month == (monday + timedelta(days=6)).month else (monday + timedelta(days=6)).replace(day=1)
+    else:
+        weeks = pycal.Calendar(firstweekday=0).monthdatescalendar(month.year, month.month)
     first, last = weeks[0][0], weeks[-1][-1]
 
     by_day, unscheduled = {}, []
@@ -71,8 +81,16 @@ def board_calendar(request, board_id=None):
         "this_month": today.strftime("%Y-%m"),
         "today": today,
         "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-        "weeks": [[{"date": d, "cards": by_day.get(d, []), "in_month": d.month == month.month} for d in w]
-                  for w in weeks],
+        "weeks": [[{"date": d, "cards": by_day.get(d, []), "in_month": mode == "week" or d.month == month.month}
+                   for d in w] for w in weeks],
+        "mode": mode,
+        "week_start": weeks[0][0] if mode == "week" else None,
+        "prev_week": (weeks[0][0] - timedelta(days=7)).isoformat() if mode == "week" else "",
+        "next_week": (weeks[0][0] + timedelta(days=7)).isoformat() if mode == "week" else "",
+        "month_choices": [(_shift_month(today.replace(day=1), i).strftime("%Y-%m"), _shift_month(today.replace(day=1), i))
+                          for i in range(-12, 13)],
+        "add_lists": board.lists.filter(is_archived=False) if board else [],
+        "ical_url": _ical_url(request, board),
         "unscheduled": unscheduled[:200],
         "first_list": board.lists.filter(is_archived=False).first() if board else None,
     })
@@ -151,6 +169,73 @@ def board_timeline(request, board_id=None):
         "next": (start + timedelta(days=28)).isoformat(),
     })
     return render(request, "boards/view_timeline.html", ctx)
+
+
+def _ical_url(request, board):
+    """Private calendar-feed link for this person (made on first use)."""
+    import secrets
+
+    from django.conf import settings
+    u = request.user
+    if not u.ical_token:
+        u.ical_token = secrets.token_urlsafe(24)
+        u.save(update_fields=["ical_token"])
+    path = f"/ical/{u.ical_token}/" + (f"b{board.pk}.ics" if board else "all.ics")
+    return settings.SITE_URL + path
+
+
+def ical_feed(request, token, scope):
+    """An .ics feed Outlook / Google / Apple Calendar can subscribe to. Read-only;
+    anyone holding the link sees the same cards its owner can see, so it's private."""
+    import re
+    from datetime import datetime
+    from datetime import timezone as dt_tz
+
+    from django.contrib.auth import get_user_model
+    from django.http import Http404, HttpResponse
+    from django.conf import settings
+    u = get_user_model().objects.filter(ical_token=token, is_active=True).first() if token else None
+    if not u or not (scope == "all" or re.fullmatch(r"b\d+", scope)):
+        raise Http404
+    boards = permissions.visible_boards(u).filter(is_template=False)
+    if scope != "all":
+        boards = boards.filter(pk=int(scope[1:]))
+        if not boards.exists():
+            raise Http404
+    cards = (cards_qs().filter(list__board__in=boards, list__is_archived=False, is_archived=False, is_template=False,
+                               due_at__isnull=False, due_at__gte=timezone.now() - timedelta(days=90))
+             .select_related("list__board").order_by("due_at")[:2000])
+
+    def esc(s):
+        return str(s).replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+    def fold(line):
+        out = []
+        while len(line.encode()) > 74:
+            cut = 74
+            while len(line[:cut].encode()) > 74:
+                cut -= 1
+            out.append(line[:cut]); line = " " + line[cut:]
+        out.append(line)
+        return "\r\n".join(out)
+
+    fmt = lambda dt: dt.astimezone(dt_tz.utc).strftime("%Y%m%dT%H%M%SZ")
+    now = fmt(datetime.now(dt_tz.utc))
+    name = "Lanes" if scope == "all" else f"Lanes — {boards.first().title}"
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Lanes//Calendar//EN", "CALSCALE:GREGORIAN",
+             f"X-WR-CALNAME:{esc(name)}", "X-PUBLISHED-TTL:PT1H", "REFRESH-INTERVAL;VALUE=DURATION:PT1H"]
+    for c in cards:
+        url = f"{settings.SITE_URL}/b/{c.list.board_id}/?card={c.pk}"
+        lines += ["BEGIN:VEVENT", f"UID:lanes-card-{c.pk}@lanes", f"DTSTAMP:{now}",
+                  f"DTSTART:{fmt(c.due_at - timedelta(minutes=30))}", f"DTEND:{fmt(c.due_at)}",
+                  f"SUMMARY:{esc(('✓ ' if c.is_complete else '') + c.title)}",
+                  f"DESCRIPTION:{esc(f'{c.list.board.title} › {c.list.title}' + chr(10) + url)}", f"URL:{url}",
+                  "END:VEVENT"]
+    lines.append("END:VCALENDAR")
+    body = "\r\n".join(fold(l) for l in lines) + "\r\n"
+    resp = HttpResponse(body, content_type="text/calendar; charset=utf-8")
+    resp["Content-Disposition"] = 'inline; filename="lanes.ics"'
+    return resp
 
 
 def _bars(counter):

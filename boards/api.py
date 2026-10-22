@@ -84,8 +84,17 @@ def list_create(request, board_id):
     board = get_object_or_404(Board, pk=board_id)
     _edit(board, request.user)
     title = _text(request.data.get("title"), 120, "title")
-    lst = List.objects.create(board=board, title=title,
-                              position=positions.end_position(board.lists.filter(is_archived=False)))
+    live = list(board.lists.filter(is_archived=False).order_by("position", "pk"))
+    try:
+        at = int(request.data.get("position") or 0)        # 1-based slot, like Trello's "Position"
+    except (TypeError, ValueError):
+        at = 0
+    if 1 <= at <= len(live):
+        before = live[at - 2].position if at > 1 else None
+        pos = positions.between(before, live[at - 1].position)
+    else:
+        pos = positions.end_position(board.lists.filter(is_archived=False))
+    lst = List.objects.create(board=board, title=title, position=pos)
     log(board, request.user, "list_created", title=title)
     return {"html": render_to_string("boards/_list.html", {"list": lst, "can_edit": True}, request=request)}
 

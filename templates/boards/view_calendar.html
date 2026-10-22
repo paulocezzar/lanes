@@ -1,37 +1,93 @@
 {% extends base_template %}
 {% load static %}
 {% block board_body %}
-<div class="view-wrap calendar-view" data-calendar>
-  <div class="view-toolbar">
-    <a class="btn light sm" href="?m={{ prev_month }}&{{ query_suffix }}" aria-label="Previous month">‹</a>
-    <a class="btn light sm" href="?m={{ this_month }}&{{ query_suffix }}">Today</a>
-    <a class="btn light sm" href="?m={{ next_month }}&{{ query_suffix }}" aria-label="Next month">›</a>
-    <h2 class="view-heading">{{ month|date:"F Y" }}</h2>
-    {% if can_edit %}<span class="view-hint">Drag a card to another day to change its due date.</span>{% endif %}
-  </div>
-  <div class="calendar-layout">
-    <div class="cal">
-      <div class="cal-head">{% for d in weekdays %}<div>{{ d }}</div>{% endfor %}</div>
-      {% for week in weeks %}
-      <div class="cal-week">
-        {% for day in week %}
-        <div class="cal-day{% if not day.in_month %} out{% endif %}{% if day.date == today %} today{% endif %}" data-day="{{ day.date|date:'Y-m-d' }}">
-          <div class="cal-day-top">
-            <span class="cal-num">{{ day.date|date:"j" }}</span>
-            {% if can_edit and first_list %}<button class="cal-add" data-cal-add title="Add a card due this day">+</button>{% endif %}
+<div class="view-wrap calendar-view cal-full{% if mode == 'week' %} cal-weekmode{% endif %}" data-calendar>
+  <div class="cal-shell">
+    <div class="cal-toolbar">
+      <select class="cal-month-pick" data-cal-month aria-label="Month">
+        {% for key, m in month_choices %}<option value="{{ key }}" {% if m.year == month.year and m.month == month.month %}selected{% endif %}>{{ m|date:"M Y" }}</option>{% endfor %}
+      </select>
+      <div class="cal-nav">
+        {% if mode == "week" %}
+        <a class="btn light sm" href="?v=week&d={{ prev_week }}&{{ query_suffix }}" aria-label="Previous week">‹</a>
+        <a class="btn light sm" href="?v=week&{{ query_suffix }}">Today</a>
+        <a class="btn light sm" href="?v=week&d={{ next_week }}&{{ query_suffix }}" aria-label="Next week">›</a>
+        {% else %}
+        <a class="btn light sm" href="?m={{ prev_month }}&{{ query_suffix }}" aria-label="Previous month">‹</a>
+        <a class="btn light sm" href="?m={{ this_month }}&{{ query_suffix }}">Today</a>
+        <a class="btn light sm" href="?m={{ next_month }}&{{ query_suffix }}" aria-label="Next month">›</a>
+        {% endif %}
+      </div>
+      <select class="cal-mode-pick" data-cal-mode aria-label="View">
+        <option value="month" {% if mode == "month" %}selected{% endif %}>Month</option>
+        <option value="week" {% if mode == "week" %}selected{% endif %}>Week</option>
+      </select>
+      <h2 class="view-heading">{% if mode == "week" %}{{ week_start|date:"j M" }} – {{ weeks.0.6.date|date:"j M Y" }}{% else %}{{ month|date:"F Y" }}{% endif %}</h2>
+      <span class="cal-spacer"></span>
+      <button type="button" class="btn light sm" data-cal-unsched-toggle title="Cards without a due date">No due date <span class="count">{{ unscheduled|length }}</span></button>
+      <div class="pop-wrap">
+        <button type="button" class="btn light sm" data-cal-sync-toggle>{% include "boards/_icon.html" with i="clock" %} Sync to personal calendar</button>
+        <div class="pop cal-sync-pop" data-cal-sync hidden>
+          <div class="pop-head">Sync to personal calendar</div>
+          <p class="small">Subscribe to this link in Outlook, Google Calendar or Apple Calendar to see {% if board %}this board's{% else %}your{% endif %} due dates there. It updates about once an hour.</p>
+          <div class="row"><input readonly value="{{ ical_url }}" data-ical-url aria-label="Calendar link"><button class="btn sm" type="button" data-copy-ical>Copy</button></div>
+          <details class="small"><summary>How to add it</summary>
+            <p><b>Outlook:</b> Calendar → Add calendar → Subscribe from web → paste the link.<br>
+            <b>Google:</b> Other calendars → + → From URL → paste the link.<br>
+            <b>iPhone:</b> Settings → Calendar → Accounts → Add Subscribed Calendar.</p></details>
+          <p class="muted small">Keep it private — anyone with the link can see the same cards you can.</p>
+        </div>
+      </div>
+    </div>
+    <div class="cal-body">
+      <div class="cal" style="--weeks: {{ weeks|length }}">
+        {% for week in weeks %}
+        <div class="cal-week">
+          {% for day in week %}
+          <div class="cal-day{% if not day.in_month %} out{% endif %}{% if day.date == today %} today{% endif %}{% if day.date.weekday >= 5 %} weekend{% endif %}" data-day="{{ day.date|date:'Y-m-d' }}">
+            <div class="cal-day-top">
+              {% if forloop.parentloop.first %}<span class="cal-dow">{{ day.date|date:"D" }}</span>{% endif %}
+              <span class="cal-num">{% if day.date.day == 1 %}{{ day.date|date:"M j" }}{% else %}{{ day.date|date:"j" }}{% endif %}</span>
+              {% if can_edit and board %}<button class="cal-add" data-cal-add title="Add a card due this day">+</button>{% endif %}
+            </div>
+            <div class="cal-chips">{% for c in day.cards %}{% include "boards/_chip.html" %}{% endfor %}</div>
           </div>
-          <div class="cal-chips">{% for c in day.cards %}{% include "boards/_chip.html" %}{% endfor %}</div>
+          {% endfor %}
         </div>
         {% endfor %}
       </div>
-      {% endfor %}
+      <aside class="cal-side" data-cal-unsched hidden>
+        <h3>No due date <span class="count">{{ unscheduled|length }}</span></h3>
+        <p class="muted small">Drag a card onto a day to give it a due date.</p>
+        <div class="cal-chips" data-day="">{% for c in unscheduled %}{% include "boards/_chip.html" %}{% empty %}<p class="muted small">Every card has a date.</p>{% endfor %}</div>
+      </aside>
     </div>
-    <aside class="cal-side">
-      <h3>No due date <span class="count">{{ unscheduled|length }}</span></h3>
-      <div class="cal-chips" data-day="">{% for c in unscheduled %}{% include "boards/_chip.html" %}{% empty %}<p class="muted small">Every card has a date.</p>{% endfor %}</div>
-    </aside>
+    {% if can_edit and board %}
+    <div class="cal-addbar">
+      <div class="pop cal-add-menu" data-cal-add-menu hidden>
+        <button type="button" class="mitem" data-cal-new="card">Card</button>
+        <button type="button" class="mitem" data-cal-new="list">List</button>
+      </div>
+      <form class="pop cal-add-pop" data-cal-card-form hidden>
+        <div class="pop-head">Add card <button type="button" class="icon-btn xs" data-cal-close aria-label="Close">{% include "boards/_icon.html" with i="close" %}</button></div>
+        <label>Name<input name="title" maxlength="250" required placeholder="Enter a name for this card"></label>
+        <label>List<select name="list">{% for l in add_lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</select></label>
+        <div class="cal-dates">
+          <label>Start date<span class="cal-date-row"><input type="checkbox" name="has_start"><input type="date" name="start" disabled></span></label>
+          <label>Due date<span class="cal-date-row"><input type="checkbox" name="has_due" checked><input type="date" name="due"><input type="time" name="due_time" value="17:00"></span></label>
+        </div>
+        <button class="btn primary block">Add card</button>
+      </form>
+      <form class="pop cal-add-pop" data-cal-list-form hidden>
+        <div class="pop-head">Add list <button type="button" class="icon-btn xs" data-cal-close aria-label="Close">{% include "boards/_icon.html" with i="close" %}</button></div>
+        <label>Name<input name="title" maxlength="120" required placeholder="Enter list name…"></label>
+        <label>Position<select name="position">{% for l in add_lists %}<option value="{{ forloop.counter }}">{{ forloop.counter }}</option>{% endfor %}<option value="{{ add_lists|length|add:1 }}" selected>{{ add_lists|length|add:1 }}</option></select></label>
+        <button class="btn primary block">Add list</button>
+      </form>
+      <button type="button" class="btn cal-add-btn" data-cal-add-toggle>{% include "boards/_icon.html" with i="plus" %} Add</button>
+    </div>
+    {% endif %}
   </div>
 </div>
-{% if first_list %}<template id="first-list" data-list-id="{{ first_list.pk }}" data-list-title="{{ first_list.title }}"></template>{% endif %}
 {% endblock %}
 {% block scripts %}{{ block.super }}<script src="{% static 'lanes/views.js' %}"></script>{% endblock %}

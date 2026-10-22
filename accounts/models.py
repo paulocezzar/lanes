@@ -41,6 +41,7 @@ class User(AbstractUser):
     recovery_codes = models.JSONField(default=list, blank=True)  # hashed, one-time
     EMAIL_PREFS = [("instant", "As they happen (grouped, every few minutes)"),
                    ("daily", "Once a day — a morning summary"), ("off", "Never — just the bell in Lanes")]
+    ical_token = models.CharField(max_length=40, blank=True, db_index=True)   # private calendar-feed link
     recent_boards = models.JSONField(default=list, blank=True)   # board ids, most recent first
     colourblind = models.BooleanField(default=False)       # patterns on labels as well as colour
     only_unread = models.BooleanField(default=False)       # notifications panel: hide read ones

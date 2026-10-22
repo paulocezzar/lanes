@@ -47,17 +47,83 @@
       } catch { location.reload(); }
     });
 
-    // "+" on a day: quick-add a card into the first list, due that day
-    const firstList = document.getElementById('first-list');
-    cal.addEventListener('click', async e => {
-      const btn = e.target.closest('[data-cal-add]');
-      if (!btn || !firstList) return;
-      const day = btn.closest('[data-day]').dataset.day;
-      const title = await LanesUI.ask(`New card due ${day}`, { hint: `It goes into “${firstList.dataset.listTitle}”.`, placeholder: 'Card title', ok: 'Add card' });
-      if (!title || !title.trim()) return;
-      const data = await L.post(`/api/lists/${firstList.dataset.listId}/cards/`, { title: title.trim() });
-      await L.post(`/api/cards/${data.card_id}/update/`, { due_at: `${day}T17:00` });
-      location.reload();
+    // "+ Add" (bottom-left) → Card / List, and "+" on a day → Add card due that day (like Trello)
+    const menu = $('[data-cal-add-menu]'), cardForm = $('[data-cal-card-form]'), listForm = $('[data-cal-list-form]');
+    const closeAll = () => [menu, cardForm, listForm].forEach(el => el && (el.hidden = true));
+    const openCardForm = day => {
+      closeAll();
+      cardForm.reset();
+      cardForm.due.value = day || new Date().toISOString().slice(0, 10);
+      cardForm.start.disabled = true;
+      cardForm.hidden = false;
+      cardForm.title.focus();
+    };
+    document.addEventListener('click', e => {
+      if (e.target.closest('[data-cal-add-toggle]')) { const open = menu.hidden; closeAll(); menu.hidden = !open; return; }
+      const nw = e.target.closest('[data-cal-new]');
+      if (nw) {
+        if (nw.dataset.calNew === 'card') return openCardForm();
+        closeAll(); listForm.reset(); listForm.position.selectedIndex = listForm.position.options.length - 1;
+        listForm.hidden = false; return listForm.title.focus();
+      }
+      if (e.target.closest('[data-cal-close]')) return closeAll();
+      const plus = e.target.closest('[data-cal-add]');
+      if (plus && cardForm) { e.preventDefault(); return openCardForm(plus.closest('[data-day]').dataset.day); }
+      if (!e.target.closest('.cal-addbar')) closeAll();
+    });
+    if (cardForm) {
+      cardForm.has_start.addEventListener('change', () => { cardForm.start.disabled = !cardForm.has_start.checked; });
+      cardForm.has_due.addEventListener('change', () => { cardForm.due.disabled = cardForm.due_time.disabled = !cardForm.has_due.checked; });
+      cardForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const title = cardForm.title.value.trim();
+        if (!title) return;
+        try {
+          const data = await L.post(`/api/lists/${cardForm.list.value}/cards/`, { title });
+          const upd = {};
+          if (cardForm.has_due.checked && cardForm.due.value) upd.due_at = `${cardForm.due.value}T${cardForm.due_time.value || '17:00'}`;
+          if (cardForm.has_start.checked && cardForm.start.value) upd.start_date = cardForm.start.value;
+          if (Object.keys(upd).length) await L.post(`/api/cards/${data.card_id}/update/`, upd);
+          location.reload();
+        } catch (err) { L.toast(err.message || 'Could not add the card.'); }
+      });
+      listForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const title = listForm.title.value.trim();
+        if (!title) return;
+        try {
+          await L.post(`/api/boards/${L.boardId}/lists/`, { title, position: +listForm.position.value });
+          L.toast(`List “${title}” added.`);
+          setTimeout(() => location.reload(), 500);
+        } catch (err) { L.toast(err.message || 'Could not add the list.'); }
+      });
+    }
+  }
+
+  // Calendar toolbar (everyone): month picker, Month/Week, No due date panel, Sync link
+  if (cal) {
+    const qs = new URLSearchParams(location.search);
+    $('[data-cal-month]')?.addEventListener('change', e => {
+      qs.delete('v'); qs.delete('d'); qs.set('m', e.target.value); location.search = qs.toString();
+    });
+    $('[data-cal-mode]')?.addEventListener('change', e => {
+      if (e.target.value === 'week') { qs.set('v', 'week'); } else { qs.delete('v'); qs.delete('d'); }
+      location.search = qs.toString();
+    });
+    const side = $('[data-cal-unsched]');
+    const key = 'lanes-cal-unsched';
+    try { if (localStorage.getItem(key) === '1' && side) side.hidden = false; } catch {}
+    $('[data-cal-unsched-toggle]')?.addEventListener('click', () => {
+      side.hidden = !side.hidden;
+      try { localStorage.setItem(key, side.hidden ? '0' : '1'); } catch {}
+    });
+    const sync = $('[data-cal-sync]');
+    $('[data-cal-sync-toggle]')?.addEventListener('click', e => { e.stopPropagation(); sync.hidden = !sync.hidden; });
+    document.addEventListener('click', e => { if (sync && !sync.hidden && !e.target.closest('.cal-sync-pop, [data-cal-sync-toggle]')) sync.hidden = true; });
+    $('[data-copy-ical]')?.addEventListener('click', async () => {
+      const input = $('[data-ical-url]');
+      try { await navigator.clipboard.writeText(input.value); L.toast('Calendar link copied.'); }
+      catch { input.select(); L.toast('Press Ctrl+C to copy.'); }
     });
   }
 
