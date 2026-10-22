@@ -20,6 +20,7 @@ urlpatterns = [
     path("search/<int:pk>/delete/", views_search.search_delete, name="search_delete"),
     path("planner/", views_planner.planner, name="planner"),
     path("api/inbox/", views_planner.inbox_panel, name="inbox_panel"),
+    path("api/planner/panel/", views_planner.planner_panel, name="planner_panel"),
     path("api/inbox/add/", views_planner.inbox_add),
     path("api/inbox/capture/", views_planner.inbox_capture),
     path("api/inbox/<int:item_id>/", views_planner.inbox_update),

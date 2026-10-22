@@ -2292,3 +2292,21 @@ class ItemReminderTests(TestCase):
         ChecklistItem.objects.filter(pk=item.pk).update(due_at=timezone.now() + timedelta(minutes=40))
         self.assertEqual(send_due_reminders(), 1)
         self.assertContains(c.get(f"/cards/{card.pk}/"), "Set due date reminder")
+
+
+class DockPlannerTests(TestCase):
+    def test_planner_panel_and_dock(self):
+        from datetime import timedelta
+        ws = Workspace.objects.create(name="Dock")
+        u = User.objects.create_user("dock@x.com", "pw")
+        b = Board.objects.create(workspace=ws, title="B")
+        BoardMember.objects.create(board=b, user=u, role="admin")
+        c = Card.objects.create(list=List.objects.create(board=b, title="L"), title="Bake rye", due_at=timezone.now() + timedelta(hours=1))
+        c.members.add(u)
+        cl = Client(); cl.force_login(u)
+        page = cl.get(f"/b/{b.pk}/")
+        self.assertContains(page, "data-toggle-planner")
+        self.assertContains(page, "data-dock-switch")
+        html = cl.get("/api/planner/panel/").json()["html"]
+        self.assertIn("Bake rye", html)
+        self.assertIn("Today", html)

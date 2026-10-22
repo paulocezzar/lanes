@@ -128,6 +128,39 @@ def planner(request):
 
 
 @login_required
+def planner_panel(request):
+    """Compact agenda (overdue, then the next 7 days) for the Planner side panel on board pages."""
+    today = timezone.localdate()
+    days = [today + timedelta(days=i) for i in range(7)]
+    user = request.user
+    boards = permissions.visible_boards(user)
+    cards = cards_qs().filter(members=user, is_archived=False, is_template=False, list__is_archived=False,
+                              list__board__in=boards, due_at__isnull=False,
+                              due_at__lt=timezone.make_aware(timezone.datetime.combine(days[-1] + timedelta(days=1),
+                                                                                       timezone.datetime.min.time())))
+    items = ChecklistItem.objects.filter(
+        assignee=user, is_done=False, due_at__isnull=False, checklist__card__is_archived=False,
+        checklist__card__list__is_archived=False, checklist__card__list__board__in=boards,
+    ).select_related("checklist__card__list__board")
+    by_day, overdue = {d: [] for d in days}, []
+    for kind, objs in (("card", cards), ("item", items)):
+        for o in objs:
+            d = timezone.localtime(o.due_at).date()
+            if d < today:
+                if not getattr(o, "is_complete", False):
+                    overdue.append({"kind": kind, "obj": o})
+            elif d in by_day:
+                by_day[d].append({"kind": kind, "obj": o})
+    for d in by_day:
+        by_day[d].sort(key=lambda e: e["obj"].due_at)
+    html = render_to_string("boards/_planner_panel.html", {
+        "days": [{"date": d, "entries": by_day[d], "today": d == today} for d in days],
+        "overdue": overdue,
+    }, request=request)
+    return JsonResponse({"html": html})
+
+
+@login_required
 def inbox_panel(request):
     """Inbox HTML for the slide-out panel on board pages."""
     return JsonResponse({"html": inbox_html(request), "ai": ai.enabled()})

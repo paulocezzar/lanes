@@ -1163,9 +1163,17 @@
       onChange: wireInbox,
       sendToBoard: () => toast('Drag the item onto a list to put it on this board.'),
     });
+    window.LanesOpenInbox = async () => { if (inboxDrawer.hidden) $('[data-toggle-inbox]')?.click(); };
+    window.LanesInboxReload = async () => {
+      const res = await fetch('/api/inbox/', { credentials: 'same-origin' });
+      if (res.ok) { inbox.setHtml((await res.json()).html); loaded = true; }
+    };
     $('[data-toggle-inbox]').addEventListener('click', async () => {
       inboxDrawer.hidden = !inboxDrawer.hidden;
       boardEl.classList.toggle('with-inbox', !inboxDrawer.hidden);
+      $('[data-toggle-inbox]').classList.toggle('on', !inboxDrawer.hidden);
+      $('[data-toggle-inbox]').setAttribute('aria-pressed', !inboxDrawer.hidden);
+      saveDock();
       if (!inboxDrawer.hidden && !loaded) {
         const res = await fetch('/api/inbox/', { credentials: 'same-origin' });
         if (res.ok) { inbox.setHtml((await res.json()).html); loaded = true; }
@@ -1173,6 +1181,82 @@
     });
     $('[data-close-inbox]', inboxDrawer).addEventListener('click', () => {
       inboxDrawer.hidden = true; boardEl.classList.remove('with-inbox');
+      $('[data-toggle-inbox]').classList.remove('on'); saveDock();
+    });
+  }
+
+  // ---------- bottom dock (Inbox · Planner · Board · Switch boards · voice), like Trello ----------
+  const plannerDrawer = document.getElementById('planner-drawer');
+  const DOCK_KEY = 'lanes-dock';
+  function saveDock() {
+    try {
+      localStorage.setItem(DOCK_KEY, JSON.stringify({
+        inbox: !!inboxDrawer && !inboxDrawer.hidden, planner: !!plannerDrawer && !plannerDrawer.hidden,
+        hideBoard: boardEl.classList.contains('board-hidden') }));
+    } catch {}
+  }
+  async function loadPlanner() {
+    try {
+      const res = await fetch('/api/planner/panel/', { credentials: 'same-origin' });
+      if (res.ok) $('[data-planner-body]', plannerDrawer).innerHTML = (await res.json()).html;
+    } catch {}
+  }
+  function setPlanner(open) {
+    if (!plannerDrawer) return;
+    plannerDrawer.hidden = !open;
+    boardEl.classList.toggle('with-planner', open);
+    $('[data-toggle-planner]')?.classList.toggle('on', open);
+    $('[data-toggle-planner]')?.setAttribute('aria-pressed', open);
+    if (open) loadPlanner();
+    saveDock();
+  }
+  $('[data-toggle-planner]')?.addEventListener('click', () => setPlanner(plannerDrawer.hidden));
+  $('[data-close-planner]')?.addEventListener('click', () => setPlanner(false));
+  $('[data-toggle-boardview]')?.addEventListener('click', e => {
+    const btn = e.currentTarget;
+    const hide = !boardEl.classList.contains('board-hidden');
+    // hiding the board only makes sense when a panel is open — otherwise open the planner
+    if (hide && (!inboxDrawer || inboxDrawer.hidden) && plannerDrawer.hidden) setPlanner(true);
+    boardEl.classList.toggle('board-hidden', hide);
+    btn.classList.toggle('on', !hide); btn.setAttribute('aria-pressed', !hide);
+    saveDock();
+  });
+  $('[data-dock-switch]')?.addEventListener('click', () => window.LanesBoard_switch?.());
+  // keep the planner fresh when the board changes
+  setInterval(() => { if (plannerDrawer && !plannerDrawer.hidden && !document.hidden) loadPlanner(); }, 60000);
+  try {
+    const s = JSON.parse(localStorage.getItem(DOCK_KEY) || '{}');
+    if (s.inbox && inboxDrawer) $('[data-toggle-inbox]')?.click();
+    if (s.planner) setPlanner(true);
+    if (s.hideBoard && (s.inbox || s.planner)) $('[data-toggle-boardview]')?.click();
+  } catch {}
+
+  // Voice capture: say a to-do and it lands in your Inbox (browser speech recognition, Chrome/Edge/Safari)
+  const voiceBtn = $('[data-dock-voice]');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (voiceBtn && SR) {
+    voiceBtn.hidden = false;
+    let rec = null;
+    voiceBtn.addEventListener('click', () => {
+      if (rec) { rec.stop(); return; }
+      rec = new SR();
+      rec.lang = document.documentElement.lang === 'en' ? 'en-GB' : (navigator.language || 'en-GB');
+      rec.interimResults = false; rec.maxAlternatives = 1;
+      voiceBtn.classList.add('listening');
+      toast('🎙 Listening… say your to-do.');
+      rec.onresult = async ev => {
+        const text = ev.results[0][0].transcript.trim();
+        if (!text) return;
+        try {
+          await post('/api/inbox/add/', { text: text.charAt(0).toUpperCase() + text.slice(1) });
+          toast(`Added to your Inbox: “${text}”`);
+          await window.LanesInboxReload?.();
+          window.LanesOpenInbox?.();
+        } catch (err) { toast(err.message || 'Could not add that.'); }
+      };
+      rec.onerror = ev => toast(ev.error === 'not-allowed' ? 'Allow the microphone to use voice capture.' : 'Didn\'t catch that — try again.');
+      rec.onend = () => { voiceBtn.classList.remove('listening'); rec = null; };
+      rec.start();
     });
   }
 

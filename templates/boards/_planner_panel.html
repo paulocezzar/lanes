@@ -1,0 +1,13 @@
+<div class="pp">
+  {% if overdue %}
+  <section class="pp-day bad"><h4>Overdue <span class="count">{{ overdue|length }}</span></h4>
+    {% for e in overdue %}{% include "boards/_plan_entry.html" %}{% endfor %}</section>
+  {% endif %}
+  {% for d in days %}
+  <section class="pp-day{% if d.today %} today{% endif %}">
+    <h4>{% if d.today %}Today{% elif forloop.counter == 2 %}Tomorrow{% else %}{{ d.date|date:"l" }}{% endif %} <small>{{ d.date|date:"j M" }}</small></h4>
+    {% for e in d.entries %}{% include "boards/_plan_entry.html" %}{% empty %}<p class="pp-empty">Nothing due</p>{% endfor %}
+  </section>
+  {% endfor %}
+  <a class="btn ghost sm block" href="{% url 'planner' %}">Open full planner →</a>
+</div>

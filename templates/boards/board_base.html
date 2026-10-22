@@ -62,7 +62,6 @@
       </div>
       {% endif %}
       {% if can_edit %}{% for b in board_buttons %}<button class="btn light sm press-btn" data-press-board="{{ b.pk }}" title="Board button">{{ b.icon }} {{ b.name }}</button>{% endfor %}{% endif %}
-      {% if can_edit and view == "board" %}<button class="btn light sm" data-toggle-inbox title="Your private inbox — drag items onto a list">{% include "boards/_icon.html" with i="inbox" %}Inbox</button>{% endif %}
       <div class="avatar-stack" data-open-share>
         {% for u in people|slice:":6" %}{% include "boards/_avatar.html" %}{% endfor %}
         {% if people|length > 6 %}<span class="avatar more">+{{ people|length|add:"-6" }}</span>{% endif %}
@@ -108,6 +107,23 @@
   <div id="share-members">{% include "boards/_share_members.html" with memberships=board.memberships.all %}</div>
 </dialog>
 
+{% if view == "board" %}
+<aside class="planner-drawer" id="planner-drawer" hidden>
+  <div class="drawer-head"><h3>Planner <small class="muted">your week</small></h3><button class="icon-btn" data-close-planner aria-label="Close">{% include "boards/_icon.html" with i="close" %}</button></div>
+  <div data-planner-body><p class="muted small pad">Loading…</p></div>
+</aside>
+<nav class="dock" aria-label="Board tools">
+  <div class="dock-main">
+    {% if can_edit %}<button class="dock-btn" data-toggle-inbox aria-pressed="false" title="Your private inbox — drag items onto a list">{% include "boards/_icon.html" with i="inbox" %}<span>Inbox</span></button>{% endif %}
+    <button class="dock-btn" data-toggle-planner aria-pressed="false" title="Your cards and checklist items for the week">{% include "boards/_icon.html" with i="clock" %}<span>Planner</span></button>
+    <button class="dock-btn on" data-toggle-boardview aria-pressed="true" title="Show or hide the board">{% include "boards/_icon.html" with i="card" %}<span>Board</span></button>
+    <i class="dock-sep"></i>
+    <button class="dock-btn" data-dock-switch title="Switch boards (s)">{% include "boards/_icon.html" with i="copy" %}<span>Switch boards</span></button>
+  </div>
+  {% if can_edit %}<button class="dock-btn dock-voice" data-dock-voice hidden title="Say a to-do — it goes into your Inbox" aria-label="Voice capture to Inbox">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg></button>{% endif %}
+</nav>
+{% endif %}
 {% if can_edit and view == "board" %}
 <aside class="inbox-drawer" id="inbox-drawer" hidden>
   <div class="drawer-head"><h3>Inbox <small class="muted">only you</small></h3><button class="icon-btn" data-close-inbox>{% include "boards/_icon.html" with i="close" %}</button></div>
