@@ -29,7 +29,7 @@ def parse(query):
         parts = (query or "").split()
     terms, ops = [], []
     for p in parts:
-        m = re.match(r"^(label|board|list|is):(.+)$", p, re.I)
+        m = re.match(r"^(label|board|list|is|member):(.+)$", p, re.I)
         if m:
             ops.append((m.group(1).lower(), m.group(2)))
         elif p.startswith("@") and len(p) > 1:

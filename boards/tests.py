@@ -2166,6 +2166,24 @@ class TrelloTouches3Tests(TestCase):
         jan31 = timezone.make_aware(datetime(2027, 1, 31, 17), timezone.get_current_timezone())
         self.assertEqual(next_due(jan31, "monthly").date().isoformat(), "2027-02-28")
 
+    def test_recurring_tick_untick_makes_no_duplicates(self):
+        from datetime import timedelta
+        card = Card.objects.create(list=self.lst, title="Daily temp log", due_at=timezone.now() + timedelta(hours=2), recur="daily")
+        url = f"/api/cards/{card.pk}/update/"
+        self.assertIn("next_card", self.j(url, {"is_complete": True}).json())
+        self.assertEqual(Card.objects.filter(title="Daily temp log").count(), 2)
+        self.j(url, {"is_complete": False})                       # mis-click undone: the copy goes too
+        self.assertEqual(Card.objects.filter(title="Daily temp log").count(), 1)
+        self.j(url, {"is_complete": True}); self.j(url, {"is_complete": False}); self.j(url, {"is_complete": True})
+        self.assertEqual(Card.objects.filter(title="Daily temp log").count(), 2)
+        # a copy someone has already worked on is kept
+        nxt = Card.objects.exclude(pk=card.pk).get(title="Daily temp log")
+        nxt.comments.create(body="started", author=self.user if hasattr(self, "user") else None)
+        self.j(url, {"is_complete": False})
+        self.assertTrue(Card.objects.filter(pk=nxt.pk).exists())
+        self.j(url, {"is_complete": True})                        # and no second copy appears
+        self.assertEqual(Card.objects.filter(title="Daily temp log").count(), 2)
+
     def test_reminder_timing_and_watchers(self):
         from datetime import timedelta
         from .models import Watch
@@ -2257,7 +2275,7 @@ class CalendarTrelloTests(TestCase):
         self.u.refresh_from_db()
         ics = self.c.get(f"/ical/{self.u.ical_token}/b{self.board.pk}.ics")
         self.assertEqual(ics.status_code, 200)
-        self.assertIn("SUMMARY:Bake\\, ice\; box", ics.content.decode())
+        self.assertIn(r"SUMMARY:Bake\, ice\; box", ics.content.decode())
         anon = Client()
         self.assertEqual(anon.get(f"/ical/{self.u.ical_token}/all.ics").status_code, 200)
         self.assertEqual(anon.get(f"/ical/nope/all.ics").status_code, 404)
@@ -2414,3 +2432,591 @@ class CrossDepartmentTests(TestCase):
         self.card.refresh_from_db()
         self.assertEqual(self.card.list, self.bl)
         self.assertContains(self.m.get(f"/b/{self.bb.pk}/"), "Gemma induction")
+
+
+class FullSweepTests(TestCase):
+    """Every feature that had no test yet — one pass over the whole app."""
+
+    def setUp(self):
+        from .models import Checklist, ChecklistItem, Comment, CustomField
+        self.ws = Workspace.objects.create(name="Sweep")
+        self.admin = User.objects.create_user("sa@x.com", "pw", first_name="Sal", is_superuser=True, is_staff=True)
+        self.mem = User.objects.create_user("sm@x.com", "pw", first_name="Mia")
+        self.obs = User.objects.create_user("so@x.com", "pw", first_name="Oz")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.admin, role="admin")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.mem)
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.obs)
+        self.board = Board.objects.create(workspace=self.ws, title="Sweep board", visibility="workspace")
+        BoardMember.objects.create(board=self.board, user=self.admin, role="admin")
+        BoardMember.objects.create(board=self.board, user=self.mem, role="member")
+        BoardMember.objects.create(board=self.board, user=self.obs, role="observer")
+        self.a = List.objects.create(board=self.board, title="A", position=1000)
+        self.b = List.objects.create(board=self.board, title="B", position=2000)
+        self.card = Card.objects.create(list=self.a, title="Bake bread", position=1000)
+        self.card.members.add(self.mem)
+        self.cl = Checklist.objects.create(card=self.card, title="Steps")
+        self.item = ChecklistItem.objects.create(checklist=self.cl, text="Knead")
+        self.comment = Comment.objects.create(card=self.card, author=self.mem, body="first")
+        self.label = Label.objects.create(board=self.board, name="Urgent", colour="red")
+        self.field = CustomField.objects.create(board=self.board, name="Batch", kind="number")
+        self.c = Client(); self.c.force_login(self.admin)
+        self.m = Client(); self.m.force_login(self.mem)
+        self.o = Client(); self.o.force_login(self.obs)
+
+    def j(self, client, url, data=None):
+        return client.post(url, json.dumps(data or {}), content_type="application/json")
+
+    # ---- comments, checklists, labels, fields ----
+    def test_comment_edit_and_delete(self):
+        r = self.j(self.m, f"/api/comments/{self.comment.pk}/", {"body": "edited"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.comment.refresh_from_db()
+        self.assertEqual(self.comment.body, "edited")
+        self.assertIsNotNone(self.comment.edited_at)
+        self.assertGreaterEqual(self.j(self.o, f"/api/comments/{self.comment.pk}/", {"body": "x"}).status_code, 400)
+        self.assertEqual(self.j(self.m, f"/api/comments/{self.comment.pk}/", {"delete": True}).status_code, 200)
+        self.assertFalse(type(self.comment).objects.filter(pk=self.comment.pk).exists())
+
+    def test_comment_react(self):
+        r = self.j(self.m, f"/api/comments/{self.comment.pk}/react/", {"emoji": "👍"})
+        self.assertLess(r.status_code, 500, r.content)
+
+    def test_checklist_rename_hide_delete(self):
+        self.assertEqual(self.j(self.m, f"/api/checklists/{self.cl.pk}/", {"title": "Method", "hide_checked": True}).status_code, 200)
+        self.cl.refresh_from_db()
+        self.assertEqual((self.cl.title, self.cl.hide_checked), ("Method", True))
+        self.assertEqual(self.j(self.o, f"/api/checklists/{self.cl.pk}/", {"title": "no"}).status_code, 403)
+        self.assertEqual(self.j(self.m, f"/api/checklists/{self.cl.pk}/", {"delete": True}).status_code, 200)
+        self.assertFalse(type(self.cl).objects.filter(pk=self.cl.pk).exists())
+
+    def test_label_create_rename_attach_delete(self):
+        url = f"/api/boards/{self.board.pk}/labels/"
+        r = self.j(self.m, url, {"name": "Gluten free", "colour": "green", "card_id": self.card.pk})
+        self.assertEqual(r.status_code, 200, r.content)
+        lab = Label.objects.get(name="Gluten free")
+        self.assertIn(lab, self.card.labels.all())
+        self.assertEqual(self.j(self.m, url, {"label_id": lab.pk, "name": "GF", "colour": "blue"}).status_code, 200)
+        lab.refresh_from_db()
+        self.assertEqual((lab.name, lab.colour), ("GF", "blue"))
+        self.assertEqual(self.j(self.o, url, {"name": "nope"}).status_code, 403)
+        self.assertEqual(self.j(self.m, url, {"label_id": lab.pk, "delete": True}).status_code, 200)
+        self.assertFalse(Label.objects.filter(pk=lab.pk).exists())
+
+    def test_custom_fields_all_kinds_and_values(self):
+        from .models import CustomField
+        url = f"/api/boards/{self.board.pk}/fields/"
+        r = self.j(self.c, url, {"name": "Oven", "kind": "dropdown", "options": ["Deck", "Rack"], "show_on_card": True})
+        self.assertEqual(r.status_code, 200, r.content)
+        dd = CustomField.objects.get(name="Oven")
+        self.assertEqual(dd.kind, "dropdown")
+        for kind in ("text", "date", "checkbox"):
+            self.assertEqual(self.j(self.c, url, {"name": kind.title(), "kind": kind}).status_code, 200)
+        set_url = f"/api/cards/{self.card.pk}/fields/"
+        self.assertEqual(self.j(self.m, set_url, {"field_id": self.field.pk, "value": "12"}).status_code, 200)
+        self.assertGreaterEqual(self.j(self.m, set_url, {"field_id": self.field.pk, "value": "twelve"}).status_code, 400)
+        self.assertEqual(self.j(self.c, url, {"field_id": dd.pk, "name": "Oven type"}).status_code, 200)
+        self.assertEqual(self.j(self.c, url, {"field_id": dd.pk, "delete": True}).status_code, 200)
+        self.assertFalse(CustomField.objects.filter(pk=dd.pk).exists())
+
+    # ---- lists & boards ----
+    def test_list_move_star_join_watch(self):
+        r = self.j(self.m, f"/api/lists/{self.b.pk}/move/", {"before_id": None, "after_id": self.a.pk})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(list(self.board.lists.order_by("position").values_list("title", flat=True)), ["B", "A"])
+        self.assertEqual(self.j(self.m, f"/api/boards/{self.board.pk}/star/").status_code, 200)
+        self.assertEqual(self.j(self.m, f"/api/boards/{self.board.pk}/watch/").status_code, 200)
+        self.assertEqual(self.j(self.m, f"/api/cards/{self.card.pk}/watch/").status_code, 200)
+        self.assertTrue(Watch.objects.filter(user=self.mem).exists())
+        joiner = User.objects.create_user("sj@x.com", "pw", first_name="Jo")
+        WorkspaceMember.objects.create(workspace=self.ws, user=joiner)
+        cj = Client(); cj.force_login(joiner)
+        self.assertEqual(self.j(cj, f"/api/boards/{self.board.pk}/join/").status_code, 200)
+        self.assertTrue(BoardMember.objects.filter(board=self.board, user=joiner).exists())
+
+    def test_list_copy_move_cards_sort_archive_move_board(self):
+        Card.objects.create(list=self.a, title="Apple", position=2000)
+        self.assertEqual(self.j(self.m, f"/api/lists/{self.a.pk}/sort/", {"by": "name"}).status_code, 200)
+        self.assertEqual(self.j(self.m, f"/api/lists/{self.a.pk}/copy/", {"title": "A copy"}).status_code, 200)
+        copy = List.objects.get(title="A copy")
+        self.assertEqual(copy.cards.count(), 2)
+        self.assertEqual(self.j(self.m, f"/api/lists/{self.a.pk}/move-cards/", {"list_id": self.b.pk}).status_code, 200)
+        self.assertEqual(self.b.cards.count(), 2)
+        self.assertEqual(self.j(self.m, f"/api/lists/{self.b.pk}/archive-cards/").status_code, 200)
+        self.assertFalse(self.b.cards.filter(is_archived=False).exists())
+        other = Board.objects.create(workspace=self.ws, title="Other")
+        BoardMember.objects.create(board=other, user=self.admin, role="admin")
+        self.assertEqual(self.j(self.c, f"/api/lists/{copy.pk}/move-board/", {"board_id": other.pk}).status_code, 200)
+        copy.refresh_from_db()
+        self.assertTrue(copy.is_archived)
+        self.assertEqual(Card.objects.filter(list__board=other).count(), 2)
+
+    def test_board_copy_and_restore(self):
+        r = self.c.post(f"/b/{self.board.pk}/copy/", {"title": "Sweep copy", "keep_cards": "on"})
+        self.assertEqual(r.status_code, 302)
+        cp = Board.objects.get(title="Sweep copy")
+        self.assertEqual(cp.lists.count(), 2)
+        self.assertTrue(Card.objects.filter(list__board=cp, title="Bake bread").exists())
+        self.board.is_archived = True; self.board.save()
+        self.assertEqual(self.c.post(f"/boards/{self.board.pk}/restore/").status_code, 302)
+        self.board.refresh_from_db()
+        self.assertFalse(self.board.is_archived)
+
+    def test_exports(self):
+        self.assertContains(self.c.get(f"/b/{self.board.pk}/export.csv"), "Bake bread")
+        self.assertContains(self.c.get(f"/b/{self.board.pk}/export.json"), "Bake bread")
+        self.assertEqual(self.c.get("/export/all.json").status_code, 200)
+
+    # ---- cards ----
+    def test_card_update_every_field(self):
+        url = f"/api/cards/{self.card.pk}/update/"
+        for data in ({"title": "Sourdough"}, {"description": "**hi**"}, {"due_at": "2030-01-02T10:00"},
+                     {"start_date": "2030-01-01"}, {"recur": "weekly"}, {"reminder_minutes": 60},
+                     {"is_template": True}, {"cover_colour": "green"}, {"cover_full": True},
+                     {"sticker": "⭐"}, {"is_complete": True}, {"is_complete": False}):
+            r = self.j(self.m, url, data)
+            self.assertEqual(r.status_code, 200, (data, r.content))
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.title, "Sourdough")
+        self.assertEqual(self.card.recur, "weekly")
+        self.assertTrue(self.card.is_template)
+        self.assertEqual(self.j(self.o, url, {"title": "x"}).status_code, 403)
+        self.assertEqual(self.j(self.m, url, {"archive": True}).status_code, 200)
+        self.card.refresh_from_db()
+        self.assertTrue(self.card.is_archived)
+
+    def test_card_copy_vote_delete_template(self):
+        self.assertEqual(self.j(self.m, f"/api/cards/{self.card.pk}/copy/", {"list_id": self.b.pk, "title": "Copy"}).status_code, 200)
+        self.assertTrue(self.b.cards.filter(title="Copy").exists())
+        self.assertLess(self.j(self.m, f"/api/cards/{self.card.pk}/vote/").status_code, 500)
+        self.card.is_template = True; self.card.save()
+        r = self.j(self.m, f"/api/lists/{self.b.pk}/from-template/", {"card_id": self.card.pk, "title": "From tpl"})
+        self.assertLess(r.status_code, 500, r.content)
+        self.assertEqual(self.j(self.o, f"/api/cards/{self.card.pk}/delete/").status_code, 403)
+        self.assertEqual(self.j(self.c, f"/api/cards/{self.card.pk}/delete/").status_code, 400)   # archive first
+        self.card.is_archived = True; self.card.save()
+        self.assertEqual(self.j(self.c, f"/api/cards/{self.card.pk}/delete/").status_code, 200)
+        self.assertFalse(Card.objects.filter(pk=self.card.pk).exists())
+
+    def test_card_modal_and_board_views_render(self):
+        for url in (f"/cards/{self.card.pk}/", f"/b/{self.board.pk}/", f"/b/{self.board.pk}/calendar/",
+                    f"/b/{self.board.pk}/table/", f"/b/{self.board.pk}/timeline/", f"/b/{self.board.pk}/dashboard/",
+                    f"/b/{self.board.pk}/map/", f"/b/{self.board.pk}/automation/", "/all/calendar/", "/all/table/",
+                    "/all/timeline/", "/all/dashboard/", "/all/map/", "/my-cards/", "/planner/", "/notifications/",
+                    "/search/?q=bread", "/", f"/api/boards/{self.board.pk}/state/", "/api/boards/mine/",
+                    "/api/boards/recent/", "/api/inbox/", "/api/planner/panel/", "/api/notifications/",
+                    "/company/", "/company/audit/", "/company/people/", "/company/settings/",
+                    f"/departments/{self.ws.pk}/people/", "/account/two-step/", "/account/email/", "/password/"):
+            r = self.c.get(url)
+            self.assertIn(r.status_code, (200, 302), (url, r.status_code))
+
+    def test_attachments_upload_rename_cover_download_delete(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .models import Attachment
+        png = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4"
+               b"\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82")
+        r = self.m.post(f"/api/cards/{self.card.pk}/attachments/", {"file": SimpleUploadedFile("dot.png", png, "image/png")})
+        self.assertEqual(r.status_code, 200, r.content)
+        att = Attachment.objects.get(card=self.card)
+        self.assertEqual(self.c.get(f"/files/{att.pk}/").status_code, 200)
+        self.assertEqual(self.j(self.m, f"/api/attachments/{att.pk}/", {"name": "loaf.png"}).status_code, 200)
+        self.assertEqual(self.j(self.m, f"/api/attachments/{att.pk}/", {"cover": True}).status_code, 200)
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.cover_id, att.pk)
+        outsider = User.objects.create_user("sx@x.com", "pw")
+        cx = Client(); cx.force_login(outsider)
+        self.assertEqual(cx.get(f"/files/{att.pk}/").status_code, 404)
+        self.assertEqual(self.j(self.m, f"/api/attachments/{att.pk}/", {"delete": True}).status_code, 200)
+        self.assertFalse(Attachment.objects.filter(pk=att.pk).exists())
+
+    # ---- automation ----
+    def test_rule_pause_delete_button_delete_schedule_run(self):
+        from .models import Button, Rule, Schedule
+        rule = Rule.objects.create(board=self.board, trigger="card_completed", actions=[{"type": "move", "list": self.b.pk}])
+        self.c.post(f"/b/{self.board.pk}/automation/rules/{rule.pk}/")
+        rule.refresh_from_db(); self.assertFalse(rule.is_enabled)
+        self.c.post(f"/b/{self.board.pk}/automation/rules/{rule.pk}/", {"action": "delete"})
+        self.assertFalse(Rule.objects.filter(pk=rule.pk).exists())
+        btn = Button.objects.create(board=self.board, kind="card", name="Go", actions=[{"type": "complete"}])
+        self.assertEqual(self.j(self.m, f"/api/cards/{self.card.pk}/buttons/{btn.pk}/").status_code, 200)
+        self.card.refresh_from_db(); self.assertTrue(self.card.is_complete)
+        self.c.post(f"/b/{self.board.pk}/automation/buttons/{btn.pk}/", {"action": "delete"})
+        self.assertFalse(Button.objects.filter(pk=btn.pk).exists())
+        s = Schedule.objects.create(board=self.board, kind="actions", frequency="daily",
+                                    actions=[{"type": "create_list", "text": "Made by schedule"}], created_by=self.admin,
+                                    next_run_at=timezone.now() + timezone.timedelta(days=1))
+        self.c.post(f"/b/{self.board.pk}/automation/schedules/{s.pk}/", {"action": "run"})
+        self.assertTrue(List.objects.filter(board=self.board, title="Made by schedule").exists())
+        self.c.post(f"/b/{self.board.pk}/automation/schedules/{s.pk}/")
+        s.refresh_from_db(); self.assertFalse(s.is_enabled)
+        self.c.post(f"/b/{self.board.pk}/automation/schedules/{s.pk}/", {"action": "delete"})
+        self.assertFalse(Schedule.objects.filter(pk=s.pk).exists())
+
+    def test_rule_create_every_action_via_form(self):
+        from .models import Rule
+        post = {"trigger": "card_moved", "trigger_list": self.b.pk,
+                "action_0": "add_label", "label_0": self.label.pk,
+                "action_1": "add_member", "user_1": self.mem.pk,
+                "action_2": "add_checklist", "cltitle_2": "QA", "clitems_2": "Taste\nPack",
+                "action_3": "comment", "text_3": "Moved!"}
+        self.c.post(f"/b/{self.board.pk}/automation/rules/", post)
+        rule = Rule.objects.get(board=self.board, trigger="card_moved")
+        self.assertEqual([a["type"] for a in rule.actions], ["add_label", "add_member", "add_checklist", "comment"])
+        # errors are reported, nothing saved
+        n = Rule.objects.count()
+        self.c.post(f"/b/{self.board.pk}/automation/rules/", {"trigger": "card_completed", "action_0": "move"})
+        self.c.post(f"/b/{self.board.pk}/automation/rules/", {"trigger": "card_completed", "action_0": "comment"})
+        self.c.post(f"/b/{self.board.pk}/automation/rules/", {"trigger": "card_completed", "action_0": "add_sticker", "sticker_0": "bad"})
+        self.assertEqual(Rule.objects.count(), n)
+        for trig, extra in (("card_due_soon", {"trigger_hours": "24"}), ("card_overdue", {"trigger_hours": "3"}),
+                            ("label_added", {"trigger_label": self.label.pk}), ("member_added", {"member_who": "me"}),
+                            ("checklist_done", {}), ("card_added", {"trigger_list": self.a.pk, "by_whom": "others"})):
+            self.c.post(f"/b/{self.board.pk}/automation/rules/", {"trigger": trig, "action_0": "complete", **extra})
+            self.assertTrue(Rule.objects.filter(trigger=trig).exists(), trig)
+        # members can't edit automation on a board where they're observers
+        self.o.post(f"/b/{self.board.pk}/automation/rules/", {"trigger": "card_completed", "action_0": "complete"})
+        self.assertEqual(Rule.objects.filter(trigger="card_completed").count(), 0)
+
+    def test_run_action_every_card_action(self):
+        from . import automation
+        from .models import Checklist
+        Checklist.objects.create(card=self.card, title="x").items.create(text="y")
+        acts = [{"type": "move", "list": self.b.pk}, {"type": "move_top"}, {"type": "complete"},
+                {"type": "incomplete"}, {"type": "check_all"}, {"type": "add_label", "label": self.label.pk},
+                {"type": "remove_label", "label": self.label.pk}, {"type": "add_member", "user": self.obs.pk},
+                {"type": "clear_members"}, {"type": "set_due", "days": 3}, {"type": "set_due_workdays", "days": 2},
+                {"type": "clear_due"}, {"type": "comment", "text": "auto"}, {"type": "notify", "text": "hey"},
+                {"type": "add_checklist", "title": "Auto", "text": "one\ntwo"}, {"type": "add_sticker", "sticker": "⭐"},
+                {"type": "archive"}]
+        out = []
+        for a in acts:
+            self.card.refresh_from_db()
+            out.append(automation.run_action(self.card, a))
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.list, self.b)
+        self.assertTrue(self.card.is_archived)
+        self.assertTrue(self.card.checklists.filter(title="Auto", items__text="two").exists())
+        self.assertTrue(self.card.comments.filter(body="auto").exists())
+        self.assertGreaterEqual(sum(1 for x in out if x), 12, out)
+
+    def test_run_board_actions_every_kind(self):
+        from . import automation
+        Card.objects.create(list=self.a, title="Done one", is_complete=True, position=3000)
+        Card.objects.create(list=self.a, title="Zed", position=4000, due_at=timezone.now())
+        done = automation.run_board_actions(self.board, [
+            {"type": "create_card", "list": self.a.pk, "text": "Daily check %d/%m"},
+            {"type": "sort_due", "list": self.a.pk},
+            {"type": "sort_field", "list": self.a.pk, "field": self.field.pk, "order": "desc"},
+            {"type": "archive_done"},
+            {"type": "move_random", "from_list": self.a.pk, "list": self.b.pk, "count": 1},
+            {"type": "move_all", "from_list": self.a.pk, "list": self.b.pk},
+            {"type": "archive_list", "list": self.b.pk},
+            {"type": "create_list", "text": "Fresh"},
+        ], self.admin)
+        self.assertTrue(List.objects.filter(board=self.board, title="Fresh").exists())
+        self.assertFalse(Card.objects.filter(list__board=self.board, is_archived=False).exists())
+        self.assertGreaterEqual(len(done), 6, done)
+        self.assertTrue(automation.describe_board_actions(self.board, [{"type": "create_list", "text": "Fresh"}]))
+
+    def test_run_automations_hook_and_command(self):
+        from django.core.management import call_command
+        from django.test import override_settings
+        call_command("run_automations")
+        with override_settings(CRON_TOKEN=""):
+            self.assertEqual(self.client.post("/internal/run-automations/").status_code, 404)
+        with override_settings(CRON_TOKEN="tok"):
+            self.assertEqual(self.client.post("/internal/run-automations/").status_code, 404)   # wrong token looks absent
+            self.assertEqual(self.client.get("/internal/run-automations/", HTTP_AUTHORIZATION="Bearer tok").status_code, 405)
+            r = self.client.post("/internal/run-automations/", HTTP_AUTHORIZATION="Bearer tok")
+            self.assertEqual(r.status_code, 200, r.content)
+
+    # ---- planner / inbox / notifications ----
+    def test_inbox_update_done_date_reorder_delete_to_card(self):
+        from .models import InboxItem
+        i1 = InboxItem.objects.create(owner=self.mem, text="Call flour supplier", position=1)
+        i2 = InboxItem.objects.create(owner=self.mem, text="Order boxes", position=2)
+        r = self.j(self.m, f"/api/inbox/{i1.pk}/", {"text": "Call miller", "notes": "n", "due_date": "2030-02-01"})
+        self.assertEqual(r.status_code, 200, r.content)
+        i1.refresh_from_db()
+        self.assertEqual((i1.text, str(i1.due_date)), ("Call miller", "2030-02-01"))
+        self.assertEqual(self.j(self.m, f"/api/inbox/{i2.pk}/", {"before_id": i1.pk}).status_code, 200)
+        self.assertEqual(self.j(self.m, f"/api/inbox/{i1.pk}/", {"is_done": True}).status_code, 200)
+        self.assertEqual(self.j(self.o, f"/api/inbox/{i1.pk}/", {"text": "hack"}).status_code, 404)
+        r = self.j(self.m, f"/api/inbox/{i2.pk}/to-card/", {"list_id": self.a.pk})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertTrue(self.a.cards.filter(title="Order boxes").exists())
+        self.assertEqual(self.j(self.m, f"/api/inbox/{i1.pk}/", {"delete": True}).status_code, 200)
+        self.assertFalse(InboxItem.objects.filter(pk=i1.pk).exists())
+
+    def test_notifications_read_and_open(self):
+        n1 = Notification.objects.create(recipient=self.mem, kind="assigned", card=self.card, text="added you to Bake bread")
+        Notification.objects.create(recipient=self.mem, kind="assigned", card=self.card, text="b")
+        self.assertContains(self.m.get("/notifications/"), "added you to Bake bread")
+        r = self.j(self.m, "/api/notifications/read/", {"id": n1.pk})
+        self.assertEqual(r.json()["unread"], 1)
+        self.assertEqual(self.j(self.m, "/api/notifications/read/").json()["unread"], 0)
+        self.assertEqual(self.m.get(f"/notifications/{n1.pk}/").status_code, 302)
+
+    # ---- search ----
+    def test_search_operators(self):
+        self.card.labels.add(self.label)
+        self.card.due_at = timezone.now() - timezone.timedelta(days=1); self.card.save()
+        for q, hit in (("bread", True), ("label:urgent", True), ("board:sweep", True), ("list:A", True),
+                       ("member:mia", True), ("is:overdue", True), ("is:mine", False), ("label:nothing", False)):
+            r = self.c.get("/search/", {"q": q})
+            self.assertEqual(r.status_code, 200)
+            (self.assertContains if hit else self.assertNotContains)(r, "Bake bread", msg_prefix=q)
+        self.assertContains(self.m.get("/search/", {"q": "is:mine"}), "Bake bread")
+        r = self.c.post("/search/save/", {"q": "label:urgent", "name": "Urgent stuff"})
+        self.assertLess(r.status_code, 400)
+
+    # ---- dates, recurring, markdown ----
+    def test_nl_dates_numeric_and_words(self):
+        from datetime import datetime as dt
+        from . import nl_dates
+        now = timezone.make_aware(dt(2026, 10, 22, 9, 0))
+        for text, want in (("Order flour 25/12", (2026, 12, 25)), ("Party 3/1/27", (2027, 1, 3)),
+                           ("Review 1/2", (2027, 2, 1)), ("tomorrow", (2026, 10, 23))):
+            due, words = nl_dates.parse(text, now=now)
+            self.assertIsNotNone(due, text)
+            self.assertEqual(timezone.localtime(due).date().timetuple()[:3], want, text)
+        self.assertEqual(nl_dates.parse("31/02/27", now=now)[0], None)
+        self.assertEqual(nl_dates.parse("nothing here", now=now), (None, ""))
+
+    def test_recurring_next_due_edges(self):
+        from datetime import datetime as dt
+        from .recurring import next_due
+        tz = timezone.get_current_timezone()
+        jan31 = timezone.make_aware(dt(2027, 1, 31, 9), tz)
+        self.assertEqual(timezone.localtime(next_due(jan31, "monthly")).day, 28)
+        dec = timezone.make_aware(dt(2026, 12, 15, 9), tz)
+        self.assertEqual(timezone.localtime(next_due(dec, "monthly")).month, 1)
+        fri = timezone.make_aware(dt(2026, 10, 23, 9), tz)
+        self.assertEqual(timezone.localtime(next_due(fri, "weekdays")).weekday(), 0)
+        leap = timezone.make_aware(dt(2028, 2, 29, 9), tz)
+        self.assertEqual(timezone.localtime(next_due(leap, "yearly")).day, 28)
+        self.assertEqual(timezone.localtime(next_due(fri, "daily")).day, 24)
+        self.assertIsNone(next_due(fri, "never"))
+
+    def test_markdown_render_is_safe(self):
+        from .templatetags import lanes_extras
+        fn = getattr(lanes_extras, "render_md", None) or getattr(lanes_extras, "markdown", None)
+        if fn is None:
+            self.skipTest("no markdown filter")
+        html = str(fn("**bold** <script>alert(1)</script> [x](javascript:alert(1)) https://example.com"))
+        self.assertIn("<strong>bold</strong>", html)
+        self.assertNotIn("<script>", html)
+        self.assertNotIn('href="javascript', html)
+
+    # ---- people & accounts ----
+    def test_people_add_update_remove(self):
+        url = f"/departments/{self.ws.pk}/people/add/"
+        r = self.c.post(url, {"email": "New.Person@x.com", "first_name": "New", "role": "member"})
+        self.assertEqual(r.status_code, 302)
+        u = User.objects.get(email="new.person@x.com")
+        self.assertTrue(WorkspaceMember.objects.filter(workspace=self.ws, user=u).exists())
+        self.c.post(f"/departments/{self.ws.pk}/people/{u.pk}/", {"role": "admin"})
+        self.assertEqual(WorkspaceMember.objects.get(workspace=self.ws, user=u).role, "admin")
+        self.c.post(f"/departments/{self.ws.pk}/people/{u.pk}/", {"action": "remove"})
+        self.assertFalse(WorkspaceMember.objects.filter(workspace=self.ws, user=u).exists())
+        # plain members can't add people
+        self.m.post(url, {"email": "sneak@x.com"})
+        self.assertFalse(User.objects.filter(email="sneak@x.com").exists())
+
+    def test_people_import_csv(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        csv = b"email,first_name,last_name,department\nimp1@x.com,Imo,One,Sweep\nimp2@x.com,Ira,Two,Sweep\n"
+        r = self.c.post("/company/people/import/", {"file": SimpleUploadedFile("p.csv", csv, "text/csv")})
+        self.assertLess(r.status_code, 500)
+        r = self.c.post("/company/people/import/", {"file": SimpleUploadedFile("p.csv", csv, "text/csv"), "confirm": "1"})
+        self.assertLess(r.status_code, 500)
+
+    def test_two_step_new_codes_disable_and_admin_reset(self):
+        from accounts import twofactor
+        u = self.mem
+        u.totp_secret = twofactor.new_secret(); u.totp_enabled = True; u.save()
+        code = lambda: twofactor._code(u.totp_secret, int(__import__("time").time() // 30))
+        self.m.post("/account/two-step/new-codes/", {"code": "000000"})
+        u.refresh_from_db(); before = list(u.recovery_codes)
+        self.m.post("/account/two-step/new-codes/", {"code": code()})
+        u.refresh_from_db(); self.assertNotEqual(u.recovery_codes, before)
+        self.m.post("/account/two-step/off/", {"code": "000000"})
+        u.refresh_from_db(); self.assertTrue(u.totp_enabled)
+        self.assertEqual(self.o.post(f"/account/two-step/reset/{u.pk}/").status_code, 404)
+        self.c.post(f"/account/two-step/reset/{u.pk}/")
+        u.refresh_from_db(); self.assertFalse(u.totp_enabled)
+
+    def test_email_prefs_theme_and_password_change(self):
+        self.assertLess(self.m.post("/account/theme/", {"theme": "dark"}).status_code, 400)
+        self.assertLess(self.m.post("/account/email/", {}).status_code, 500)
+        r = self.m.post("/password/", {"old_password": "pw", "new_password1": "Cr0issant-42!", "new_password2": "Cr0issant-42!"})
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(User.objects.get(pk=self.mem.pk).check_password("Cr0issant-42!"))
+
+    # ---- public link ----
+    def test_public_board_link(self):
+        tok = self.board.public_token = "pubTok123456789abcdef"; self.board.save()
+        self.assertEqual(Client().get("/p/short/").status_code, 404)
+        r = Client().get(f"/p/{tok}/")
+        self.assertContains(r, "Bake bread")
+        self.assertEqual(Client().get(f"/p/{tok}/c/{self.card.pk}/").status_code, 200)
+        self.assertEqual(Client().get("/p/wrongtoken/").status_code, 404)
+
+
+class ExternalServicesMockedTests(TestCase):
+    """Microsoft sign-in, Graph email and AI — with the network faked out."""
+
+    def setUp(self):
+        self.u = User.objects.create_user("ext@x.com", "pw", first_name="Ext")
+        self.ws = Workspace.objects.create(name="Ext")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.board = Board.objects.create(workspace=self.ws, title="Ext")
+        BoardMember.objects.create(board=self.board, user=self.u, role="admin")
+        self.card = Card.objects.create(list=List.objects.create(board=self.board, title="L"), title="Launch menu",
+                                        description="New autumn menu across all sites")
+
+    def _fake_urlopen(self, req, timeout=0):
+        import io
+        sysmsg = json.loads(req.data)["system"]
+        if "summarise" in sysmsg:
+            reply = {"summary": "Menu launch is under way.", "status": "on track", "next": "Print menus", "open_questions": []}
+        elif "to-do list" in sysmsg:
+            reply = {"items": [{"text": "Order cake boards", "due": None, "notes": ""}]}
+        elif "picks" in sysmsg or "priorit" in sysmsg.lower():
+            reply = {"picks": [{"id": f"c{self.card.pk}", "why": "Launch is soon"}], "note": "All calm."}
+        elif "JSON" in sysmsg:
+            reply = {"title": "Launch steps", "steps": ["Taste test", "Print menus"]}
+        else:
+            return io.BytesIO(json.dumps({"content": [{"type": "text", "text": "A clear description."}]}).encode())
+        self.calls.append(req.headers)
+        return io.BytesIO(json.dumps({"content": [{"type": "text", "text": json.dumps(reply)}]}).encode())
+
+    def test_ai_features_with_faked_claude(self):
+        from unittest import mock
+        from django.test import override_settings
+        self.calls = []
+        self.client.force_login(self.u)
+        post = lambda url, d=None: self.client.post(url, json.dumps(d or {}), content_type="application/json")
+        with override_settings(ANTHROPIC_API_KEY="test-key"), mock.patch("urllib.request.urlopen", self._fake_urlopen):
+            r = post(f"/api/cards/{self.card.pk}/suggest-steps/")
+            self.assertEqual(r.status_code, 200, r.content)
+            self.assertContains(post(f"/api/cards/{self.card.pk}/summarise/"), "Menu launch")
+            self.assertContains(post(f"/api/cards/{self.card.pk}/write-description/", {"notes": "autumn"}), "clear description")
+            self.card.members.add(self.u)
+            self.assertContains(post("/api/ai/priorities/"), "Launch is soon")
+            r = post("/api/inbox/capture/", {"text": "Hi Paulo, can you order 20 cake boards? Thanks"})
+            self.assertLess(r.status_code, 500, r.content)
+        self.assertTrue(self.calls and self.calls[0].get("X-api-key") == "test-key")
+        with override_settings(ANTHROPIC_API_KEY=""):
+            self.assertEqual(post(f"/api/cards/{self.card.pk}/summarise/").status_code, 503)   # AI off → friendly message
+
+    def test_ai_service_error_is_friendly(self):
+        import urllib.error
+        from unittest import mock
+        from django.test import override_settings
+        self.client.force_login(self.u)
+        def boom(req, timeout=0):
+            raise urllib.error.URLError("down")
+        with override_settings(ANTHROPIC_API_KEY="k"), mock.patch("urllib.request.urlopen", boom):
+            r = self.client.post(f"/api/cards/{self.card.pk}/summarise/", "{}", content_type="application/json")
+        self.assertEqual(r.status_code, 503)
+        self.assertIn("reach", r.json()["error"])
+
+    def test_microsoft_login_start_and_bad_callback(self):
+        from django.test import override_settings
+        with override_settings(MS_CLIENT_ID="cid", MS_CLIENT_SECRET="sec", MS_TENANT_ID="tid",
+                               MICROSOFT_CLIENT_ID="cid", MICROSOFT_CLIENT_SECRET="sec", MICROSOFT_TENANT_ID="tid"):
+            r = self.client.get("/login/microsoft/")
+            self.assertLess(r.status_code, 500)
+            r = self.client.get("/login/microsoft/callback/", {"state": "wrong", "code": "x"})
+            self.assertLess(r.status_code, 500)
+
+
+class MicrosoftGeoSimMockedTests(TestCase):
+    """Outlook email via Graph, postcode lookups and the simulation seeder — network faked."""
+
+    def test_graph_email_backend_sends_with_app_token(self):
+        from unittest import mock
+        from django.core.mail import EmailMultiAlternatives
+        from django.test import override_settings
+        from accounts import microsoft
+        seen = []
+
+        class R:
+            def __init__(self, data, status=202): self.data, self.status = data, status
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return json.dumps(self.data).encode()
+
+        def fake(req, timeout=0):
+            seen.append((req.full_url, dict(req.headers), req.data))
+            return R({"access_token": "AT", "expires_in": 3600}) if "oauth2" in req.full_url else R({})
+        microsoft._app_token.update(value=None, expires=0)
+        with override_settings(MS_TENANT_ID="t", MS_CLIENT_ID="c", MS_CLIENT_SECRET="s", MS_MAIL_SENDER="lanes@thenewt.co.uk",
+                               EMAIL_BACKEND="accounts.graph_mail.GraphEmailBackend"), mock.patch("urllib.request.urlopen", fake):
+            m = EmailMultiAlternatives("Due tomorrow", "plain", to=["a@x.com"], reply_to=["r@x.com"])
+            m.attach_alternative("<b>html</b>", "text/html")
+            self.assertEqual(m.send(), 1)
+        self.assertIn("login.microsoftonline.com/t/oauth2/v2.0/token", seen[0][0])
+        self.assertEqual(seen[1][0], "https://graph.microsoft.com/v1.0/users/lanes@thenewt.co.uk/sendMail")
+        self.assertEqual(seen[1][1]["Authorization"], "Bearer AT")
+        body = json.loads(seen[1][2])
+        self.assertEqual(body["message"]["body"]["contentType"], "HTML")
+        self.assertEqual(body["message"]["replyTo"][0]["emailAddress"]["address"], "r@x.com")
+
+    def test_graph_errors_raise_or_stay_silent(self):
+        import io
+        import urllib.error
+        from unittest import mock
+        from django.test import override_settings
+        from accounts import microsoft
+        from accounts.graph_mail import GraphEmailBackend
+        from django.core.mail import EmailMessage
+
+        def bad(req, timeout=0):
+            raise urllib.error.HTTPError(req.full_url, 401, "no", {}, io.BytesIO(b'{"error_description":"Bad secret\\r\\nTrace"}'))
+        microsoft._app_token.update(value=None, expires=0)
+        with override_settings(MS_TENANT_ID="t", MS_CLIENT_ID="c", MS_CLIENT_SECRET="s", MS_MAIL_SENDER="x@y"), \
+             mock.patch("urllib.request.urlopen", bad):
+            with self.assertRaisesMessage(microsoft.MicrosoftError, "Bad secret"):
+                GraphEmailBackend().send_messages([EmailMessage("s", "b", to=["a@x.com"])])
+            self.assertEqual(GraphEmailBackend(fail_silently=True).send_messages([EmailMessage("s", "b", to=["a@x.com"])]), 0)
+
+    def test_geocoding_postcode_then_place_and_offline(self):
+        from unittest import mock
+        from . import geo
+        calls = []
+
+        def fake(url, timeout):
+            calls.append(url)
+            if "postcodes.io" in url:
+                return {"result": {"latitude": 51.1, "longitude": -2.5}}
+            return [{"lat": "51.5", "lon": "-0.1"}]
+        with mock.patch.object(geo, "_get", fake):
+            self.assertEqual(geo.lookup("The Newt, BA7 7NG"), (51.1, -2.5))
+            self.assertEqual(geo.lookup("Covent Garden"), (51.5, -0.1))
+        self.assertIn("BA77NG", calls[0])
+        self.assertEqual(geo.lookup("51.2, -2.4"), (51.2, -2.4))
+        self.assertIsNone(geo.lookup("95, 10"))
+        self.assertIsNone(geo.lookup(""))
+        with mock.patch.object(geo, "_get", side_effect=OSError("offline")):
+            self.assertIsNone(geo.lookup("Somewhere"))
+
+    def test_seed_sim_skips_creates_once_and_removes(self):
+        import os
+        from io import StringIO
+        from unittest import mock
+        from django.core.management import call_command
+        out = StringIO()
+        with mock.patch.dict(os.environ, {"LANES_SIM_PASSWORD": ""}):
+            call_command("seed_sim", stdout=out)
+        self.assertIn("skipping", out.getvalue())
+        with mock.patch.dict(os.environ, {"LANES_SIM_PASSWORD": "Sim-pass-123"}):
+            call_command("seed_sim", stdout=StringIO())
+            n = Card.objects.count()
+            self.assertGreater(n, 0)
+            call_command("seed_sim", stdout=StringIO())        # redeploy: no duplicates
+            self.assertEqual(Card.objects.count(), n)
+        self.assertTrue(User.objects.get(email="sim.sophie@example.com").check_password("Sim-pass-123"))
+        call_command("seed_sim", "--remove", stdout=StringIO())
+        self.assertFalse(User.objects.filter(email__startswith="sim.").exists())
+        self.assertEqual(Card.objects.count(), 0)

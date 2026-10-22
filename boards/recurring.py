@@ -37,12 +37,9 @@ def spawn_next(card, user):
     if not card.recur or not card.due_at or card.is_template:
         return None
     from .copying import copy_card
-    due = next_due(card.due_at, card.recur)
-    now = timezone.now()
-    while due and due <= now:            # finished late: skip to the next date that's still ahead
-        due = next_due(due, card.recur)
+    due = _next_ahead(card)
     lst = card.list
-    if lst.is_archived:
+    if not due or lst.is_archived or _existing_next(card, due).exists():   # ticked, unticked, ticked again
         return None
     new = copy_card(card, lst, user=user, keep_dates=False, position=card.position + 0.5)
     new.due_at = due
@@ -52,3 +49,30 @@ def spawn_next(card, user):
     new.stickers, new.cover_colour = card.stickers, card.cover_colour
     new.save(update_fields=["due_at", "start_date", "recur", "reminder_minutes", "stickers", "cover_colour"])
     return new
+
+
+def _next_ahead(card):
+    due = next_due(card.due_at, card.recur)
+    now = timezone.now()
+    while due and due <= now:            # finished late: skip to the next date that's still ahead
+        due = next_due(due, card.recur)
+    return due
+
+
+def _existing_next(card, due):
+    from .models import Card
+    return Card.objects.filter(list__board=card.list.board, title=card.title, recur=card.recur, due_at=due,
+                               is_archived=False, is_complete=False).exclude(pk=card.pk)
+
+
+def undo_spawn(card):
+    """Un-ticked by mistake: take away the copy it just made, if nobody has touched it yet."""
+    if not card.recur or not card.due_at or card.is_template:
+        return 0
+    due = _next_ahead(card)
+    n = 0
+    for c in _existing_next(card, due) if due else []:
+        if not c.comments.exists() and not c.attachments.exists() and not c.checklists.filter(items__is_done=True).exists():
+            c.delete()
+            n += 1
+    return n

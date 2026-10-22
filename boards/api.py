@@ -265,8 +265,12 @@ def card_update(request, card_id):
     if "archive" in d:
         card.is_archived = bool(d["archive"])
         log(board, user, "card_archived" if card.is_archived else "card_restored", card=card)
-    just_completed = "is_complete" in d and card.is_complete and not Card.objects.get(pk=card.pk).is_complete
+    was_complete = Card.objects.filter(pk=card.pk).values_list("is_complete", flat=True).first()
+    just_completed = "is_complete" in d and card.is_complete and not was_complete
     card.save()
+    if "is_complete" in d and was_complete and not card.is_complete:
+        from .recurring import undo_spawn
+        undo_spawn(card)
     if just_completed:
         from .recurring import spawn_next
         nxt = spawn_next(card, request.user)
