@@ -982,7 +982,7 @@ kbd { display: inline-block; min-width: 20px; text-align: center; padding: 1px 6
   border-bottom-width: 2px; background: var(--surface-2); font: 600 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
 .keys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px 22px; }
 .keys-grid p { margin: 6px 0; font-size: 13px; }
-.card-tile.kb-current { outline: 2px solid var(--accent); outline-offset: 1px; }
+.card-tile.kb-key, .card-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ms-pill { display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px; background: rgb(0 164 239 / .15); color:#0078d4; vertical-align: middle; }
 
 /* ---------- in-app question boxes (instead of the browser's) ---------- */
@@ -1000,7 +1000,7 @@ kbd { display: inline-block; min-width: 20px; text-align: center; padding: 1px 6
 .card-tile { position: relative; }
 .tile-edit { position: absolute; top: 4px; right: 4px; z-index: 2; width: 26px; height: 26px; border-radius: 6px; border: 0;
   background: var(--surface-2); color: var(--text); cursor: pointer; opacity: 0; font-size: 13px; }
-.card-tile:hover .tile-edit, .card-tile.kb-current .tile-edit { opacity: .95; }
+.card-tile:hover .tile-edit, .card-tile.kb-key .tile-edit { opacity: .95; }
 .tile-edit:hover { background: var(--surface-3); }
 .quick-menu { position: fixed; z-index: 90; display: grid; gap: 4px; min-width: 190px; }
 .quick-menu button { display: flex; align-items: center; gap: 8px; text-align: left; border: 0; border-radius: 6px; padding: 7px 12px;
@@ -1200,7 +1200,7 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
   box-shadow: inset 0 0 0 1.5px var(--text-2);
   transition: width .18s ease, margin-right .18s ease, opacity .15s ease, background-color .15s, box-shadow .15s, transform .15s; }
 .tile-check svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.card-tile:hover .tile-check, .card-tile.kb-current .tile-check, .tile-check.shown { width: 16px; margin-right: 7px; opacity: 1; }
+.card-tile:hover .tile-check, .card-tile:focus-visible .tile-check, .card-tile.kb-key .tile-check, .tile-check.shown { width: 16px; margin-right: 7px; opacity: 1; }
 .tile-check:hover { box-shadow: inset 0 0 0 1.5px var(--text); }
 .card-tile:hover .tile-check:not(.on):hover { color: var(--text-2); }
 .tile-check.on { background: var(--ok); box-shadow: none; color: #10141a; }

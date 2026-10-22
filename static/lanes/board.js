@@ -1435,25 +1435,26 @@
 
   // ---------- keyboard shortcuts (press ? for the list) ----------
   let kbTile = null;                       // the card shortcuts act on when no card is open
-  function setCurrent(tile) {
-    kbTile?.classList.remove('kb-current');
+  function setCurrent(tile, byKey) {
+    kbTile?.classList.remove('kb-current', 'kb-key');
+    if (byKey) tile?.classList.add('kb-key');
     kbTile = tile;
     tile?.classList.add('kb-current');
   }
-  listsEl.addEventListener('mouseover', e => { const t = e.target.closest('.card-tile'); if (t) setCurrent(t); });
-  listsEl.addEventListener('focusin', e => { const t = e.target.closest('.card-tile'); if (t) setCurrent(t); });
+  listsEl.addEventListener('mouseover', e => { const t = e.target.closest('.card-tile'); if (t) { const f = document.activeElement; if (f?.classList?.contains('card-tile') && f !== t) f.blur(); setCurrent(t); t.classList.remove('kb-key'); } });
+  listsEl.addEventListener('focusin', e => { const t = e.target.closest('.card-tile'); if (t && t !== kbTile) setCurrent(t); });
   const visibleTiles = list => $$('.card-tile', list).filter(t => !t.hidden);
   function moveCurrent(dx, dy) {
     const lists = $$('.list', listsEl).filter(l => !l.classList.contains('collapsed') && visibleTiles(l).length);
     if (!lists.length) return;
-    if (!kbTile || !document.body.contains(kbTile)) { setCurrent(visibleTiles(lists[0])[0]); kbTile.focus(); return; }
+    if (!kbTile || !document.body.contains(kbTile)) { setCurrent(visibleTiles(lists[0])[0], true); kbTile.focus(); return; }
     let li = lists.indexOf(kbTile.closest('.list'));
     let ti = visibleTiles(lists[li] || lists[0]).indexOf(kbTile);
     if (li < 0) { li = 0; ti = 0; }
     if (dx) { li = Math.max(0, Math.min(lists.length - 1, li + dx)); ti = Math.min(ti, visibleTiles(lists[li]).length - 1); }
     if (dy) ti = Math.max(0, Math.min(visibleTiles(lists[li]).length - 1, ti + dy));
     const t = visibleTiles(lists[li])[ti];
-    setCurrent(t); t.focus(); t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    setCurrent(t, true); t.focus(); t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   const targetCardId = () => (dialog.open ? openCardId : kbTile && document.body.contains(kbTile) ? kbTile.dataset.cardId : null);
   async function onCard(id, path, payload) {
