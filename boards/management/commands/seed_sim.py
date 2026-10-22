@@ -58,8 +58,11 @@ class Command(BaseCommand):
             users[first] = (u, role)
         watchers = list(User.objects.filter(is_superuser=True, is_active=True))
 
+        fresh = {}
+
         def board(title, lists):
-            b, _ = Board.objects.get_or_create(workspace=ws, title=title, defaults={"created_by": users["Sophie"][0]})
+            b, created = Board.objects.get_or_create(workspace=ws, title=title, defaults={"created_by": users["Sophie"][0]})
+            fresh[title] = created
             for u, role in users.values():
                 BoardMember.objects.update_or_create(board=b, user=u, defaults={"role": role})
             for su in watchers:
@@ -79,6 +82,8 @@ class Command(BaseCommand):
             ("Waiting on stock", "Gluten-free brownies", 1, ["Allergen", "Retail"], "Aisha", ["Check GF flour delivery", "Separate prep area"]),
             ("To do", "Dispatch: Babington order", 0, ["Wholesale", "Urgent"], "Tom", ["Pick", "Label", "Load van"]),
         ]
+        if not fresh["Production — this week"]:
+            cards = []        # board already exists: never re-add cards people have since moved
         for lst, title, days, labs, who, items in cards:
             c, created = Card.objects.get_or_create(
                 list=L[lst], title=title,
@@ -93,8 +98,9 @@ class Command(BaseCommand):
                     for i, t in enumerate(items):
                         ChecklistItem.objects.create(checklist=cl, text=t, position=(i + 1) * 1000)
         hr, HL = board("Starters & leavers", ["New starters", "Induction booked", "Training", "Signed off"])
-        Card.objects.get_or_create(list=HL["New starters"], title="Gemma — starts next Monday",
-                                   defaults={"created_by": users["Sophie"][0], "due_at": now + timedelta(days=4),
-                                             "position": 1000})
+        if fresh["Starters & leavers"]:
+            Card.objects.get_or_create(list=HL["New starters"], title="Gemma — starts next Monday",
+                                       defaults={"created_by": users["Sophie"][0], "due_at": now + timedelta(days=4),
+                                                 "position": 1000})
         self.stdout.write(f"Simulation ready: boards {prod.pk}, {hr.pk}; watchers: "
                           + ", ".join(u.email for u in watchers))

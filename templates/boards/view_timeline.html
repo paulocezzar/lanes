@@ -27,8 +27,8 @@
           <div class="tl-grid">
             {% if today_col %}<i class="tl-today" style="grid-column: {{ today_col }}"></i>{% endif %}
             <a href="?card={{ r.card.pk }}" data-card-open="{{ r.card.pk }}"
-               class="tl-bar due-{{ r.card.due_state|default:'none' }}{% if r.card.is_complete %} done{% endif %}{% if r.clipped_left %} clip-l{% endif %}{% if r.clipped_right %} clip-r{% endif %}"
-               style="grid-column: {{ r.col }} / span {{ r.span }}">
+               class="tl-bar due-{{ r.card.due_state|default:'none' }}{% if r.card.is_complete %} done{% endif %}{% if r.clipped_left %} clip-l{% endif %}{% if r.clipped_right %} clip-r{% endif %}{% if r.span <= 4 %} short{% endif %}"
+               style="grid-column: {{ r.col }} / span {{ r.span }}" title="{{ r.card.title }}{% if r.card.due_at %} — due {{ r.card.due_at|date:'D j M, H:i' }}{% endif %}">
               {% with l=r.card.labels.all|first %}{% if l %}<i class="chip-bar lc-{{ l.colour }}"></i>{% endif %}{% endwith %}
               <span>{{ r.card.title }}</span>
             </a>

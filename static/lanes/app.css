@@ -1279,3 +1279,10 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .item-pop { width: 280px; display: grid; gap: 8px; }
 .item-pop select, .item-pop input { width: 100%; }
 @media (hover: none) { .item-more > summary { visibility: visible; } }
+
+/* Timeline: short (1–4 day) bars show the card name beside the bar instead of cutting it to "D.." */
+.tl-bar.short { position: relative; overflow: visible; min-width: 18px; }
+.tl-bar.short span { position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%); color: var(--text);
+  font-weight: 600; max-width: 260px; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.tl-bar.short .chip-bar { margin-left: -2px; }
+.tl-grid { overflow: visible; }
