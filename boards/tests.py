@@ -2362,3 +2362,55 @@ class SimFindingsTests(TestCase):
         from datetime import timedelta
         self.assertEqual(ago(timezone.now()), "just now")
         self.assertTrue(ago(timezone.now() - timedelta(minutes=5)).endswith("ago"))
+
+
+class CrossDepartmentTests(TestCase):
+    """HR (Hana) gives work to Bakery (Marco) — the three ways."""
+    def setUp(self):
+        self.hr = Workspace.objects.create(name="HR x"); self.bakery = Workspace.objects.create(name="Bakery x")
+        self.hana = User.objects.create_user("hana@x.com", "pw", first_name="Hana")
+        self.marco = User.objects.create_user("marco@x.com", "pw", first_name="Marco")
+        WorkspaceMember.objects.create(workspace=self.hr, user=self.hana, role="admin")
+        WorkspaceMember.objects.create(workspace=self.bakery, user=self.marco, role="admin")
+        self.hrb = Board.objects.create(workspace=self.hr, title="Starters", visibility="private")
+        BoardMember.objects.create(board=self.hrb, user=self.hana, role="admin")
+        self.hl = List.objects.create(board=self.hrb, title="Induction")
+        self.bb = Board.objects.create(workspace=self.bakery, title="Production")
+        BoardMember.objects.create(board=self.bb, user=self.marco, role="admin")
+        BoardMember.objects.create(board=self.bb, user=self.hana, role="member")   # Hana can edit Bakery's board
+        self.bl = List.objects.create(board=self.bb, title="To do")
+        self.card = Card.objects.create(list=self.hl, title="Gemma induction")
+        self.h = Client(); self.h.force_login(self.hana)
+        self.m = Client(); self.m.force_login(self.marco)
+
+    def j(self, c, url, data):
+        return c.post(url, json.dumps(data), content_type="application/json")
+
+    def test_1_share_then_assign(self):
+        self.assertEqual(self.m.get(f"/b/{self.hrb.pk}/").status_code, 404)                       # private: invisible
+        self.assertEqual(self.j(self.h, f"/api/cards/{self.card.pk}/members/", {"user_id": self.marco.pk}).status_code, 400)
+        self.assertEqual(self.j(self.h, f"/api/boards/{self.hrb.pk}/share/", {"email": "marco@x.com", "role": "member"}).status_code, 200)
+        self.assertEqual(self.j(self.h, f"/api/cards/{self.card.pk}/members/", {"user_id": self.marco.pk}).status_code, 200)
+        self.assertTrue(Notification.objects.filter(recipient=self.marco, kind="assigned").exists())
+        self.assertEqual(self.m.get(f"/b/{self.hrb.pk}/").status_code, 200)
+        self.assertContains(self.m.get("/my-cards/"), "Gemma induction")
+        # checklist step assignment too
+        from .models import Checklist, ChecklistItem
+        it = ChecklistItem.objects.create(checklist=Checklist.objects.create(card=self.card, title="Steps"), text="H&S")
+        self.assertEqual(self.j(self.h, f"/api/items/{it.pk}/", {"assignee_id": self.marco.pk}).status_code, 200)
+        self.assertTrue(Notification.objects.filter(recipient=self.marco, kind="item_assigned").exists())
+
+    def test_2_mirror_to_their_board(self):
+        r = self.j(self.h, f"/api/cards/{self.card.pk}/mirrors/", {"list_id": self.bl.pk})
+        self.assertEqual(r.status_code, 200, r.content)
+        page = self.m.get(f"/b/{self.bb.pk}/")
+        self.assertContains(page, "Gemma induction")                                              # shows on Bakery board
+        self.assertEqual(self.m.get(f"/b/{self.hrb.pk}/").status_code, 404)                       # HR board still hidden
+        self.assertEqual(self.m.get(f"/cards/{self.card.pk}/").status_code, 200)                  # Marco can open the card
+
+    def test_3_move_to_their_board(self):
+        r = self.j(self.h, f"/api/cards/{self.card.pk}/move/", {"list_id": self.bl.pk})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.list, self.bl)
+        self.assertContains(self.m.get(f"/b/{self.bb.pk}/"), "Gemma induction")
