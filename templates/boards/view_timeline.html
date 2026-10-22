@@ -1,45 +1,90 @@
 {% extends base_template %}
 {% load static %}
 {% block board_body %}
-<div class="view-wrap timeline-view">
-  <div class="view-toolbar">
-    <a class="btn light sm" href="?start={{ prev }}&{{ query_suffix }}" aria-label="Earlier">‹</a>
-    <a class="btn light sm" href="?{{ query_suffix }}">Today</a>
-    <a class="btn light sm" href="?start={{ next }}&{{ query_suffix }}" aria-label="Later">›</a>
-    {% include "boards/_view_add.html" %}
-    <h2 class="view-heading">{{ days.0|date:"j M" }} – {{ days|last|date:"j M Y" }}</h2>
-    <span class="view-hint">Bars run from a card's start date to its due date.{% if undated %} {{ undated }} card{{ undated|pluralize }} without a due date not shown.{% endif %}</span>
-  </div>
-  <div class="tl-scroll">
-    <div class="tl" style="--days: {{ day_count }}">
-      <div class="tl-row tl-header">
-        <div class="tl-label"></div>
-        <div class="tl-grid">
-          {% for d in days %}<div class="tl-day{% if d.weekday >= 5 %} weekend{% endif %}{% if d == today %} today{% endif %}">{% if d.weekday == 0 or forloop.first %}<b>{{ d|date:"j M" }}</b>{% endif %}<span>{{ d|date:"D"|slice:":1" }}</span></div>{% endfor %}
-        </div>
+<div class="view-wrap cal-full tl-view" data-timeline data-start="{{ start|date:'Y-m-d' }}" data-col-w="{{ col_w }}">
+  <div class="cal-shell">
+    <div class="cal-toolbar">
+      <select class="cal-month-pick" data-tl-month aria-label="Jump to month">
+        {% for key, m in month_choices %}<option value="{{ key }}" {% if m.year == start.year and m.month == start.month %}selected{% endif %}>{{ m|date:"M Y" }}</option>{% endfor %}
+      </select>
+      <div class="cal-nav">
+        <a class="btn light sm" href="?start={{ prev }}&z={{ zoom }}&g={{ group_by }}&{{ query_suffix }}" aria-label="Earlier">‹</a>
+        <a class="btn light sm" href="?z={{ zoom }}&g={{ group_by }}&{{ query_suffix }}">Today</a>
+        <a class="btn light sm" href="?start={{ next }}&z={{ zoom }}&g={{ group_by }}&{{ query_suffix }}" aria-label="Later">›</a>
       </div>
-      {% for g in groups %}
-      <div class="tl-group">
-        <div class="tl-group-name">{{ g.title }} <span class="count">{{ g.rows|length }}</span></div>
-        {% for r in g.rows %}
-        <div class="tl-row">
-          <div class="tl-label" title="{{ r.card.title }}">{{ r.card.title }}</div>
+      <select data-tl-zoom aria-label="Zoom">{% for k, v in zooms %}<option value="{{ k }}" {% if k == zoom %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      {% if board %}<select data-tl-group aria-label="Group by">
+        <option value="list" {% if group_by == "list" %}selected{% endif %}>List</option>
+        <option value="member" {% if group_by == "member" %}selected{% endif %}>Members</option>
+        <option value="none" {% if group_by == "none" %}selected{% endif %}>No grouping</option>
+      </select>{% endif %}
+      <h2 class="view-heading">{{ start|date:"j M" }} – {{ end|date:"j M Y" }}</h2>
+      <span class="cal-spacer"></span>
+      {% if can_edit and board %}<span class="view-hint">Drag a bar to move its dates · drag its right edge to change the due date</span>{% endif %}
+    </div>
+    <div class="tl-scroll">
+      <div class="tl" style="--days: {{ day_count }}; --col: {{ col_w }}px">
+        <div class="tl-row tl-header">
+          <div class="tl-label"></div>
           <div class="tl-grid">
-            {% if today_col %}<i class="tl-today" style="grid-column: {{ today_col }}"></i>{% endif %}
-            <a href="?card={{ r.card.pk }}" data-card-open="{{ r.card.pk }}"
-               class="tl-bar due-{{ r.card.due_state|default:'none' }}{% if r.card.is_complete %} done{% endif %}{% if r.clipped_left %} clip-l{% endif %}{% if r.clipped_right %} clip-r{% endif %}{% if r.span <= 4 %} short{% endif %}"
-               style="grid-column: {{ r.col }} / span {{ r.span }}" title="{{ r.card.title }}{% if r.card.due_at %} — due {{ r.card.due_at|date:'D j M, H:i' }}{% endif %}">
-              {% with l=r.card.labels.all|first %}{% if l %}<i class="chip-bar lc-{{ l.colour }}"></i>{% endif %}{% endwith %}
-              <span>{{ r.card.title }}</span>
-            </a>
+            {% for d in days %}<div class="tl-day{% if d.weekday >= 5 %} weekend{% endif %}{% if d == today %} today{% endif %}">
+              {% if zoom == "quarter" %}{% if d.day == 1 or forloop.first %}<b>{{ d|date:"M" }}</b>{% endif %}{% if d.weekday == 0 %}<span>{{ d|date:"j" }}</span>{% endif %}
+              {% elif zoom == "month" %}{% if d.weekday == 0 or forloop.first %}<b>{{ d|date:"j M" }}</b>{% endif %}<span>{{ d|date:"D"|slice:":1" }}</span>
+              {% else %}<span class="tl-dow">{{ d|date:"D"|upper }}</span><span class="tl-dnum">{% if d.day == 1 %}{{ d|date:"j M"|upper }}{% else %}{{ d|date:"j" }}{% endif %}</span>{% endif %}
+            </div>{% endfor %}
           </div>
         </div>
-        {% empty %}
-        <div class="tl-row empty"><div class="tl-label muted">Nothing dated in this window</div><div class="tl-grid">{% if today_col %}<i class="tl-today" style="grid-column: {{ today_col }}"></i>{% endif %}</div></div>
-        {% endfor %}
+        <div class="tl-body">
+          <div class="tl-shade" aria-hidden="true">{% for d in days %}<i class="{% if d.weekday >= 5 %}weekend{% endif %}{% if d == today %} today{% endif %}"></i>{% endfor %}</div>
+          {% for g in groups %}
+          <div class="tl-group">
+            <div class="tl-group-head">
+              <div class="tl-label">
+                <b class="tl-group-title">{{ g.title }}</b>
+                <span class="tl-group-meta">
+                  {% if g.undated %}<button type="button" class="link-btn" data-tl-unsched>({{ g.undated|length }}) Not scheduled</button>{% endif %}
+                  {% if can_edit and board and g.list_id %}<button type="button" class="icon-btn xs" data-tl-add="{{ g.list_id }}" title="Add a card to {{ g.title }}">{% include "boards/_icon.html" with i="plus" %}</button>{% endif %}
+                </span>
+                {% if g.undated %}<div class="tl-unsched" hidden>{% for c in g.undated %}{% include "boards/_chip.html" %}{% endfor %}</div>{% endif %}
+              </div>
+              <div class="tl-grid"></div>
+            </div>
+            {% for r in g.rows %}
+            <div class="tl-row">
+              <div class="tl-label" title="{{ r.card.title }}">{{ r.card.title }}</div>
+              <div class="tl-grid">
+                <a href="?card={{ r.card.pk }}" data-card-open="{{ r.card.pk }}" data-tl-card="{{ r.card.pk }}" draggable="false"
+                   data-due="{{ r.card.due_at|date:'c' }}" data-start-date="{{ r.card.start_date|date:'Y-m-d' }}"
+                   class="tl-bar due-{{ r.card.due_state|default:'none' }}{% if r.card.is_complete %} done{% endif %}{% if r.clipped_left %} clip-l{% endif %}{% if r.clipped_right %} clip-r{% endif %}{% if r.span <= 2 and zoom != 'day' or r.span == 1 and zoom == 'day' %} short{% endif %}"
+                   style="grid-column: {{ r.col }} / span {{ r.span }}" title="{{ r.card.title }}{% if r.card.due_at %} — due {{ r.card.due_at|date:'D j M, H:i' }}{% endif %}">
+                  {% with l=r.card.labels.all|first %}{% if l %}<i class="chip-bar lc-{{ l.colour }}"></i>{% endif %}{% endwith %}
+                  <span>{{ r.card.title }}</span>
+                  {% if can_edit and board %}<i class="tl-resize" data-tl-resize title="Drag to change the due date"></i>{% endif %}
+                </a>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% empty %}<p class="muted pad">Nothing here yet.</p>
+          {% endfor %}
+        </div>
       </div>
-      {% endfor %}
     </div>
+    {% if can_edit and board %}
+    <div class="cal-addbar">
+      <form class="pop cal-add-pop" data-tl-card-form hidden>
+        <div class="pop-head">Add card <button type="button" class="icon-btn xs" data-tl-close aria-label="Close">{% include "boards/_icon.html" with i="close" %}</button></div>
+        <label>Name<input name="title" maxlength="250" required placeholder="Enter a name for this card"></label>
+        <label>List<select name="list">{% for l in add_lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</select></label>
+        <div class="cal-dates">
+          <label>Start date<span class="cal-date-row"><input type="checkbox" name="has_start"><input type="date" name="start" disabled></span></label>
+          <label>Due date<span class="cal-date-row"><input type="checkbox" name="has_due" checked><input type="date" name="due"><input type="time" name="due_time" value="17:00"></span></label>
+        </div>
+        <button class="btn primary block">Add card</button>
+      </form>
+      <button type="button" class="btn cal-add-btn" data-tl-add="">{% include "boards/_icon.html" with i="plus" %} Add</button>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

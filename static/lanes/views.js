@@ -135,6 +135,103 @@
     });
   }
 
+  // ---------- Timeline (Trello-style): zoom, grouping, not-scheduled lists, add, drag to reschedule ----------
+  const tl = $('[data-timeline]');
+  if (tl) {
+    const qs = new URLSearchParams(location.search);
+    const go = (k, v) => { qs.set(k, v); if (k !== 'start') {} location.search = qs.toString(); };
+    $('[data-tl-zoom]')?.addEventListener('change', e => go('z', e.target.value));
+    $('[data-tl-group]')?.addEventListener('change', e => go('g', e.target.value));
+    $('[data-tl-month]')?.addEventListener('change', e => go('start', e.target.value));
+    tl.addEventListener('click', e => {
+      const u = e.target.closest('[data-tl-unsched]');
+      if (u) { const box = u.closest('.tl-label').querySelector('.tl-unsched'); box.hidden = !box.hidden; }
+    });
+    // keep "today" in view when the page opens
+    const todayCol = $('.tl-shade i.today', tl);
+    if (todayCol) {
+      const sc = $('.tl-scroll', tl);
+      sc.scrollLeft = Math.max(0, todayCol.offsetLeft - sc.clientWidth / 3);
+    }
+    const form = $('[data-tl-card-form]');
+    if (form && canEdit) {
+      document.addEventListener('click', e => {
+        const add = e.target.closest('[data-tl-add]');
+        if (add) {
+          form.reset(); form.hidden = false; form.start.disabled = true;
+          if (add.dataset.tlAdd) form.list.value = add.dataset.tlAdd;
+          form.due.value = new Date().toISOString().slice(0, 10);
+          return form.title.focus();
+        }
+        if (e.target.closest('[data-tl-close]') || (!form.hidden && !e.target.closest('.cal-addbar'))) form.hidden = true;
+      });
+      form.has_start.addEventListener('change', () => { form.start.disabled = !form.has_start.checked; });
+      form.has_due.addEventListener('change', () => { form.due.disabled = form.due_time.disabled = !form.has_due.checked; });
+      form.addEventListener('submit', async e => {
+        e.preventDefault();
+        const title = form.title.value.trim();
+        if (!title) return;
+        try {
+          const data = await L.post(`/api/lists/${form.list.value}/cards/`, { title });
+          const upd = {};
+          if (form.has_due.checked && form.due.value) upd.due_at = `${form.due.value}T${form.due_time.value || '17:00'}`;
+          if (form.has_start.checked && form.start.value) upd.start_date = form.start.value;
+          if (Object.keys(upd).length) await L.post(`/api/cards/${data.card_id}/update/`, upd);
+          location.reload();
+        } catch (err) { L.toast(err.message || 'Could not add the card.'); }
+      });
+    }
+    // Drag a bar to move both dates; drag its right edge to move only the due date.
+    if (canEdit) {
+      const colW = +tl.dataset.colW;
+      const pad = n => String(n).padStart(2, '0');
+      const shiftDate = (iso, days) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+      let drag = null;
+      tl.addEventListener('pointerdown', e => {
+        const bar = e.target.closest('[data-tl-card]');
+        if (!bar || e.button !== 0) return;
+        e.preventDefault();                      // stop the browser's own link-drag
+        drag = { bar, x: e.clientX, resize: !!e.target.closest('[data-tl-resize]'), moved: false,
+                 col: bar.style.gridColumn, days: 0 };
+        bar.setPointerCapture(e.pointerId);
+      });
+      tl.addEventListener('pointermove', e => {
+        if (!drag) return;
+        const dx = e.clientX - drag.x;
+        if (!drag.moved && Math.abs(dx) < 6) return;
+        drag.moved = true; drag.bar.classList.add('dragging');
+        drag.days = Math.round(dx / colW);
+        const m = /(\d+)\s*\/\s*span\s*(\d+)/.exec(drag.col);
+        if (!m) return;
+        let c = +m[1], sp = +m[2];
+        if (drag.resize) sp = Math.max(1, sp + drag.days); else c = Math.max(1, c + drag.days);
+        drag.bar.style.gridColumn = `${c} / span ${sp}`;
+      });
+      const end = async e => {
+        if (!drag) return;
+        const d = drag; drag = null;
+        d.bar.classList.remove('dragging');
+        if (!d.moved) { d.bar.click(); return; }   // a plain click opens the card as usual
+        e.preventDefault();
+        d.bar.addEventListener('click', ev => { ev.preventDefault(); ev.stopImmediatePropagation(); }, { once: true, capture: true });
+        if (!d.days) { d.bar.style.gridColumn = d.col; return; }
+        const due = d.bar.dataset.due;        // ISO with offset
+        const local = new Date(due);
+        const dueDay = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
+        const time = `${pad(local.getHours())}:${pad(local.getMinutes())}`;
+        const upd = { due_at: `${shiftDate(dueDay, d.days)}T${time}` };
+        if (!d.resize && d.bar.dataset.startDate) upd.start_date = shiftDate(d.bar.dataset.startDate, d.days);
+        try {
+          await L.post(`/api/cards/${d.bar.dataset.tlCard}/update/`, upd);
+          L.toast(d.resize ? 'Due date changed.' : `Moved ${Math.abs(d.days)} day${Math.abs(d.days) === 1 ? '' : 's'} ${d.days > 0 ? 'later' : 'earlier'}.`);
+          setTimeout(() => location.reload(), 400);
+        } catch { d.bar.style.gridColumn = d.col; }
+      };
+      tl.addEventListener('pointerup', end);
+      tl.addEventListener('pointercancel', () => { if (drag) { drag.bar.style.gridColumn = drag.col; drag.bar.classList.remove('dragging'); drag = null; } });
+    }
+  }
+
   // ---------- "+ Add card" on the Table and Timeline views ----------
   const addForm = $('[data-view-add-form]');
   if (addForm) {

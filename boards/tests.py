@@ -2200,8 +2200,12 @@ class TrelloTouches3Tests(TestCase):
         self.j(f"/api/boards/{self.board.pk}/fields/", {"name": "Priority", "kind": "dropdown",
                                                          "options": "Highest,High,Medium,Low,Lowest"})
         self.assertEqual(self.board.custom_fields.get().options[0], "Highest")
-        for v in ("table", "timeline"):
-            self.assertContains(self.c.get(f"/b/{self.board.pk}/{v}/"), "data-view-add-form")
+        self.assertContains(self.c.get(f"/b/{self.board.pk}/table/"), "data-view-add-form")
+        tl = self.c.get(f"/b/{self.board.pk}/timeline/")
+        self.assertContains(tl, "data-tl-card-form")
+        for z in ("day", "week", "month", "quarter"):
+            self.assertEqual(self.c.get(f"/b/{self.board.pk}/timeline/?z={z}&g=member").status_code, 200)
+        self.assertEqual(self.c.get("/all/timeline/").status_code, 200)
 
 
 class MoveCardPositionTests(TestCase):

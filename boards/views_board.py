@@ -120,53 +120,76 @@ def board_table(request, board_id=None):
 
 @login_required
 def board_timeline(request, board_id=None):
+    """Trello-style timeline: zoom (day/week/month/quarter), grouped by list, member or nothing,
+    with each group's undated cards one click away."""
     board, ctx, qs = _scope(request, board_id, "timeline")
     today = timezone.localdate()
+    zooms = {"day": (14, 120), "week": (28, 64), "month": (56, 30), "quarter": (91, 16)}
+    zoom = request.GET.get("z") if request.GET.get("z") in zooms else "week"
+    span, col_w = zooms[zoom]
     try:
         start = date.fromisoformat(request.GET.get("start", ""))
     except ValueError:
-        start = today - timedelta(days=7)
-    start -= timedelta(days=start.weekday())          # always begin on a Monday
-    days = 42                                         # six weeks
-    end = start + timedelta(days=days - 1)
+        start = today - timedelta(days=3 if zoom == "day" else 7)
+    if zoom != "day":
+        start -= timedelta(days=start.weekday())          # begin on a Monday
+    end = start + timedelta(days=span - 1)
+    group_by = request.GET.get("g") if request.GET.get("g") in ("list", "member", "none") else ("list" if board else "board")
 
-    # One board: group by its lists (+ a group for cards mirrored in). All boards: group by board.
     groups = OrderedDict()
-    if board:
+    if board and group_by == "list":
         for lst in board.lists.filter(is_archived=False):
-            groups[("l", lst.pk)] = {"title": lst.title, "rows": []}
-    undated = 0
-    for c in qs.order_by("list__board__title", "list__position", "due_at"):
-        due = _local_date(c.due_at)
-        if not due:
-            undated += 1
-            continue
-        begin = min(c.start_date or due, due)
-        if due < start or begin > end:
-            continue
-        if board is None:
-            key, title = ("b", c.list.board_id), c.list.board.title
-        elif c.list.board_id == board.pk:
-            key, title = ("l", c.list_id), c.list.title
-        else:
-            key, title = ("m", 0), "🔗 Mirrored from other boards"
-        col_start = max((begin - start).days, 0)
-        col_end = min((due - start).days, days - 1)
-        groups.setdefault(key, {"title": title, "rows": []})["rows"].append({
-            "card": c, "col": col_start + 1, "span": col_end - col_start + 1,
-            "clipped_left": begin < start, "clipped_right": due > end,
-        })
+            groups[("l", lst.pk)] = {"title": lst.title, "list_id": lst.pk, "rows": [], "undated": []}
+    elif group_by == "member":
+        for u in ctx.get("people", []):
+            groups[("u", u.pk)] = {"title": u.display_name, "list_id": None, "rows": [], "undated": []}
+        groups[("u", 0)] = {"title": "Unassigned", "list_id": None, "rows": [], "undated": []}
+    elif group_by == "none":
+        groups[("n", 0)] = {"title": "All cards", "list_id": None, "rows": [], "undated": []}
 
+    def keys_for(c):
+        if group_by == "list" and board:
+            if c.list.board_id == board.pk:
+                return [(("l", c.list_id), c.list.title)]
+            return [(("m", 0), "🔗 Mirrored from other boards")]
+        if group_by == "member":
+            ms = list(c.members.all())
+            return [(("u", u.pk), u.display_name) for u in ms] or [(("u", 0), "Unassigned")]
+        if group_by == "none":
+            return [(("n", 0), "All cards")]
+        return [(("b", c.list.board_id), c.list.board.title)]
+
+    for c in qs.order_by("list__board__title", "list__position", "due_at", "position"):
+        due = _local_date(c.due_at)
+        for key, title in keys_for(c):
+            g = groups.setdefault(key, {"title": title, "list_id": None, "rows": [], "undated": []})
+            if not due:
+                g["undated"].append(c)
+                continue
+            begin = min(c.start_date or due, due)
+            if due < start or begin > end:
+                continue
+            col_start = max((begin - start).days, 0)
+            col_end = min((due - start).days, span - 1)
+            g["rows"].append({"card": c, "col": col_start + 1, "span": col_end - col_start + 1,
+                              "clipped_left": begin < start, "clipped_right": due > end})
+    step = {"day": 7, "week": 14, "month": 28, "quarter": 63}[zoom]
+    days = [start + timedelta(days=i) for i in range(span)]
     ctx.update({
-        "start": start,
-        "days": [start + timedelta(days=i) for i in range(days)],
-        "day_count": days,
+        "start": start, "end": end,
+        "days": days,
+        "day_count": span,
+        "col_w": col_w,
+        "zoom": zoom, "zooms": [("day", "Day"), ("week", "Week"), ("month", "Month"), ("quarter", "Quarter")],
+        "group_by": group_by,
         "today": today,
         "today_col": (today - start).days + 1 if start <= today <= end else None,
-        "groups": [g for g in groups.values() if g["rows"] or board],
-        "undated": undated,
-        "prev": (start - timedelta(days=28)).isoformat(),
-        "next": (start + timedelta(days=28)).isoformat(),
+        "groups": [g for g in groups.values() if g["rows"] or g["undated"] or g.get("list_id")],
+        "prev": (start - timedelta(days=step)).isoformat(),
+        "next": (start + timedelta(days=step)).isoformat(),
+        "month_choices": [(_shift_month(today.replace(day=1), i).strftime("%Y-%m-01"), _shift_month(today.replace(day=1), i))
+                          for i in range(-6, 13)],
+        "add_lists": board.lists.filter(is_archived=False) if board else [],
     })
     return render(request, "boards/view_timeline.html", ctx)
 

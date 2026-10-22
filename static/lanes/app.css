@@ -1354,3 +1354,35 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .cal-more { border: 0; background: none; color: var(--text-2); font: inherit; font-size: 12px; font-weight: 600; text-align: left; padding: 2px 4px; cursor: pointer; border-radius: 4px; }
 .cal-more:hover { background: var(--surface-3); color: var(--text); }
 .cal-full .cal-chips.expanded { position: relative; z-index: 5; background: var(--list); box-shadow: var(--shadow); border-radius: 8px; padding: 4px; overflow: visible; }
+
+/* ---------- Timeline, Trello-style ---------- */
+.tl-view .tl-scroll { flex: 1; min-height: 0; overflow: auto; border-radius: 0; background: none; }
+.tl-view .tl { --label: 230px; min-width: calc(var(--label) + var(--days) * var(--col)); position: relative; }
+.tl-view .tl-grid { grid-template-columns: repeat(var(--days), var(--col)); }
+.tl-view .tl-row { min-height: 40px; }
+.tl-view .tl-header { background: var(--list); }
+.tl-view .tl-day { border-left: 1px solid rgb(255 255 255 / .04); padding: 6px 0; }
+.tl-view .tl-day .tl-dow { font-size: 11px; font-weight: 600; margin: 0; }
+.tl-view .tl-day .tl-dnum { font-size: 15px; font-weight: 700; color: var(--text); margin: 0; }
+.tl-view .tl-day.today { box-shadow: inset 0 -3px 0 var(--accent); }
+.tl-view .tl-day.today .tl-dow, .tl-view .tl-day.today .tl-dnum { color: var(--accent); background: none; }
+.tl-body { position: relative; }
+.tl-shade { position: absolute; top: 0; bottom: 0; left: var(--label); display: grid; grid-template-columns: repeat(var(--days), var(--col)); pointer-events: none; }
+.tl-shade i { border-left: 1px solid rgb(255 255 255 / .04); }
+.tl-shade i.weekend { background: rgb(255 255 255 / .045); }
+.tl-shade i.today { background: rgb(87 157 255 / .06); }
+:root[data-theme="light"] .tl-shade i.weekend { background: rgb(9 30 66 / .05); }
+.tl-view .tl-group { border-bottom: 1px solid var(--border); position: relative; }
+.tl-group-head { display: grid; grid-template-columns: var(--label) 1fr; }
+.tl-group-head .tl-label { white-space: normal; display: grid; gap: 4px; padding: 12px 14px 6px; }
+.tl-group-title { font-size: 15px; color: var(--text); }
+.tl-group-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.tl-group-meta .link-btn { color: #85b8ff; font-weight: 600; font-size: 13px; }
+.tl-unsched { display: grid; gap: 4px; margin-top: 6px; }
+.tl-view .tl-label { background: var(--list); }
+.tl-view .tl-bar { height: 28px; cursor: grab; position: relative; user-select: none; touch-action: none; }
+.tl-view .tl-bar.dragging { cursor: grabbing; opacity: .85; box-shadow: 0 6px 16px rgb(0 0 0 / .4); z-index: 5; }
+.tl-resize { position: absolute; right: 0; top: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+.tl-bar.short .tl-resize { right: -2px; }
+.tl-view .view-hint { font-size: 12px; color: var(--text-2); }
+@media (max-width: 760px) { .tl-view .tl { --label: 140px; } .tl-view .view-hint { display: none; } }
