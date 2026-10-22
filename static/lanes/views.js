@@ -102,6 +102,14 @@
 
   // Calendar toolbar (everyone): month picker, Month/Week, No due date panel, Sync link
   if (cal) {
+    cal.addEventListener('click', e => {
+      const more = e.target.closest('[data-cal-more]');
+      if (!more) return;
+      e.preventDefault();
+      const box = more.closest('.cal-chips');
+      box.classList.toggle('expanded');
+      more.textContent = box.classList.contains('expanded') ? 'Show less' : `+${box.querySelectorAll('.chip').length - 3} more`;
+    });
     const qs = new URLSearchParams(location.search);
     $('[data-cal-month]')?.addEventListener('change', e => {
       qs.delete('v'); qs.delete('d'); qs.set('m', e.target.value); location.search = qs.toString();
@@ -196,6 +204,26 @@
         const x = fn(a), y = fn(b);
         return (x < y ? -1 : x > y ? 1 : 0) * (asc ? 1 : -1);
       }).forEach(r => tbody.appendChild(r));
+      saveState();
     }));
+
+    // Keep filters and sort when the page refreshes itself (live updates reload the table)
+    const KEY = `lanes-table-${location.pathname}`;
+    function saveState() {
+      try { sessionStorage.setItem(KEY, JSON.stringify({ q: search.value, list: listSel.value, person: personSel.value,
+                                                          hide: hideDone.checked, sortKey, asc })); } catch {}
+    }
+    [search, listSel, personSel, hideDone].forEach(el => el.addEventListener('input', saveState));
+    try {
+      const st = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+      if (st) {
+        search.value = st.q || ''; listSel.value = st.list || ''; personSel.value = st.person || ''; hideDone.checked = !!st.hide;
+        filter();
+        if (st.sortKey) {
+          const th = $(`th[data-sort="${st.sortKey}"]`, table);
+          if (th) { sortKey = st.sortKey; asc = !st.asc; th.click(); }   // click flips asc back to the saved one
+        }
+      }
+    } catch {}
   }
 })();

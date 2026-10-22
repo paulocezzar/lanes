@@ -2310,3 +2310,51 @@ class DockPlannerTests(TestCase):
         html = cl.get("/api/planner/panel/").json()["html"]
         self.assertIn("Bake rye", html)
         self.assertIn("Today", html)
+
+
+class SimFindingsTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="SimFix")
+        self.u = User.objects.create_user("sf@x.com", "pw", first_name="Sue")
+        self.v = User.objects.create_user("sf2@x.com", "pw", first_name="Vic")
+        self.b = Board.objects.create(workspace=self.ws, title="B")
+        for u in (self.u, self.v):
+            BoardMember.objects.create(board=self.b, user=u, role="admin")
+        self.card = Card.objects.create(list=List.objects.create(board=self.b, title="L"), title="Scones", description="v1")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def j(self, url, data):
+        return self.c.post(url, json.dumps(data), content_type="application/json")
+
+    def test_description_conflict(self):
+        Card.objects.filter(pk=self.card.pk).update(description="someone else's v2")
+        r = self.j(f"/api/cards/{self.card.pk}/update/", {"description": "my v2", "description_base": "v1"})
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(r.json()["current"], "someone else's v2")
+        self.card.refresh_from_db(); self.assertEqual(self.card.description, "someone else's v2")
+        r = self.j(f"/api/cards/{self.card.pk}/update/", {"description": "my v2"})          # chose "Replace with mine"
+        self.card.refresh_from_db(); self.assertEqual(self.card.description, "my v2")
+        r = self.j(f"/api/cards/{self.card.pk}/update/", {"description": "my v3", "description_base": "my v2"})
+        self.assertEqual(r.status_code, 200)
+
+    def test_history_records_items_labels_and_renames(self):
+        from .models import Activity, Checklist, Label
+        lab = Label.objects.create(board=self.b, name="Urgent", colour="red")
+        cl = Checklist.objects.create(card=self.card, title="Steps")
+        self.j(f"/api/cards/{self.card.pk}/labels/", {"label_id": lab.pk})
+        self.j(f"/api/checklists/{cl.pk}/items/", {"text": "Weigh up"})
+        item = cl.items.get()
+        self.j(f"/api/items/{item.pk}/", {"assignee_id": self.v.pk, "due_at": "2026-11-02T09:00"})
+        self.j(f"/api/items/{item.pk}/", {"delete": True})
+        self.j(f"/api/cards/{self.card.pk}/update/", {"title": "Scones x60"})
+        texts = [a.text() for a in Activity.objects.filter(card=self.card)]
+        for want in ["added the Urgent label", "added “Weigh up” to Steps", "assigned “Weigh up” to Vic",
+                     "set “Weigh up” due 2 Nov, 09:00", "deleted “Weigh up” from Steps",
+                     "renamed this card from “Scones” to “Scones x60”"]:
+            self.assertIn(want, texts)
+
+    def test_just_now(self):
+        from .templatetags.lanes_extras import ago
+        from datetime import timedelta
+        self.assertEqual(ago(timezone.now()), "just now")
+        self.assertTrue(ago(timezone.now() - timedelta(minutes=5)).endswith("ago"))

@@ -24,9 +24,10 @@ User = get_user_model()
 
 
 class ApiError(Exception):
-    def __init__(self, message, status=400):
+    def __init__(self, message, status=400, extra=None):
         super().__init__(message)
         self.status = status
+        self.extra = extra or {}
 
 
 def api(view):
@@ -42,7 +43,7 @@ def api(view):
             with transaction.atomic():
                 return JsonResponse(view(request, *args, **kwargs) or {"ok": True})
         except ApiError as e:
-            return JsonResponse({"error": str(e)}, status=e.status)
+            return JsonResponse({"error": str(e), **e.extra}, status=e.status)
         except Http404:
             return JsonResponse({"error": "Not found"}, status=404)
     return wrapper
@@ -210,10 +211,16 @@ def card_update(request, card_id):
     if "title" in d:
         new = _text(d["title"], 250, "title")
         if new != card.title:
-            log(board, user, "card_renamed", card=card, **{"from": card.title})
+            log(board, user, "card_renamed", card=card, **{"from": card.title, "to": new})
             card.title = new
     if "description" in d:
-        card.description = (d["description"] or "")[:20000]
+        new_desc = (d["description"] or "")[:20000]
+        base = d.get("description_base")
+        # Two people editing at once: refuse to silently overwrite someone else's newer text.
+        if base is not None and card.description != base and card.description != new_desc:
+            raise ApiError("Someone else changed this description while you were editing.", 409,
+                           {"conflict": True, "current": card.description})
+        card.description = new_desc
     if "is_complete" in d and bool(d["is_complete"]) != card.is_complete:
         card.is_complete = bool(d["is_complete"])
         log(board, user, "card_completed" if card.is_complete else "card_reopened", card=card)
@@ -277,8 +284,10 @@ def card_toggle_label(request, card_id):
     label = get_object_or_404(Label, pk=request.data.get("label_id"), board=card.list.board)
     if card.labels.filter(pk=label.pk).exists():
         card.labels.remove(label)
+        log(card.list.board, request.user, "label_removed", card=card, name=str(label) or label.get_colour_display())
     else:
         card.labels.add(label)
+        log(card.list.board, request.user, "label_added", card=card, name=str(label) or label.get_colour_display())
         automation.fire(card, Rule.LABEL_ADDED, label=label, actor=request.user)
     return card_response(card.pk, request)
 
@@ -400,8 +409,9 @@ def checklist_update(request, checklist_id):
 @api
 def item_create(request, checklist_id):
     cl = _checklist(request, checklist_id)
-    ChecklistItem.objects.create(checklist=cl, text=_text(request.data.get("text"), 250),
-                                 position=positions.end_position(cl.items.all()))
+    it = ChecklistItem.objects.create(checklist=cl, text=_text(request.data.get("text"), 250),
+                                      position=positions.end_position(cl.items.all()))
+    log(cl.card.list.board, request.user, "item_added", card=cl.card, text=it.text, checklist=cl.title)
     return card_response(cl.card_id, request)
 
 
@@ -411,6 +421,7 @@ def item_update(request, item_id):
     card = item.checklist.card
     _edit(card.list.board, request.user)
     if request.data.get("delete"):
+        log(card.list.board, request.user, "item_deleted", card=card, text=item.text, checklist=item.checklist.title)
         item.delete()
         return card_response(card.pk, request)
     if "text" in request.data:
@@ -423,15 +434,24 @@ def item_update(request, item_id):
             if item.assignee_id != int(uid):
                 notify.send(User.objects.get(pk=uid), Notification.ITEM_ASSIGNED, actor=request.user, card=card,
                             text=f"assigned you “{item.text}” on {card.title}")
+            if item.assignee_id != int(uid):
+                log(card.list.board, request.user, "item_assigned", card=card, text=item.text,
+                    name=User.objects.get(pk=uid).display_name)
             item.assignee_id = uid
         else:
+            if item.assignee_id:
+                log(card.list.board, request.user, "item_unassigned", card=card, text=item.text)
             item.assignee = None
     if "due_at" in request.data:
         if request.data["due_at"]:
             due = parse_datetime(request.data["due_at"])
             if not due:
                 raise ApiError("Couldn't read that date.")
-            item.due_at = timezone.make_aware(due) if timezone.is_naive(due) else due
+            new_due = timezone.make_aware(due) if timezone.is_naive(due) else due
+            if new_due != item.due_at:
+                log(card.list.board, request.user, "item_due", card=card, text=item.text,
+                    due=timezone.localtime(new_due).strftime("%-d %b, %H:%M"))
+            item.due_at = new_due
         else:
             item.due_at = None
     if "reminder_minutes" in request.data:

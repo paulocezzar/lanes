@@ -60,3 +60,10 @@
     } catch { /* toast shown */ }
   });
 })();
+
+// On a phone the week stacks vertically: jump straight to today instead of scrolling past empty days.
+(() => {
+  if (window.innerWidth > 760) return;
+  const today = document.querySelector('.day.today');
+  if (today) setTimeout(() => today.scrollIntoView({ block: 'start' }), 50);
+})();

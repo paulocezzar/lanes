@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load lanes_extras %}
 {% block title %}People · Company · Lanes{% endblock %}
 {% block content %}
 <main class="home company">
@@ -24,7 +24,7 @@
       <tr>
         <td><b>{{ u.display_name }}</b>{% if u.is_guest %} <span class="guest-pill">Guest</span>{% endif %}{% if u.is_superuser %} <span class="ok-pill">Company admin</span>{% endif %}{% if u.ms_oid %} <span class="ms-pill" title="Has signed in with Microsoft">Microsoft</span>{% endif %}<br><small class="muted">{{ u.email }}</small></td>
         <td>{{ r.depts|join:", "|default:"—" }}</td>
-        <td>{% if u.last_login %}{{ u.last_login|timesince }} ago{% else %}<span class="muted">Never</span>{% endif %}</td>
+        <td>{% if u.last_login %}{{ u.last_login|ago }}{% else %}<span class="muted">Never</span>{% endif %}</td>
         <td>{% if u.totp_enabled %}<span class="ok-pill">On</span>{% elif r.needs_2fa %}<span class="guest-pill">Needs setting up</span>{% else %}<span class="muted">Off</span>{% endif %}</td>
         <td><div class="row-actions">
           {% if u.totp_enabled %}

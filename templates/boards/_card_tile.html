@@ -15,6 +15,7 @@
   <div class="tile-badges">
     {% if votes and card.list.board.voting %}<span class="badge vote-badge" title="{{ votes }} vote{{ votes|pluralize }}">👍{{ votes }}</span>{% endif %}
     {% if card.due_at %}<span class="badge due-{{ card.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ card.due_at|date:"j M" }}</span>{% endif %}
+    {% if card.recur %}<span class="badge recur-badge" title="Repeats {{ card.get_recur_display|lower }}">🔁</span>{% endif %}
     {% if card.description %}<span class="badge" title="Has a description">{% include "boards/_icon.html" with i="desc" %}</span>{% endif %}
     {% if card.attachments.all %}<span class="badge" title="Attachments">📎{{ card.attachments.all|length }}</span>{% endif %}
     {% if card.comments.all %}<span class="badge">{% include "boards/_icon.html" with i="comment" %}{{ card.comments.all|length }}</span>{% endif %}

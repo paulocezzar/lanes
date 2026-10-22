@@ -50,7 +50,8 @@
               <span class="cal-num">{% if day.date.day == 1 %}{{ day.date|date:"M j" }}{% else %}{{ day.date|date:"j" }}{% endif %}</span>
               {% if can_edit and board %}<button class="cal-add" data-cal-add title="Add a card due this day">+</button>{% endif %}
             </div>
-            <div class="cal-chips">{% for c in day.cards %}{% include "boards/_chip.html" %}{% endfor %}</div>
+            <div class="cal-chips{% if day.cards|length > 3 and mode == 'month' %} has-more{% endif %}">{% for c in day.cards %}{% include "boards/_chip.html" %}{% endfor %}
+              {% if day.cards|length > 3 and mode == 'month' %}<button type="button" class="cal-more" data-cal-more>+{{ day.cards|length|add:"-3" }} more</button>{% endif %}</div>
           </div>
           {% endfor %}
         </div>

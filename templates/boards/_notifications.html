@@ -1,10 +1,10 @@
-{% for n in items %}
+{% load lanes_extras %}{% for n in items %}
 <a class="notif{% if not n.read_at %} unread{% endif %}" href="{% url 'notification_open' n.pk %}" data-notif="{{ n.pk }}">
   {% if n.actor %}{% include "boards/_avatar.html" with u=n.actor %}{% else %}<span class="avatar notif-sys">{% if n.kind == "due_soon" or n.kind == "item_due_soon" %}⏰{% elif n.kind == "watched" %}👁{% elif n.kind == "automation" %}⚡{% else %}⚡{% endif %}</span>{% endif %}
   <span class="notif-main">
     <span>{% if n.kind == "watched" %}<i class="notif-tag">👁</i> {% endif %}<b>{{ n.actor.display_name|default:"Lanes" }}</b> {{ n.text }}</span>
     {% if n.excerpt %}<span class="notif-excerpt">“{{ n.excerpt|truncatechars:120 }}”</span>{% endif %}
-    <small>{% if n.board %}{{ n.board.title }} · {% endif %}{{ n.created_at|timesince }} ago</small>
+    <small>{% if n.board %}{{ n.board.title }} · {% endif %}{{ n.created_at|ago }}</small>
   </span>
   {% if not n.read_at %}<i class="notif-dot" aria-label="Unread"></i>{% endif %}
 </a>

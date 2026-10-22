@@ -1,4 +1,4 @@
-{% extends "boards/board_base.html" %}
+{% extends "boards/board_base.html" %}{% load lanes_extras %}
 {% block board_body %}
 <div class="view-wrap auto-view">
  <div class="auto-shell">
@@ -91,7 +91,7 @@
       <div class="feed-item">
         {% if a.actor %}{% include "boards/_avatar.html" with u=a.actor %}{% else %}<span class="auto-bolt">⚡</span>{% endif %}
         <div><b>{{ a.actor.display_name|default:"Automation" }}</b> {{ a.text }}{% if a.card %} — <a href="?s=activity&amp;card={{ a.card.pk }}" data-card-link="{{ a.card.pk }}">{{ a.card.title }}</a>{% endif %}
-          <time>{{ a.created_at|timesince }} ago</time></div>
+          <time>{{ a.created_at|ago }}</time></div>
       </div>
       {% empty %}<p class="muted">Nothing has run yet.</p>{% endfor %}
     {% endif %}

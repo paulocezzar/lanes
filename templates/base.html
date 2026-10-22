@@ -24,6 +24,7 @@
       <input type="search" name="q" placeholder="Search cards" value="{% if request.resolver_match.url_name == 'search' %}{{ request.GET.q }}{% endif %}" aria-label="Search cards" autocomplete="off" data-top-search>
       <div class="search-drop" data-search-drop hidden></div>
     </form>
+    <a class="icon-btn top-search-mobile" href="{% url 'search' %}" title="Search cards" aria-label="Search cards"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></a>
     <div class="topbar-right">
       <div class="bell-wrap" id="bell">
         <button class="icon-btn bell" data-bell title="Notifications" aria-label="Notifications">

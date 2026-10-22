@@ -38,6 +38,9 @@
     }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 409 && body.conflict) {           // someone else saved first — caller decides
+        const err = new Error('conflict'); err.conflict = body; throw err;
+      }
       toast(body.error || 'Something went wrong.');
       throw new Error(body.error || res.status);
     }
@@ -46,7 +49,7 @@
 
   function fromHTML(html) {
     const t = document.createElement('template');
-    t.innerHTML = html.trim();
+    t.innerHTML = String(html ?? '').trim();
     return t.content.firstElementChild;
   }
 
@@ -459,7 +462,17 @@
       });
       desc.addEventListener('submit', e => {
         e.preventDefault();
-        cardPost('update', { description: ta.value }).then(() => (original = ta.value));
+        const mine = ta.value;
+        cardPost('update', { description: mine, description_base: original }).then(() => (original = mine))
+          .catch(async err => {
+            if (!err.conflict) return;
+            const theirs = err.conflict.current || '';
+            const keepMine = await LanesUI.confirm('Someone else changed this description while you were editing.', {
+              text: `Their version:\n\n${theirs.slice(0, 600) || '(empty)'}\n\nReplace it with yours, or keep theirs?`,
+              ok: 'Replace with mine', cancel: 'Keep theirs' });
+            if (keepMine) cardPost('update', { description: mine }).then(() => (original = mine));
+            else { original = theirs; openCard(openCardId); }
+          });
       });
     }
 
@@ -1448,6 +1461,13 @@
   });
   document.addEventListener('click', e => { if (!quick.hidden && !quick.contains(e.target)) hideQuick(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !quick.hidden) { e.stopPropagation(); hideQuick(); } }, true);
+  // Escape inside a card: close the open popover first, only then the card (like Trello)
+  const popIsOpen = () => openPop || $$('[data-pop-panel]:not([hidden])', dialogBody).length || $('details[open]', dialogBody);
+  const closePopsOnly = () => { hidePops(); $$('details[open]', dialogBody).forEach(d => d.removeAttribute('open')); };
+  dialog.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && popIsOpen()) { e.preventDefault(); e.stopPropagation(); closePopsOnly(); }
+  }, true);
+  dialog.addEventListener('cancel', e => { if (popIsOpen()) { e.preventDefault(); closePopsOnly(); } });
   quick.addEventListener('click', async e => {
     const b = e.target.closest('[data-q]');
     if (!b) return;
@@ -1483,7 +1503,7 @@
     if (dialog.open || String(window.getSelection() || '')) return;
     const key = e.key.toLowerCase();
     if ((key === 'c' || key === 'x') && kbTile && document.body.contains(kbTile) && kbTile.matches(':hover, :focus, .kb-current')) {
-      if (key === 'x' && boardEl.dataset.canEdit !== '1') return;
+      if (boardEl.dataset.canEdit !== '1') return;     // observers can't paste anyway
       e.preventDefault();
       const marker = `${location.origin}/b/${boardId}/?card=${kbTile.dataset.cardId}`;
       try { localStorage.setItem(CLIP, JSON.stringify({ id: kbTile.dataset.cardId, mode: key === 'x' ? 'move' : 'copy', marker, at: Date.now() })); } catch {}

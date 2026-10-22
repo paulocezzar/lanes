@@ -1330,3 +1330,27 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .dock .dock-btn.dock-voice { background: rgb(22 26 31 / .92); border: 1px solid rgb(255 255 255 / .12); border-radius: 12px; box-shadow: 0 8px 24px rgb(0 0 0 / .35); }
 .dock .dock-btn.dock-voice:hover { background: rgb(44 51 58 / .95); }
 .dock .dock-btn.dock-voice.listening { background: #ae2e24; }
+
+/* ---------- Fixes from the simulated office ---------- */
+#board[data-can-edit="0"] .tile-check { display: none; }
+.cm .pop, .cm .item-pop { max-height: min(70vh, 560px); overflow-y: auto; }
+.recur-badge { font-size: 11px; }
+@media (hover: none) { .item .icon-btn.item-del { visibility: visible; } .item-more > summary { visibility: visible; } }
+.top-search-mobile { display: none; }
+@media (max-width: 760px) {
+  /* popovers, filter and notifications never run off a phone screen */
+  .pop, .filter-wrap .filter-pop, .bell-panel, .menu-panel, .item-pop, .cal-sync-pop, .view-add-pop, .move-pop {
+    position: fixed !important; left: 8px !important; right: 8px !important; width: auto !important; max-width: none !important;
+    top: auto; max-height: 75vh; overflow-y: auto; }
+  .filter-wrap .filter-pop, .bell-panel, .menu-panel, .cal-sync-pop { top: 56px !important; }
+  .cm .pop { top: 64px !important; }
+  .top-search-mobile { display: inline-flex; }
+  input[type=checkbox] { width: 20px; height: 20px; }
+  .item { min-height: 40px; }
+}
+
+.cal-toolbar .view-heading { color: var(--text); }
+.cal-full .cal-chips.has-more:not(.expanded) > .chip:nth-of-type(n+4) { display: none; }
+.cal-more { border: 0; background: none; color: var(--text-2); font: inherit; font-size: 12px; font-weight: 600; text-align: left; padding: 2px 4px; cursor: pointer; border-radius: 4px; }
+.cal-more:hover { background: var(--surface-3); color: var(--text); }
+.cal-full .cal-chips.expanded { position: relative; z-index: 5; background: var(--list); box-shadow: var(--shadow); border-radius: 8px; padding: 4px; overflow: visible; }

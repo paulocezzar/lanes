@@ -116,3 +116,15 @@ def md(text):
 def who_can(setting):
     from boards.permissions import who_can as _who
     return _who(setting)
+
+
+@register.filter
+def ago(value):
+    """'just now' for the first minute, then '5 minutes ago' (Django's timesince)."""
+    from django.utils import timezone
+    from django.utils.timesince import timesince
+    if not value:
+        return ""
+    if (timezone.now() - value).total_seconds() < 60:
+        return "just now"
+    return f"{timesince(value)} ago"

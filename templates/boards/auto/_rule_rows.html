@@ -1,10 +1,10 @@
-{% for r in items %}
+{% load lanes_extras %}{% for r in items %}
 <div class="auto-row{% if not r.rule.is_enabled %} off{% endif %}">
   <span class="auto-bolt">⚡</span>
   <div class="auto-desc">
     <b>{{ r.when }}</b>
     <ul>{% for t in r.then %}<li>{{ t }}</li>{% endfor %}</ul>
-    <small class="muted">Ran {{ r.rule.run_count }} time{{ r.rule.run_count|pluralize }}{% if r.rule.last_run_at %}, last {{ r.rule.last_run_at|timesince }} ago{% endif %}{% if r.rule.created_by %} · made by {{ r.rule.created_by.display_name }}{% endif %}</small>
+    <small class="muted">Ran {{ r.rule.run_count }} time{{ r.rule.run_count|pluralize }}{% if r.rule.last_run_at %}, last {{ r.rule.last_run_at|ago }}{% endif %}{% if r.rule.created_by %} · made by {{ r.rule.created_by.display_name }}{% endif %}</small>
   </div>
   {% if can_edit %}
   <form method="post" action="{% url 'rule_update' board.pk r.rule.pk %}">{% csrf_token %}<input type="hidden" name="section" value="{{ section }}">

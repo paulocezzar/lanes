@@ -225,7 +225,7 @@
             <a class="att-thumb" href="{% url 'attachment' a.pk %}" target="_blank" rel="noopener">{% if a.is_image %}<img src="{% url 'attachment' a.pk %}" alt="" loading="lazy">{% elif a.url %}<span>🔗</span>{% else %}<span>{{ a.name|slice:"-4:"|upper|cut:"." }}</span>{% endif %}</a>
             <div class="att-meta">
               <a href="{% url 'attachment' a.pk %}" target="_blank" rel="noopener"><b>{{ a.name }}</b></a>
-              <small>{% if a.url %}{{ a.link_host }}{% else %}{{ a.size_label }}{% endif %} · {{ a.created_at|timesince }} ago{% if card.cover_id == a.pk %} · Cover{% endif %}</small>
+              <small>{% if a.url %}{{ a.link_host }}{% else %}{{ a.size_label }}{% endif %} · {{ a.created_at|ago }}{% if card.cover_id == a.pk %} · Cover{% endif %}</small>
               {% if can_edit %}<div class="att-actions">
                 {% if a.is_image %}<button class="link-btn" data-cover="{{ a.pk }}" data-on="{% if card.cover_id == a.pk %}0{% else %}1{% endif %}">{% if card.cover_id == a.pk %}Remove cover{% else %}Make cover{% endif %}</button>{% endif %}
                 <button class="link-btn" data-delete-attachment="{{ a.pk }}">Delete</button>
@@ -303,7 +303,7 @@
           <div class="feed-item comment">
             {% if c.author %}{% include "boards/_avatar.html" with u=c.author %}{% endif %}
             <div class="feed-main">
-              <div><b>{{ c.author.display_name|default:"⚡ Automation" }}</b> <time>{{ c.created_at|timesince }} ago{% if c.edited_at %} (edited){% endif %}</time></div>
+              <div><b>{{ c.author.display_name|default:"⚡ Automation" }}</b> <time>{{ c.created_at|ago }}{% if c.edited_at %} (edited){% endif %}</time></div>
               <div class="comment-body md">{{ c.body|md }}</div>
               <div class="reactions" data-comment="{{ c.pk }}">
                 {% for r in f.reactions %}<button class="reaction{% if r.mine %} mine{% endif %}" {% if can_comment %}data-react="{{ r.emoji }}"{% else %}disabled{% endif %} title="{{ r.names|join:', ' }}">{{ r.emoji }} {{ r.count }}</button>{% endfor %}
@@ -315,7 +315,7 @@
           {% endwith %}{% else %}{% with a=f.obj %}
           <div class="feed-item">
             {% if a.actor %}{% include "boards/_avatar.html" with u=a.actor %}{% endif %}
-            <div class="feed-main"><b>{{ a.actor.display_name|default:"⚡ Automation" }}</b> {{ a.text }}<time>{{ a.created_at|timesince }} ago</time></div>
+            <div class="feed-main"><b>{{ a.actor.display_name|default:"⚡ Automation" }}</b> {{ a.text }}<time>{{ a.created_at|ago }}</time></div>
           </div>
           {% endwith %}{% endif %}
         {% endfor %}
