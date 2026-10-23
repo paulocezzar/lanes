@@ -48,6 +48,9 @@ def attachment_upload(request, card_id):
         card.cover = att
         card.save(update_fields=["cover", "updated_at"])
     log(board, request.user, "attachment_added", card=card, name=att.name)
+    from . import automation
+    from .models import Rule
+    automation.fire(card, Rule.ATTACHMENT, actor=request.user)
     from .signals import bump
     bump(board.pk)
     return JsonResponse(card_response(card.pk, request))

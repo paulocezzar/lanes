@@ -1,11 +1,14 @@
 {% for row in items %}{% with b=row.b %}
-<div class="auto-row">
+<div class="auto-row{% if not b.is_enabled %} off{% endif %}">
   <div class="auto-desc">
     <b class="btn-preview"><span class="btn sm">{{ b.icon }} {{ b.name }}</span></b>
     <ul>{% for t in row.does %}<li>{{ t }}</li>{% endfor %}</ul>
-    <small class="muted">Pressed {{ b.run_count }} time{{ b.run_count|pluralize }}</small>
+    <small class="muted">Pressed {{ b.run_count }} time{{ b.run_count|pluralize }}{% if b.close_card %} · closes the card{% endif %}{% if not b.is_enabled %} · switched off{% endif %}</small>
   </div>
   {% if can_edit %}
+  <button type="button" class="btn ghost sm" data-edit="{{ row.edit }}">Edit</button>
+  <form method="post" action="{% url 'button_update' board.pk b.pk %}">{% csrf_token %}<input type="hidden" name="section" value="{{ section }}"><input type="hidden" name="action" value="toggle">
+    <button class="btn sm {% if b.is_enabled %}ghost{% else %}primary{% endif %}">{% if b.is_enabled %}Turn off{% else %}Turn on{% endif %}</button></form>
   <form method="post" action="{% url 'button_update' board.pk b.pk %}" data-confirm="Delete this button?" data-confirm-ok="Delete" data-danger>{% csrf_token %}<input type="hidden" name="section" value="{{ section }}">
     <input type="hidden" name="action" value="delete"><button class="icon-btn xs" title="Delete">{% include "boards/_icon.html" with i="close" %}</button>
   </form>

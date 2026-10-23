@@ -3099,3 +3099,230 @@ class ExampleCardsTests(TestCase):
         self.assertIn(u, c.members.all())
         self.assertContains(self.client.get(f"/b/{b.pk}/"), "Finish Bakery Managers Guide")
         self.assertEqual(self.client.get(f"/cards/{c.pk}/").status_code, 200)
+
+
+class AutomationParityTests(TestCase):
+    """Everything added to match Trello's automation."""
+
+    def setUp(self):
+        from .models import CustomField
+        self.u = User.objects.create_user("ap@x.com", "pw", first_name="Ana")
+        self.v = User.objects.create_user("vp@x.com", "pw", first_name="Vic")
+        self.ws = Workspace.objects.create(name="AP")
+        for u in (self.u, self.v):
+            WorkspaceMember.objects.create(workspace=self.ws, user=u)
+        self.b = Board.objects.create(workspace=self.ws, title="AP board")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        BoardMember.objects.create(board=self.b, user=self.v, role="member")
+        self.l1 = List.objects.create(board=self.b, title="Inbox", position=1000)
+        self.l2 = List.objects.create(board=self.b, title="Doing", position=2000)
+        self.l3 = List.objects.create(board=self.b, title="Done", position=3000)
+        self.red = Label.objects.create(board=self.b, colour="red", name="Urgent")
+        self.field = CustomField.objects.create(board=self.b, name="Qty", kind="number")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def j(self, url, d=None, client=None):
+        return (client or self.c).post(url, json.dumps(d or {}), content_type="application/json")
+
+    def rule(self, trigger, actions, **kw):
+        from .models import Rule
+        return Rule.objects.create(board=self.b, trigger=trigger, actions=actions, created_by=self.u, **kw)
+
+    def comments(self, card):
+        return list(card.comments.values_list("body", flat=True))
+
+    # ---- triggers ----
+    def test_added_to_board_and_list_count(self):
+        self.rule("board_added", [{"type": "comment", "text": "welcome"}])
+        self.rule("list_count", [{"type": "comment", "text": "three!"}], trigger_list=self.l1, trigger_count=3)
+        ids = [self.j(f"/api/lists/{self.l1.pk}/cards/", {"title": f"c{i}"}).json()["card_id"] for i in range(3)]
+        cards = [Card.objects.get(pk=i) for i in ids]
+        self.assertTrue(all("welcome" in self.comments(c) for c in cards))
+        self.assertEqual([("three!" in self.comments(c)) for c in cards], [False, False, True])
+
+    def test_archived_due_set_removed_attachment_comment_field(self):
+        card = Card.objects.create(list=self.l1, title="x")
+        for trig in ("card_archived", "due_set", "due_removed", "attachment_added", "comment_added", "field_set"):
+            self.rule(trig, [{"type": "add_sticker", "sticker": "⭐"}] if trig == "card_archived" else
+                      [{"type": "comment", "text": f"saw {trig}"}], **({"trigger_field": self.field} if trig == "field_set" else {}))
+        u = f"/api/cards/{card.pk}/"
+        self.j(u + "update/", {"due_at": "2030-01-01T10:00"})
+        self.j(u + "update/", {"due_at": ""})
+        self.j(u + "links/", {"url": "https://example.com/spec"})
+        self.j(u + "comments/", {"body": "hello"})
+        self.j(u + "fields/", {"field_id": self.field.pk, "value": "4"})
+        bodies = self.comments(card)
+        for trig in ("due_set", "due_removed", "attachment_added", "comment_added", "field_set"):
+            self.assertIn(f"saw {trig}", bodies, trig)
+        self.assertEqual(bodies.count("saw comment_added"), 1)        # automation comments don't re-trigger
+        self.j(u + "update/", {"archive": True})
+        card.refresh_from_db()
+        self.assertIn("⭐", card.stickers)
+
+    def test_mentioned_only_me(self):
+        card = Card.objects.create(list=self.l1, title="m")
+        self.rule("mentioned", [{"type": "add_label", "label": self.red.pk}], trigger_me=True)
+        vc = Client(); vc.force_login(self.v)
+        self.j(f"/api/cards/{card.pk}/comments/", {"body": "nobody here"}, client=vc)
+        self.assertFalse(card.labels.exists())
+        self.j(f"/api/cards/{card.pk}/comments/", {"body": "@Ana can you check?"}, client=vc)
+        self.assertTrue(card.labels.filter(pk=self.red.pk).exists())
+
+    def test_list_created_runs_board_actions_on_new_list(self):
+        self.rule("list_created", [{"type": "create_card", "list": "new", "text": "Read me"}])
+        self.j(f"/api/boards/{self.b.pk}/lists/", {"title": "Brand new"})
+        new = List.objects.get(title="Brand new")
+        self.assertTrue(new.cards.filter(title="Read me").exists())
+
+    def test_due_weekday_before(self):
+        from datetime import datetime as dt
+        from . import automation
+        tz = timezone.get_current_timezone()
+        card = Card.objects.create(list=self.l1, title="w", due_at=timezone.make_aware(dt(2026, 11, 5, 17), tz))  # Thursday
+        self.rule("due_weekday", [{"type": "comment", "text": "Monday nudge"}], trigger_weekday=0, trigger_hours=9)
+        automation.run_due_rules(now=timezone.make_aware(dt(2026, 11, 2, 8, 59), tz))
+        self.assertNotIn("Monday nudge", self.comments(card))
+        automation.run_due_rules(now=timezone.make_aware(dt(2026, 11, 2, 9, 1), tz))
+        automation.run_due_rules(now=timezone.make_aware(dt(2026, 11, 3, 9, 1), tz))
+        self.assertEqual(self.comments(card).count("Monday nudge"), 1)
+
+    def test_filters(self):
+        self.rule("card_moved", [{"type": "complete"}], trigger_list=self.l3,
+                  filters=[{"type": "label", "label": self.red.pk}, {"type": "has_due"}])
+        a = Card.objects.create(list=self.l1, title="a")
+        b = Card.objects.create(list=self.l1, title="b", due_at=timezone.now())
+        b.labels.add(self.red)
+        for c in (a, b):
+            self.j(f"/api/cards/{c.pk}/move/", {"list_id": self.l3.pk})
+        a.refresh_from_db(); b.refresh_from_db()
+        self.assertFalse(a.is_complete)
+        self.assertTrue(b.is_complete)
+
+    # ---- actions ----
+    def test_new_card_actions(self):
+        from . import automation
+        from .models import CardFieldValue, Checklist
+        other = Card.objects.create(list=self.l2, title="first", position=10)
+        card = Card.objects.create(list=self.l1, title="Bread", position=500, description="old")
+        card.members.add(self.v)
+        Checklist.objects.create(card=card, title="S").items.create(text="Step one")
+        run = lambda a: automation.run_action(Card.objects.get(pk=card.pk), a)
+        self.assertTrue(run({"type": "move", "list": self.l2.pk, "position": "top"}))
+        self.assertEqual(list(self.l2.cards.order_by("position").values_list("title", flat=True)), ["Bread", "first"])
+        self.assertTrue(run({"type": "move_bottom"}))
+        self.assertEqual(list(self.l2.cards.order_by("position").values_list("title", flat=True)), ["first", "Bread"])
+        self.assertTrue(run({"type": "copy", "list": self.l3.pk}))
+        self.assertTrue(self.l3.cards.filter(title="Bread").exists())
+        self.assertTrue(run({"type": "remove_member", "user": self.v.pk}))
+        self.assertFalse(card.members.exists())
+        self.assertTrue(run({"type": "set_field", "field": self.field.pk, "value": "12"}))
+        self.assertEqual(CardFieldValue.objects.get(card=card).value, 12)
+        self.assertFalse(run({"type": "set_field", "field": self.field.pk, "value": "lots"}))
+        self.assertTrue(run({"type": "sort_list", "by": "name"}))
+        self.assertEqual(list(self.l2.cards.order_by("position").values_list("title", flat=True)), ["Bread", "first"])
+        self.assertTrue(run({"type": "cascade", "list": self.l3.pk}))
+        self.assertTrue(self.l3.cards.filter(title="Step one").exists())
+        self.assertTrue(run({"type": "rename", "text": "{cardname} (v2)"}))
+        self.assertTrue(run({"type": "set_description", "text": "About {cardname}"}))
+        self.assertTrue(run({"type": "set_start", "days": 2}))
+        card.refresh_from_db()
+        self.assertEqual(card.title, "Bread (v2)")
+        self.assertEqual(card.description, "About Bread (v2)")
+        self.assertEqual(card.start_date, timezone.localdate() + timezone.timedelta(days=2))
+
+    def test_board_actions_unique_and_copy_named(self):
+        from . import automation
+        tpl = Card.objects.create(list=self.l1, title="Opening checks", is_template=True)
+        tpl.labels.add(self.red)
+        acts = [{"type": "create_card", "list": self.l2.pk, "text": "Daily", "unique": True},
+                {"type": "copy_named", "text": "opening checks", "list": self.l2.pk}]
+        automation.run_board_actions(self.b, acts, None)
+        automation.run_board_actions(self.b, acts, None)
+        self.assertEqual(self.l2.cards.filter(title="Daily").count(), 1)
+        copies = self.l2.cards.filter(title="Opening checks")
+        self.assertEqual(copies.count(), 2)
+        self.assertFalse(copies.filter(is_template=True).exists())
+        self.assertTrue(copies.first().labels.filter(pk=self.red.pk).exists())
+
+    # ---- schedules ----
+    def test_several_days_every_two_weeks(self):
+        from datetime import date, datetime as dt
+        from . import automation
+        from .models import Schedule
+        tz = timezone.get_current_timezone()
+        s = Schedule(board=self.b, frequency="weekly", weekday=0, weekdays="0,3", interval=2, hour=7,
+                     anchor=date(2026, 10, 19), next_run_at=timezone.now())
+        runs, after = [], timezone.make_aware(dt(2026, 10, 19, 0), tz)
+        for _ in range(4):
+            after = automation.next_run(s, after)
+            runs.append(timezone.localtime(after).date().isoformat())
+        self.assertEqual(runs, ["2026-10-19", "2026-10-22", "2026-11-02", "2026-11-05"])
+        self.assertEqual(automation.describe_schedule(s), "Every 2 weeks on Monday and Thursday at 07:00")
+
+    # ---- the builder's POSTs, including edits ----
+    def test_rule_post_with_filters_and_edit(self):
+        from .models import Rule
+        url = f"/b/{self.b.pk}/automation/rules/"
+        self.c.post(url, {"trigger": "list_count", "trigger_list": self.l2.pk, "trigger_count": "5",
+                          "filters": json.dumps([{"type": "no_label", "label": self.red.pk}, {"type": "bogus"}]),
+                          "action_0": "copy", "list_0": self.l3.pk, "position_0": "top",
+                          "action_1": "set_field", "field_1": self.field.pk, "value_1": "3"})
+        r = Rule.objects.get(trigger="list_count")
+        self.assertEqual((r.trigger_count, r.filters), (5, [{"type": "no_label", "label": self.red.pk}]))
+        self.assertEqual(r.actions[0], {"type": "copy", "list": self.l3.pk, "position": "top"})
+        Rule.objects.filter(pk=r.pk).update(run_count=7)
+        self.c.post(url, {"edit_id": r.pk, "trigger": "card_archived", "action_0": "rename", "text_0": "Old: {cardname}"})
+        r.refresh_from_db()
+        self.assertEqual((r.trigger, r.run_count, r.filters), ("card_archived", 7, []))
+        self.assertEqual(Rule.objects.count(), 1)
+        # bad field value is refused
+        self.c.post(url, {"trigger": "card_archived", "action_0": "set_field", "field_0": self.field.pk, "value_0": "many"})
+        self.assertEqual(Rule.objects.count(), 1)
+        # list_created takes board actions with "the new list"
+        self.c.post(url, {"trigger": "list_created", "action_0": "create_card", "list_0": "new", "text_0": "Hi"})
+        self.assertEqual(Rule.objects.get(trigger="list_created").actions[0]["list"], "new")
+        # due weekday
+        self.c.post(url, {"section": "due", "trigger": "due_weekday", "trigger_weekday": "4", "trigger_hours": "16",
+                          "action_0": "notify"})
+        self.assertEqual(Rule.objects.get(trigger="due_weekday").trigger_weekday, 4)
+
+    def test_schedule_and_button_edits_and_options(self):
+        from .models import Button, Schedule
+        surl = f"/b/{self.b.pk}/automation/schedules/"
+        self.c.post(surl, {"frequency": "weekly", "weekdays": "1,4", "interval": "2", "hour": "6", "kind": "actions",
+                           "saction_0": "create_card", "slist_0": self.l1.pk, "stext_0": "Check", "sunique_0": "1"})
+        s = Schedule.objects.get()
+        self.assertEqual((s.weekdays, s.interval, s.weekday, s.actions[0]["unique"]), ("1,4", 2, 1, True))
+        self.c.post(surl, {"edit_id": s.pk, "frequency": "daily", "hour": "8", "kind": "card", "title": "Temps",
+                           "target_list": self.l1.pk})
+        s.refresh_from_db()
+        self.assertEqual((Schedule.objects.count(), s.frequency, s.kind, s.title), (1, "daily", "card", "Temps"))
+        burl = f"/b/{self.b.pk}/automation/buttons/"
+        self.c.post(burl, {"kind": "card", "name": "Done!", "enabled": "0", "close_card": "1",
+                           "baction_0": "complete"})
+        btn = Button.objects.get()
+        self.assertEqual((btn.is_enabled, btn.close_card), (False, True))
+        card = Card.objects.create(list=self.l1, title="k")
+        self.assertNotContains(self.c.get(f"/cards/{card.pk}/"), "Done!")
+        self.assertEqual(self.j(f"/api/cards/{card.pk}/buttons/{btn.pk}/").status_code, 404)
+        self.c.post(f"/b/{self.b.pk}/automation/buttons/{btn.pk}/", {"action": "toggle"})
+        self.assertContains(self.c.get(f"/cards/{card.pk}/"), "data-close-after")
+        self.c.post(burl, {"edit_id": btn.pk, "kind": "card", "name": "Finished", "enabled": "1", "baction_0": "archive"})
+        btn.refresh_from_db()
+        self.assertEqual((Button.objects.count(), btn.name, btn.actions), (1, "Finished", [{"type": "archive"}]))
+
+    def test_pages_suggestions_reports_edit_data(self):
+        from .services import log
+        self.rule("card_completed", [{"type": "move", "list": self.l3.pk}])
+        for i in range(3):
+            c = Card.objects.create(list=self.l1, title=f"s{i}")
+            log(self.b, self.u, "card_moved", card=c, **{"from": "Inbox", "to": "Doing"})
+            log(self.b, self.u, "card_completed", card=c)
+        page = self.c.get(f"/b/{self.b.pk}/automation/?s=suggestions")
+        self.assertContains(page, "moved into <b>Doing</b>, <b>mark it complete</b>", html=False)
+        self.assertContains(page, "3 times")
+        rep = self.c.get(f"/b/{self.b.pk}/automation/?s=reports")
+        self.assertContains(rep, "Runs")
+        rules = self.c.get(f"/b/{self.b.pk}/automation/?s=rules")
+        self.assertContains(rules, "data-edit=")
+        self.assertContains(rules, "auto-data")

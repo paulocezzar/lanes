@@ -149,7 +149,7 @@
       {% if can_edit and card_buttons or board.voting and can_comment %}
       <div class="cm-buttons">
         {% if board.voting and can_comment %}<button class="btn sm vote-btn{% if voted %} on{% endif %}" data-vote title="{% if voters %}Votes: {{ voters|join:', ' }}{% else %}No votes yet{% endif %}">👍 {% if voted %}Voted{% else %}Vote{% endif %}{% if voters %} · {{ voters|length }}{% endif %}</button>{% endif %}
-        {% if can_edit %}{% for b in card_buttons %}<button class="btn sm press-btn" data-press-card="{{ b.pk }}">{{ b.icon }} {{ b.name }}</button>{% endfor %}{% endif %}
+        {% if can_edit %}{% for b in card_buttons %}<button class="btn sm press-btn" data-press-card="{{ b.pk }}"{% if b.close_card %} data-close-after{% endif %}>{{ b.icon }} {{ b.name }}</button>{% endfor %}{% endif %}
       </div>
       {% endif %}
 

@@ -100,7 +100,7 @@ def render_modal(card, request):
         "colours": COLOURS,
         "ai_enabled": ai.enabled(),
         "sticker_choices": STICKERS,
-        "card_buttons": [b for b in board.buttons.all() if b.kind == "card"],
+        "card_buttons": [b for b in board.buttons.all() if b.kind == "card" and b.is_enabled],
         "reaction_choices": REACTIONS,
         "voted": any(v.user_id == user.pk for v in card.votes.all()),
         "voters": [v.user.display_name for v in card.votes.select_related("user")],

@@ -1445,3 +1445,23 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
   .ab-row { padding-right: 50px; }
   .ab-text { min-width: 0; }
 }
+.auto-nav-gap { flex: 1; min-height: 24px; }
+.auto-chart { display: grid; grid-template-columns: repeat(14, 1fr); gap: 6px; align-items: end; height: 140px; margin: 8px 0 22px; padding: 10px; background: var(--surface-2); border-radius: 10px; }
+.auto-bar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+.auto-bar i { display: block; width: 100%; max-width: 26px; min-height: 2px; background: var(--accent); border-radius: 4px 4px 0 0; }
+.auto-bar small { font-size: .7rem; color: var(--text-2); }
+.auto-report { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.auto-report th, .auto-report td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.auto-report th { color: var(--text-2); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; }
+.auto-report .num { text-align: right; }
+.auto-report tr.off td { opacity: .55; }
+.ab-days { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.ab-days label { display: inline-flex; }
+.ab-days input { position: absolute; opacity: 0; pointer-events: none; }
+.ab-days span { padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-size: .85rem; cursor: pointer; }
+.ab-days input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #fff); }
+.ab-days input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ab-link { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 4px 0; }
+.ab-opts { display: flex; gap: 18px; flex-wrap: wrap; margin: 4px 0 8px; font-size: .92rem; }
+.ab-opts label { display: inline-flex; gap: 6px; align-items: center; }
+.ab-hint { color: var(--text-2); font-size: .85rem; margin: -2px 0 10px; }

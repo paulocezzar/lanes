@@ -7,6 +7,7 @@
     <small class="muted">Ran {{ r.rule.run_count }} time{{ r.rule.run_count|pluralize }}{% if r.rule.last_run_at %}, last {{ r.rule.last_run_at|ago }}{% endif %}{% if r.rule.created_by %} · made by {{ r.rule.created_by.display_name }}{% endif %}</small>
   </div>
   {% if can_edit %}
+  <button type="button" class="btn ghost sm" data-edit="{{ r.edit }}">Edit</button>
   <form method="post" action="{% url 'rule_update' board.pk r.rule.pk %}">{% csrf_token %}<input type="hidden" name="section" value="{{ section }}">
     <button class="btn sm {% if r.rule.is_enabled %}ghost{% else %}primary{% endif %}">{% if r.rule.is_enabled %}Pause{% else %}Turn on{% endif %}</button>
   </form>

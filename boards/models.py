@@ -457,10 +457,25 @@ class Rule(models.Model):
         (DUE_SOON, "a card is due within…"),
         (OVERDUE, "a card's due date passes…"),
         ("member_added", "someone is added to a card"),
+        ("board_added", "a card is added to the board"),
+        ("card_archived", "a card is archived"),
+        ("due_set", "a due date is set on a card"),
+        ("due_removed", "a card's due date is removed"),
+        ("attachment_added", "an attachment is added to a card"),
+        ("comment_added", "a comment is posted to a card"),
+        ("mentioned", "someone is mentioned in a comment"),
+        ("field_set", "custom field … is set on a card"),
+        ("list_count", "list … has exactly … cards"),
+        ("list_created", "a list is created"),
+        ("due_weekday", "on the … before a card is due"),
     ]
     MEMBER_ADDED = "member_added"
+    BOARD_ADDED, ARCHIVED, DUE_SET, DUE_REMOVED = "board_added", "card_archived", "due_set", "due_removed"
+    ATTACHMENT, COMMENT, MENTIONED, FIELD_SET = "attachment_added", "comment_added", "mentioned", "field_set"
+    LIST_COUNT, LIST_CREATED, DUE_WEEKDAY = "list_count", "list_created", "due_weekday"
+    FILTERS = ["label", "no_label", "has_due", "no_due", "member", "complete", "incomplete", "in_list"]
     BY_WHOM = [("anyone", "by anyone"), ("me", "by me"), ("others", "by anyone except me")]
-    TIME_TRIGGERS = (DUE_SOON, OVERDUE)
+    TIME_TRIGGERS = (DUE_SOON, OVERDUE, "due_weekday")
     AFTER = [(0, "the moment it's due"), (1, "1 hour after"), (3, "3 hours after"), (24, "1 day after"),
              (72, "3 days after"), (168, "1 week after")]
     HOURS = [(1, "1 hour"), (2, "2 hours"), (3, "3 hours"), (12, "12 hours"), (24, "1 day"), (48, "2 days"), (72, "3 days"),
@@ -483,6 +498,15 @@ class Rule(models.Model):
         ("set_due_workdays", "set due date to … working days from now"),
         ("add_sticker", "add sticker…"),
         ("archive", "archive it"),
+        ("move_bottom", "move it to the bottom of its list"),
+        ("copy", "copy it to list…"),
+        ("remove_member", "remove member…"),
+        ("set_field", "set custom field…"),
+        ("sort_list", "sort its list by…"),
+        ("cascade", "turn its checklist items into cards in list…"),
+        ("rename", "rename it to…"),
+        ("set_description", "set its description to…"),
+        ("set_start", "set start date to … days from now"),
     ]
 
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="rules")
@@ -491,7 +515,11 @@ class Rule(models.Model):
     trigger_label = models.ForeignKey(Label, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
     trigger_hours = models.PositiveSmallIntegerField(null=True, blank=True)   # for "due within…"
     by_whom = models.CharField(max_length=10, choices=BY_WHOM, default="anyone")   # whose action triggers it
-    trigger_me = models.BooleanField(default=False)    # member_added: only when the rule's creator is added
+    trigger_me = models.BooleanField(default=False)    # member_added / mentioned: only the rule's creator
+    trigger_count = models.PositiveSmallIntegerField(null=True, blank=True)    # list_count
+    trigger_weekday = models.PositiveSmallIntegerField(null=True, blank=True)  # due_weekday: 0 = Monday
+    trigger_field = models.ForeignKey("CustomField", on_delete=models.CASCADE, null=True, blank=True, related_name="+")
+    filters = models.JSONField(default=list, blank=True)   # [{"type": "label", "label": 3}, {"type": "has_due"}]
     actions = models.JSONField(default=list)   # [{"type": "move", "list": 3}, {"type": "complete"}]
     is_enabled = models.BooleanField(default=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
@@ -535,6 +563,9 @@ class Schedule(models.Model):
     actions = models.JSONField(default=list, blank=True)       # for kind=actions: same as board buttons
     frequency = models.CharField(max_length=10, choices=FREQUENCIES, default=WEEKLY)
     weekday = models.PositiveSmallIntegerField(default=0)      # 0 = Monday, for weekly
+    weekdays = models.CharField(max_length=20, blank=True)     # weekly on several days: "0,3"
+    interval = models.PositiveSmallIntegerField(default=1)     # weekly: every N weeks
+    anchor = models.DateField(null=True, blank=True)           # week the every-N-weeks count starts from
     month_day = models.PositiveSmallIntegerField(default=1)    # 1–28, for monthly
     hour = models.PositiveSmallIntegerField(default=7)         # local time
     nth = models.PositiveSmallIntegerField(default=1)          # month_nth: 1–4, or 5 = last
@@ -711,6 +742,7 @@ class Button(models.Model):
         ("archive_list", "archive every card in list…"),
         ("move_random", "move … random cards from list… to list…"),
         ("create_list", "create a list called…"),
+        ("copy_named", "find card … and copy it to list…"),
     ]
 
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="buttons")
@@ -718,6 +750,8 @@ class Button(models.Model):
     name = models.CharField(max_length=40)
     icon = models.CharField(max_length=8, blank=True)
     actions = models.JSONField(default=list)
+    is_enabled = models.BooleanField(default=True)     # "Enabled": shown on cards / in the header
+    close_card = models.BooleanField(default=False)    # card buttons: close the card after pressing
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
     run_count = models.PositiveIntegerField(default=0)

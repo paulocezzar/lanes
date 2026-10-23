@@ -45,7 +45,7 @@ def board_context(request, board_id, view):
         "open_card": request.GET.get("card"),
         "my_workspaces": _my_workspaces(request.user),
         "ai_enabled": ai.enabled(),
-        "board_buttons": board.buttons.filter(kind="board"),
+        "board_buttons": board.buttons.filter(kind="board", is_enabled=True),
         "can_public": permissions.can_public_link(board, request.user),
         "public_off": permissions.public_links_off(),
         "can_private": permissions.can_make_private(board, request.user),

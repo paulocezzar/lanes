@@ -97,6 +97,8 @@ def list_create(request, board_id):
         pos = positions.end_position(board.lists.filter(is_archived=False))
     lst = List.objects.create(board=board, title=title, position=pos)
     log(board, request.user, "list_created", title=title)
+    automation.fire_list_created(lst, request.user)
+    lst.refresh_from_db()
     return {"html": render_to_string("boards/_list.html", {"list": lst, "can_edit": True}, request=request)}
 
 
@@ -154,6 +156,9 @@ def card_create(request, list_id):
             card.save(update_fields=["due_at"])
             log(lst.board, request.user, "due_set", card=card, due=timezone.localtime(due).strftime("%-d %b %Y, %H:%M"))
     automation.fire(card, Rule.ADDED, list_=lst, actor=request.user)
+    if card.due_at:
+        card.refresh_from_db()
+        automation.fire(card, Rule.DUE_SET, actor=request.user)
     return card_response(card.pk, request)
 
 
@@ -208,6 +213,7 @@ def card_move(request, card_id):
 def card_update(request, card_id):
     card = _card(request, card_id)
     d, board, user = request.data, card.list.board, request.user
+    fire_after = []
     if "title" in d:
         new = _text(d["title"], 250, "title")
         if new != card.title:
@@ -231,9 +237,13 @@ def card_update(request, card_id):
                 raise ApiError("Couldn't read that due date.")
             card.due_at = timezone.make_aware(due) if timezone.is_naive(due) else due
             log(board, user, "due_set", card=card, due=timezone.localtime(card.due_at).strftime("%-d %b %Y, %H:%M"))
+            fire_after.append(Rule.DUE_SET)
         else:
+            had_due = Card.objects.filter(pk=card.pk, due_at__isnull=False).exists()
             card.due_at = None
             log(board, user, "due_removed", card=card)
+            if had_due:
+                fire_after.append(Rule.DUE_REMOVED)
     if "start_date" in d:
         card.start_date = parse_date(d["start_date"]) if d["start_date"] else None
     if "recur" in d and d["recur"] in dict(Card.RECUR):
@@ -263,11 +273,16 @@ def card_update(request, card_id):
             stickers.append(s)
         card.stickers = stickers
     if "archive" in d:
+        was_archived = card.is_archived
         card.is_archived = bool(d["archive"])
         log(board, user, "card_archived" if card.is_archived else "card_restored", card=card)
+        if card.is_archived and not was_archived:
+            fire_after.append(Rule.ARCHIVED)
     was_complete = Card.objects.filter(pk=card.pk).values_list("is_complete", flat=True).first()
     just_completed = "is_complete" in d and card.is_complete and not was_complete
     card.save()
+    for trig in fire_after:
+        automation.fire(card, trig, actor=user)
     if "is_complete" in d and was_complete and not card.is_complete:
         from .recurring import undo_spawn
         undo_spawn(card)
@@ -373,6 +388,7 @@ def attachment_link(request, card_id):
     name = (request.data.get("name") or "").strip()[:200] or (parts.netloc.removeprefix("www.") + parts.path).rstrip("/")[:200]
     Attachment.objects.create(card=card, url=url, name=name, content_type="text/uri-list", uploaded_by=request.user)
     log(card.list.board, request.user, "attachment_added", card=card, name=name)
+    automation.fire(card, Rule.ATTACHMENT, actor=request.user)
     return card_response(card.pk, request)
 
 
@@ -488,6 +504,11 @@ def comment_create(request, card_id):
                                      body=_text(request.data.get("body"), 5000, "comment"))
     people = list(User.objects.filter(pk__in=_card_people_ids(card)))
     notify.on_comment(comment, people)
+    automation.fire(card, Rule.COMMENT, actor=request.user)
+    mentioned = notify.find_mentions(comment.body, people)
+    if mentioned:
+        card.refresh_from_db()
+        automation.fire(card, Rule.MENTIONED, actor=request.user, mentioned=mentioned)
     return card_response(card.pk, request)
 
 
@@ -728,6 +749,7 @@ def card_field_set(request, card_id):
         if field.kind == CustomField.LOCATION:
             from . import geo
             geo.place(cfv)
+        automation.fire(card, Rule.FIELD_SET, actor=request.user, field=field)
     return card_response(card.pk, request)
 
 
@@ -883,7 +905,7 @@ def board_watch(request, board_id):
 def card_button_press(request, card_id, button_id):
     from .models import Button
     card = _card(request, card_id)
-    button = get_object_or_404(Button, pk=button_id, board=card.list.board, kind=Button.CARD)
+    button = get_object_or_404(Button, pk=button_id, board=card.list.board, kind=Button.CARD, is_enabled=True)
     done = automation.press_card_button(button, card, request.user)
     data = card_response(card.pk, request)
     data["summary"] = "; ".join(done) or "Nothing to change."
@@ -895,7 +917,7 @@ def board_button_press(request, board_id, button_id):
     from .models import Button
     board = get_object_or_404(Board, pk=board_id)
     _edit(board, request.user)
-    button = get_object_or_404(Button, pk=button_id, board=board, kind=Button.BOARD)
+    button = get_object_or_404(Button, pk=button_id, board=board, kind=Button.BOARD, is_enabled=True)
     done = automation.press_board_button(button, request.user)
     return {"summary": "; ".join(done) or "Nothing to change."}
 
@@ -1059,6 +1081,7 @@ def list_copy(request, list_id):
     for c in cards_qs().filter(list=lst, is_archived=False).order_by("position"):
         copy_card(c, new, user=request.user, position=c.position)
     log(lst.board, request.user, "list_created", title=title)
+    automation.fire_list_created(new, request.user)
     return {"ok": True}
 
 
@@ -1128,7 +1151,11 @@ def list_sort(request, list_id):
 @api
 def list_archive_cards(request, list_id):
     lst = _list_for_edit(request, list_id)
+    ids = list(lst.cards.filter(is_archived=False).values_list("pk", flat=True))
     n = lst.cards.filter(is_archived=False).update(is_archived=True, updated_at=timezone.now())
+    if Rule.objects.filter(board=lst.board, trigger=Rule.ARCHIVED, is_enabled=True).exists():
+        for c in Card.objects.filter(pk__in=ids):
+            automation.fire(c, Rule.ARCHIVED, actor=request.user)
     from .signals import bump
     bump(lst.board_id)
     log(lst.board, request.user, "automation", summary=f"archived all {n} cards in {lst.title}")

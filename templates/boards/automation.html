@@ -5,7 +5,7 @@
   <nav class="auto-nav" aria-label="Automation sections">
     <h2>⚡ Automation</h2>
     {% for k, label, n in sections %}
-      {% if k == "rules" %}<h5>Automations</h5>{% elif k == "card-buttons" %}<h5>Custom buttons</h5>{% elif k == "activity" %}<h5>More</h5>{% endif %}
+      {% if k == "rules" %}<h5>Automations</h5>{% elif k == "card-buttons" %}<h5>Custom buttons</h5>{% elif k == "suggestions" %}<h5>More</h5>{% elif k == "reports" %}<span class="auto-nav-gap"></span>{% endif %}
       <a href="?s={{ k }}" class="{% if k == section %}on{% endif %}">{{ label }}{% if n %}<span class="count">{{ n }}</span>{% endif %}</a>
     {% endfor %}
   </nav>
@@ -14,10 +14,10 @@
     <div data-ab-home>
     <header class="auto-head">
       <h2>{% for k, label, n in sections %}{% if k == section %}{{ label }}{% endif %}{% endfor %}</h2>
-      {% if can_edit and section != "activity" %}<button type="button" class="btn primary" data-ab-open>Create {% if section == "card-buttons" or section == "board-buttons" %}button{% else %}automation{% endif %}</button>{% endif %}
+      {% if can_edit and section != "activity" and section != "suggestions" and section != "reports" %}<button type="button" class="btn primary" data-ab-open>Create {% if section == "card-buttons" or section == "board-buttons" %}button{% else %}automation{% endif %}</button>{% endif %}
     </header>
 
-    {% if section != "activity" %}
+    {% if section != "activity" and section != "suggestions" and section != "reports" %}
     <div class="auto-intro">
       <p class="auto-lead">{% if section == "rules" %}Rules are simple: when one thing happens, another thing happens automatically.
         {% elif section == "due" %}Due-date automations run as a card's due date gets close, or once it's passed. They're checked every few minutes.
@@ -46,6 +46,7 @@
           <small class="muted">{% if s.kind == "card" %}{% if s.checklist %}{{ s.checklist.splitlines|length }} checklist item{{ s.checklist.splitlines|length|pluralize }} · {% endif %}{% if s.member %}assigned to {{ s.member.display_name }} · {% endif %}{% if s.due_in_days is not None %}due in {{ s.due_in_days }} day{{ s.due_in_days|pluralize }} · {% endif %}{% endif %}{% if s.is_enabled %}next {{ s.next_run_at|date:"D j M, H:i" }}{% else %}paused{% endif %} · ran {{ s.run_count }} time{{ s.run_count|pluralize }}</small>
         </div>
         {% if can_edit %}
+        <button type="button" class="btn ghost sm" data-edit="{{ row.edit }}">Edit</button>
         <form method="post" action="{% url 'schedule_update' board.pk s.pk %}">{% csrf_token %}<input type="hidden" name="section" value="scheduled"><input type="hidden" name="action" value="run"><button class="btn ghost sm" title="Run it once now">Run now</button></form>
         <form method="post" action="{% url 'schedule_update' board.pk s.pk %}">{% csrf_token %}<input type="hidden" name="section" value="scheduled"><button class="btn sm {% if s.is_enabled %}ghost{% else %}primary{% endif %}">{% if s.is_enabled %}Pause{% else %}Turn on{% endif %}</button></form>
         <form method="post" action="{% url 'schedule_update' board.pk s.pk %}" data-confirm="Delete this scheduled automation?" data-confirm-ok="Delete" data-danger>{% csrf_token %}<input type="hidden" name="section" value="scheduled"><input type="hidden" name="action" value="delete"><button class="icon-btn xs" title="Delete">{% include "boards/_icon.html" with i="close" %}</button></form>
@@ -53,9 +54,33 @@
       </div>
       {% endwith %}{% endfor %}
     {% elif section == "card-buttons" %}
-      {% include "boards/auto/_button_section.html" with items=card_buttons kind="card" %}
+      {% include "boards/auto/_button_section.html" with items=card_button_rows kind="card" %}
     {% elif section == "board-buttons" %}
-      {% include "boards/auto/_button_section.html" with items=board_buttons kind="board" %}
+      {% include "boards/auto/_button_section.html" with items=board_button_rows kind="board" %}
+    {% elif section == "suggestions" %}
+      <p class="auto-lead">Suggestions come from things you keep doing by hand on this board.</p>
+      {% for sg in suggestions %}
+      <div class="auto-row">
+        <span class="auto-bolt">💡</span>
+        <div class="auto-desc"><span>{{ sg.text }}</span><small class="muted">{{ sg.why }}</small></div>
+        {% if can_edit %}<button type="button" class="btn primary sm" data-example="{{ sg.data }}">Use this</button>{% endif %}
+      </div>
+      {% empty %}
+      <p class="muted">No suggestions yet. When you repeat the same steps a few times (say, moving cards to a list and then ticking them complete), a suggestion appears here. Meanwhile, here are some popular rules:</p>
+      <ul class="auto-examples">
+        {% for text, data in starter_rules %}<li>{% if can_edit %}<button type="button" class="auto-example" data-example="{{ data }}">⚡ <span>{{ text }}</span></button>{% else %}<span class="auto-example">⚡ <span>{{ text }}</span></span>{% endif %}</li>{% endfor %}
+      </ul>
+      {% endfor %}
+    {% elif section == "reports" %}
+      <p class="auto-lead">{{ report.total }} automatic change{{ report.total|pluralize }} in the last 14 days.</p>
+      <div class="auto-chart" role="img" aria-label="Automation runs per day, last 14 days">
+        {% for d in report.days %}<div class="auto-bar" title="{{ d.d|date:'D j M' }}: {{ d.n }}"><i style="height: {{ d.pct }}%"></i><small>{{ d.d|date:"j" }}</small></div>{% endfor %}
+      </div>
+      <table class="auto-report">
+        <thead><tr><th>Type</th><th>Automation</th><th class="num">Runs</th><th>Last run</th></tr></thead>
+        <tbody>{% for i in report.items %}<tr class="{% if not i.on %}off{% endif %}"><td>{{ i.kind }}</td><td>{{ i.text }}{% if not i.on %} <span class="muted">(off)</span>{% endif %}</td><td class="num">{{ i.runs }}</td><td>{% if i.last %}{{ i.last|ago }}{% else %}—{% endif %}</td></tr>
+        {% empty %}<tr><td colspan="4" class="muted">No automations on this board yet.</td></tr>{% endfor %}</tbody>
+      </table>
     {% else %}
       <p class="muted">Everything rules, scheduled automations and buttons have done on this board, newest first.</p>
       {% for a in auto_activity %}
@@ -69,7 +94,7 @@
 
     {% if not can_edit %}<p class="muted small">Only board admins and members can change automation.</p>{% endif %}
     </div>
-    {% if can_edit and section != "activity" %}
+    {% if can_edit and section != "activity" and section != "reports" %}
     <div class="ab" data-autobuilder hidden></div>
     <form method="post" data-ab-form hidden>{% csrf_token %}</form>
     {{ auto_data|json_script:"auto-data" }}

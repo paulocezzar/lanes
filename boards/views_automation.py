@@ -4,7 +4,11 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+import json
+
 from django.utils import timezone
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 from django.views.decorators.http import require_POST
 
 from . import automation, permissions
@@ -14,9 +18,11 @@ from .models import STICKERS, Board, BoardMember, Label, List, Rule, Schedule
 MAX_ACTIONS = 8
 NEEDS = {"move": "list", "add_label": "label", "remove_label": "label", "add_member": "user",
          "set_due": "days", "set_due_workdays": "days", "comment": "text", "add_sticker": "sticker",
-         "notify": "message", "add_checklist": "checklist"}
+         "notify": "message", "add_checklist": "checklist", "copy": "list", "cascade": "list",
+         "remove_member": "anyuser", "set_start": "days", "rename": "text", "set_description": "message"}
 SECTIONS = [("rules", "Rules"), ("due", "Due date"), ("scheduled", "Scheduled"),
-            ("card-buttons", "Card buttons"), ("board-buttons", "Board buttons"), ("activity", "Activity")]
+            ("card-buttons", "Card buttons"), ("board-buttons", "Board buttons"), ("suggestions", "Suggestions"),
+            ("activity", "Activity"), ("reports", "Reports")]
 
 # Clickable examples. Lists/labels are matched by name on this board ("first"/"last" = position).
 EXAMPLES = {
@@ -91,21 +97,21 @@ EXAMPLES = {
 
 @login_required
 def automation_page(request, board_id):
-    import json
-
-    from django.utils.safestring import mark_safe
     board, ctx = board_context(request, board_id, "automation")
     section = request.GET.get("s") or ("rules" if request.GET.get("trigger") else "rules")
     if section not in dict(SECTIONS):
         section = "rules"
     rules, due_rules = [], []
-    for r in board.rules.select_related("trigger_list", "trigger_label", "created_by"):
+    for r in board.rules.select_related("trigger_list", "trigger_label", "trigger_field", "created_by"):
         when, then = automation.describe_rule(r)
-        (due_rules if r.trigger in Rule.TIME_TRIGGERS else rules).append({"rule": r, "when": when, "then": then})
-    schedules = [{"s": s, "when": automation.describe_schedule(s), "does": automation.describe_schedule_job(s)}
+        (due_rules if r.trigger in Rule.TIME_TRIGGERS else rules).append(
+            {"rule": r, "when": when, "then": then, "edit": json.dumps(rule_json(r))})
+    schedules = [{"s": s, "when": automation.describe_schedule(s), "does": automation.describe_schedule_job(s),
+                  "edit": json.dumps(schedule_json(s))}
                  for s in board.schedules.select_related("target_list", "member", "label")]
     from .models import Activity, Button
-    buttons = [{"b": b, "does": automation.describe_button_actions(b)} for b in board.buttons.all()]
+    buttons = [{"b": b, "does": automation.describe_button_actions(b), "edit": json.dumps(button_json(b))}
+               for b in board.buttons.all()]
     counts = {"rules": len(rules), "due": len(due_rules), "scheduled": len(schedules),
               "card-buttons": sum(1 for b in buttons if b["b"].kind == Button.CARD),
               "board-buttons": sum(1 for b in buttons if b["b"].kind == Button.BOARD)}
@@ -120,9 +126,12 @@ def automation_page(request, board_id):
         "by_whom": Rule.BY_WHOM,
         "auto_activity": (Activity.objects.filter(board=board, verb__in=["automation", "button"])
                           .select_related("actor", "card")[:60]) if section == "activity" else [],
+        "suggestions": suggest_rules(board) if section == "suggestions" else [],
+        "starter_rules": [(mark_safe(t), json.dumps(d)) for t, d in EXAMPLES["rules"]],
+        "report": usage_report(board, rules + due_rules, schedules, buttons) if section == "reports" else None,
         "open_form": bool(request.GET.get("trigger")) or request.GET.get("new") == "1",
-        "card_buttons": [b for b in buttons if b["b"].kind == Button.CARD],
-        "board_buttons": [b for b in buttons if b["b"].kind == Button.BOARD],
+        "card_button_rows": [b for b in buttons if b["b"].kind == Button.CARD],
+        "board_button_rows": [b for b in buttons if b["b"].kind == Button.BOARD],
         "buttons": buttons,
         "board_actions": Button.BOARD_ACTIONS,
         "button_icons": ["", "✅", "🚚", "📦", "🔥", "⭐", "🧹", "📌", "⏰", "👋"],
@@ -145,6 +154,7 @@ def automation_page(request, board_id):
     lists = list(board.lists.filter(is_archived=False).order_by("position"))
     ctx["auto_data"] = {
         "section": section,
+        "mode_section": "rules" if section == "suggestions" else section,
         "lists": [{"id": l.pk, "title": l.title} for l in lists],
         "labels": [{"id": l.pk, "name": str(l), "colour": l.colour} for l in board.labels.all()],
         "people": [{"id": m.user_id, "name": m.user.display_name}
@@ -152,6 +162,7 @@ def automation_page(request, board_id):
         "fields": [{"id": f.pk, "name": f.name} for f in board.custom_fields.all()],
         "stickers": STICKERS,
         "hours": [[k, v] for k, v in Rule.HOURS],
+        "sort_by": [[k, v] for k, v in automation.SORT_BY],
         "after": [[k, v] for k, v in Rule.AFTER if k],
         "weekdays": list(enumerate(automation.WEEKDAYS)),
         "months": [[k, v] for k, v in Schedule.MONTHS],
@@ -162,6 +173,105 @@ def automation_page(request, board_id):
                  "button": reverse("button_create", args=[board.pk])},
     }
     return render(request, "boards/automation.html", ctx)
+
+
+def rule_json(r):
+    return {"id": r.pk, "trigger": r.trigger, "trigger_list": r.trigger_list_id, "trigger_label": r.trigger_label_id,
+            "trigger_hours": r.trigger_hours, "by_whom": r.by_whom, "member_who": "me" if r.trigger_me else "anyone",
+            "trigger_count": r.trigger_count, "trigger_weekday": r.trigger_weekday, "trigger_field": r.trigger_field_id,
+            "filters": r.filters or [], "actions": r.actions}
+
+
+def schedule_json(s):
+    return {"id": s.pk, "frequency": s.frequency, "weekday": s.weekday, "weekdays": s.weekdays or str(s.weekday),
+            "interval": s.interval or 1, "month_day": s.month_day, "month": s.month, "nth": s.nth, "hour": s.hour,
+            "kind": s.kind, "title": s.title, "target_list": s.target_list_id, "checklist": s.checklist,
+            "member": s.member_id, "due_in_days": s.due_in_days, "actions": s.actions}
+
+
+def button_json(b):
+    return {"id": b.pk, "name": b.name, "icon": b.icon, "actions": b.actions, "enabled": b.is_enabled,
+            "close_card": b.close_card}
+
+
+def suggest_rules(board, days=60, at_least=3):
+    """Trello-style suggestions: spot the same two manual steps done together
+    again and again (within half an hour, by the same person) and offer a rule."""
+    from collections import Counter, defaultdict
+
+    from .models import Activity
+    since = timezone.now() - timezone.timedelta(days=days)
+    rows = (Activity.objects.filter(board=board, created_at__gte=since, actor__isnull=False, card__isnull=False,
+                                    verb__in=["card_moved", "card_completed", "label_added", "card_archived"])
+            .order_by("card_id", "created_at").values("card_id", "verb", "data", "created_at", "actor_id"))
+    by_card = defaultdict(list)
+    for r in rows:
+        by_card[r["card_id"]].append(r)
+    seen = Counter()
+    for acts in by_card.values():
+        for a, b in zip(acts, acts[1:]):
+            if a["actor_id"] != b["actor_id"] or (b["created_at"] - a["created_at"]).total_seconds() > 1800:
+                continue
+            to_a, to_b = (a["data"] or {}).get("to"), (b["data"] or {}).get("to")
+            if a["verb"] == "card_moved" and b["verb"] == "card_completed":
+                seen[("move_complete", to_a)] += 1
+            elif a["verb"] == "card_completed" and b["verb"] == "card_moved":
+                seen[("complete_move", to_b)] += 1
+            elif a["verb"] == "card_moved" and b["verb"] == "label_added":
+                seen[("move_label", to_a, (b["data"] or {}).get("name"))] += 1
+            elif a["verb"] == "card_moved" and b["verb"] == "card_archived":
+                seen[("move_archive", to_a)] += 1
+    lists = {l.title: l.pk for l in board.lists.filter(is_archived=False)}
+    labels = {str(l): l.pk for l in board.labels.all()}
+    have = {(r.trigger, r.trigger_list_id, json.dumps(r.actions, sort_keys=True)) for r in board.rules.all()}
+    out = []
+    for key, n in seen.most_common():
+        if n < at_least:
+            break
+        kind, lst = key[0], lists.get(key[1])
+        if not lst:
+            continue
+        if kind == "move_complete":
+            data = {"trigger": "card_moved", "trigger_list": lst, "actions": [{"type": "complete"}]}
+            text = f"When a card is moved into <b>{escape(key[1])}</b>, <b>mark it complete</b>"
+        elif kind == "complete_move":
+            data = {"trigger": "card_completed", "actions": [{"type": "move", "list": lst}]}
+            text = f"When a card is <b>marked complete</b>, <b>move it to {escape(key[1])}</b>"
+        elif kind == "move_label" and labels.get(key[2]):
+            data = {"trigger": "card_moved", "trigger_list": lst, "actions": [{"type": "add_label", "label": labels[key[2]]}]}
+            text = f"When a card is moved into <b>{escape(key[1])}</b>, <b>add the {escape(key[2])} label</b>"
+        elif kind == "move_archive":
+            data = {"trigger": "card_moved", "trigger_list": lst, "actions": [{"type": "archive"}]}
+            text = f"When a card is moved into <b>{escape(key[1])}</b>, <b>archive it</b>"
+        else:
+            continue
+        if (data["trigger"], data.get("trigger_list"), json.dumps(data["actions"], sort_keys=True)) in have:
+            continue
+        out.append({"text": mark_safe(text), "why": f"You did this by hand {n} times in the last {days} days.",
+                    "data": json.dumps(data)})
+    return out[:8]
+
+
+def usage_report(board, rules, schedules, buttons):
+    from collections import Counter
+
+    from .models import Activity
+    today = timezone.localdate()
+    start = today - timezone.timedelta(days=13)
+    acts = Activity.objects.filter(board=board, verb__in=["automation", "button"],
+                                   created_at__date__gte=start).values_list("created_at", flat=True)
+    per_day = Counter(timezone.localtime(t).date() for t in acts)
+    days = [(start + timezone.timedelta(days=i)) for i in range(14)]
+    top = max([per_day[d] for d in days] + [1])
+    items = ([{"kind": "Rule" if r["rule"].trigger not in Rule.TIME_TRIGGERS else "Due date", "text": r["when"],
+               "runs": r["rule"].run_count, "last": r["rule"].last_run_at, "on": r["rule"].is_enabled} for r in rules]
+             + [{"kind": "Scheduled", "text": f"{x['when']} → {x['does']}", "runs": x["s"].run_count,
+                 "last": x["s"].last_run_at, "on": x["s"].is_enabled} for x in schedules]
+             + [{"kind": "Card button" if x["b"].kind == "card" else "Board button", "text": f"{x['b'].icon} {x['b'].name}",
+                 "runs": x["b"].run_count, "last": None, "on": x["b"].is_enabled} for x in buttons])
+    items.sort(key=lambda i: -i["runs"])
+    return {"days": [{"d": d, "n": per_day[d], "pct": round(100 * per_day[d] / top)} for d in days],
+            "total": sum(per_day[d] for d in days), "items": items}
 
 
 def _back(board, request, section=None):
@@ -183,6 +293,10 @@ def _editable_board(request, board_id):
 @login_required
 @require_POST
 def rule_create(request, board_id):
+    """Create a rule — or, with edit_id, save the builder's result over an existing one."""
+    import json as _json
+
+    from .models import Button, CustomField
     board, ok = _editable_board(request, board_id)
     back = _back(board, request)
     if not ok:
@@ -192,15 +306,22 @@ def rule_create(request, board_id):
     if trigger not in dict(Rule.TRIGGERS):
         messages.error(request, "Pick when the rule should run.")
         return back
-    rule = Rule(board=board, trigger=trigger, created_by=request.user)
+    existing = Rule.objects.filter(pk=p.get("edit_id") or 0, board=board).first()
+    rule = Rule(board=board, trigger=trigger, created_by=existing.created_by if existing else request.user)
     if trigger not in Rule.TIME_TRIGGERS and p.get("by_whom") in dict(Rule.BY_WHOM):
         rule.by_whom = p["by_whom"]
-    if trigger == Rule.MEMBER_ADDED:
+    if trigger in (Rule.MEMBER_ADDED, Rule.MENTIONED):
         rule.trigger_me = p.get("member_who") == "me"
-    if trigger in (Rule.ADDED, Rule.MOVED):
+    if trigger in (Rule.ADDED, Rule.MOVED, Rule.LIST_COUNT):
         rule.trigger_list = List.objects.filter(pk=p.get("trigger_list") or 0, board=board).first()
         if not rule.trigger_list:
             messages.error(request, "Pick which list triggers the rule.")
+            return back
+    if trigger == Rule.LIST_COUNT:
+        try:
+            rule.trigger_count = max(0, min(int(p.get("trigger_count")), 500))
+        except (TypeError, ValueError):
+            messages.error(request, "Say how many cards the list should have.")
             return back
     if trigger == Rule.DUE_SOON:
         try:
@@ -217,13 +338,34 @@ def rule_create(request, board_id):
             rule.trigger_hours = 0
         if rule.trigger_hours not in dict(Rule.AFTER):
             rule.trigger_hours = 0
+    if trigger == Rule.DUE_WEEKDAY:
+        try:
+            rule.trigger_weekday = max(0, min(int(p.get("trigger_weekday")), 6))
+            rule.trigger_hours = max(0, min(int(p.get("trigger_hours") or 9), 23))
+        except (TypeError, ValueError):
+            messages.error(request, "Pick the day and time.")
+            return back
     if trigger == Rule.LABEL_ADDED:
         rule.trigger_label = Label.objects.filter(pk=p.get("trigger_label") or 0, board=board).first()
         if not rule.trigger_label:
             messages.error(request, "Pick which label triggers the rule.")
             return back
+    if trigger == Rule.FIELD_SET:
+        rule.trigger_field = CustomField.objects.filter(pk=p.get("trigger_field") or 0, board=board).first()
+        if not rule.trigger_field:
+            messages.error(request, "Pick the custom field.")
+            return back
+    try:
+        rule.filters = clean_filters(_json.loads(p.get("filters") or "[]"), board) if trigger != Rule.LIST_CREATED else []
+    except (ValueError, TypeError):
+        rule.filters = []
 
-    actions, error = parse_actions(p, board)
+    if trigger == Rule.LIST_CREATED:
+        actions, error = parse_actions(p, board, extra=Button.BOARD_ACTIONS, allow_new_list=True)
+        actions = [a for a in actions if a["type"] in dict(Button.BOARD_ACTIONS)]
+    else:
+        actions, error = parse_actions(p, board)
+        actions = [a for a in actions if a["type"] in dict(Rule.ACTIONS)]
     if error:
         messages.error(request, error)
         return back
@@ -235,12 +377,38 @@ def rule_create(request, board_id):
         messages.error(request, "A rule can't move cards into the same list that triggers it.")
         return back
     rule.actions = actions
+    if existing:
+        rule.pk, rule.created_at, rule.is_enabled = existing.pk, existing.created_at, existing.is_enabled
+        rule.run_count, rule.last_run_at = existing.run_count, existing.last_run_at
     rule.save()
-    messages.success(request, "Rule added.")
+    messages.success(request, "Rule saved." if existing else "Rule added.")
     return back
 
 
-def parse_actions(p, board, prefix="", extra=()):
+def clean_filters(raw, board):
+    from django.contrib.auth import get_user_model
+    out = []
+    for f in raw if isinstance(raw, list) else []:
+        t = f.get("type") if isinstance(f, dict) else None
+        if t not in Rule.FILTERS:
+            continue
+        if t in ("label", "no_label"):
+            lab = Label.objects.filter(pk=f.get("label") or 0, board=board).first()
+            if lab:
+                out.append({"type": t, "label": lab.pk})
+        elif t == "member":
+            if BoardMember.objects.filter(board=board, user_id=f.get("user") or 0).exists():
+                out.append({"type": t, "user": int(f["user"])})
+        elif t == "in_list":
+            lst = List.objects.filter(pk=f.get("list") or 0, board=board).first()
+            if lst:
+                out.append({"type": t, "list": lst.pk})
+        else:
+            out.append({"type": t})
+    return out[:6]
+
+
+def parse_actions(p, board, prefix="", extra=(), allow_new_list=False):
     """Read action_0..action_3 (+ their parameters) from a POST. Returns (actions, error)."""
     allowed = dict(Rule.ACTIONS) | dict(extra)
     actions = []
@@ -277,13 +445,47 @@ def parse_actions(p, board, prefix="", extra=()):
             if not name:
                 return [], "Name the new list."
             a["text"] = name
+        if t in ("move", "copy"):
+            a["position"] = "top" if p.get(f"{prefix}position_{i}") == "top" else "bottom"
+        if t == "sort_list":
+            from .automation import SORT_BY
+            a["by"] = p.get(f"{prefix}by_{i}") if p.get(f"{prefix}by_{i}") in dict(SORT_BY) else "due"
+        if t == "set_field":
+            from .models import CustomField
+            f = CustomField.objects.filter(pk=p.get(f"{prefix}field_{i}") or 0, board=board).first()
+            if not f:
+                return [], "Pick the custom field (add one in Menu → Fields first)."
+            value = (p.get(f"{prefix}value_{i}") or "").strip()[:500]
+            try:
+                f.clean_value(value)
+            except (TypeError, ValueError):
+                return [], f"“{value}” isn't a valid value for {f.name}."
+            a["field"], a["value"] = f.pk, value
+        if t == "create_card":
+            a["unique"] = p.get(f"{prefix}unique_{i}") == "1"
+        if t == "copy_named":
+            name = (p.get(f"{prefix}text_{i}") or "").strip()[:250]
+            if not name:
+                return [], "Write the name of the card to copy."
+            a["text"] = name
+            need = "list"
         if t in ("create_card", "sort_due", "archive_list", "move_random", "sort_field"):
             need = "list"
         if need == "list":
-            lst = List.objects.filter(pk=p.get(f"{prefix}list_{i}") or 0, board=board).first()
-            if not lst:
+            raw = p.get(f"{prefix}list_{i}")
+            lst = List.objects.filter(pk=raw if str(raw or "").isdigit() else 0, board=board).first()
+            if allow_new_list and raw == "new":
+                a["list"] = "new"
+            elif not lst:
                 return [], "Pick the list."
-            a["list"] = lst.pk
+            else:
+                a["list"] = lst.pk
+        elif need == "anyuser":
+            from django.contrib.auth import get_user_model
+            u = get_user_model().objects.filter(pk=p.get(f"{prefix}user_{i}") or 0).first()
+            if not u:
+                return [], "Pick the person."
+            a["user"] = u.pk
         elif need == "label":
             lab = Label.objects.filter(pk=p.get(f"{prefix}label_{i}") or 0, board=board).first()
             if not lab:
@@ -309,11 +511,14 @@ def parse_actions(p, board, prefix="", extra=()):
             a["sticker"] = st
         if need == "message":
             a["text"] = (p.get(f"{prefix}text_{i}") or "").strip()[:250]
+        if t == "set_description":
+            a["text"] = (p.get(f"{prefix}text_{i}") or "")[:20000]
         if need == "text" or t == "create_card":
             text = (p.get(f"{prefix}text_{i}") or "").strip()[:2000]
             if not text:
-                return [], "Write the card title." if t == "create_card" else "Write the comment to post."
-            a["text"] = text[:250] if t == "create_card" else text
+                return [], {"create_card": "Write the card title.", "rename": "Write the new card name."}.get(
+                    t, "Write the comment to post.")
+            a["text"] = text[:250] if t in ("create_card", "rename") else text
         actions.append(a)
     return actions, None
 
@@ -343,10 +548,17 @@ def button_create(request, board_id):
     if not actions:
         messages.error(request, "Add at least one action.")
         return back
-    Button.objects.create(board=board, kind=kind, name=name, icon=(p.get("icon") or "")[:8], actions=actions,
-                          created_by=request.user)
-    messages.success(request, f"Button “{name}” added. " + (
-        "It shows on every card on this board." if kind == Button.CARD else "It shows in the board's header."))
+    fields = dict(kind=kind, name=name, icon=(p.get("icon") or "")[:8], actions=actions,
+                  is_enabled=p.get("enabled", "1") == "1", close_card=p.get("close_card") == "1")
+    existing = Button.objects.filter(pk=p.get("edit_id") or 0, board=board).first()
+    if existing:
+        Button.objects.filter(pk=existing.pk).update(**fields)
+        messages.success(request, f"Button “{name}” saved.")
+        return back
+    Button.objects.create(board=board, created_by=request.user, **fields)
+    where = "It shows on every card on this board." if kind == Button.CARD else "It shows in the board's header."
+    messages.success(request, f"Button “{name}” added. " + (where if fields["is_enabled"] else
+                                                            "It's switched off until you enable it."))
     return back
 
 
@@ -358,6 +570,10 @@ def button_update(request, board_id, button_id):
     if ok and request.POST.get("action") == "delete":
         get_object_or_404(Button, pk=button_id, board=board).delete()
         messages.success(request, "Button deleted.")
+    elif ok and request.POST.get("action") == "toggle":
+        b = get_object_or_404(Button, pk=button_id, board=board)
+        b.is_enabled = not b.is_enabled
+        b.save(update_fields=["is_enabled"])
     return _back(board, request)
 
 
@@ -406,21 +622,31 @@ def schedule_create(request, board_id):
         except (TypeError, ValueError):
             return default
 
+    days = sorted({int(x) for x in (p.get("weekdays") or "").split(",") if x.strip().isdigit() and int(x) < 7})
+    weekday = days[0] if days else num("weekday", 0, 6, 0)
     s = Schedule(
         board=board, kind=kind, actions=actions, target_list=lst, title=title, created_by=request.user,
         frequency=p.get("frequency") if p.get("frequency") in dict(Schedule.FREQUENCIES) else Schedule.WEEKLY,
-        weekday=num("weekday", 0, 6, 0), month_day=num("month_day", 1, 31, 1), hour=num("hour", 0, 23, 7),
+        weekday=weekday, weekdays=",".join(map(str, days)), interval=num("interval", 1, 52, 1),
+        anchor=timezone.localdate(),
+        month_day=num("month_day", 1, 31, 1), hour=num("hour", 0, 23, 7),
         nth=num("nth", 1, 5, 1), month=num("month", 1, 12, 1),
         checklist=(p.get("checklist") or "")[:5000],
         due_in_days=num("due_in_days", 0, 365, None) if p.get("due_in_days") not in (None, "") else None,
     )
+    existing = Schedule.objects.filter(pk=p.get("edit_id") or 0, board=board).first()
+    if existing:
+        s.pk, s.created_by, s.is_enabled = existing.pk, existing.created_by, existing.is_enabled
+        s.run_count, s.last_run_at = existing.run_count, existing.last_run_at
+        if existing.interval == s.interval and existing.anchor:
+            s.anchor = existing.anchor
     member = BoardMember.objects.filter(board=board, user_id=p.get("member") or 0).first()
     s.member_id = member.user_id if member else None
     label = Label.objects.filter(pk=p.get("label") or 0, board=board).first()
     s.label = label
     s.next_run_at = automation.next_run(s, timezone.now())
     s.save()
-    messages.success(request, f"Scheduled. First run: {timezone.localtime(s.next_run_at):%a %-d %b, %H:%M}.")
+    messages.success(request, f"{'Saved' if existing else 'Scheduled'}. Next run: {timezone.localtime(s.next_run_at):%a %-d %b, %H:%M}.")
     return back
 
 

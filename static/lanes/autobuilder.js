@@ -7,7 +7,8 @@
   const D = JSON.parse(dataEl.textContent);
   const home = document.querySelector('[data-ab-home]');
   const form = document.querySelector('[data-ab-form]');
-  const MODE = { rules: 'rule', due: 'due', scheduled: 'schedule', 'card-buttons': 'cardbtn', 'board-buttons': 'boardbtn' }[D.section];
+  const SECTION = D.mode_section || D.section;
+  const MODE = { rules: 'rule', due: 'due', scheduled: 'schedule', 'card-buttons': 'cardbtn', 'board-buttons': 'boardbtn' }[SECTION];
   if (!MODE) return;
 
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -16,6 +17,10 @@
   // ---------- option sets ----------
   const O = {
     list: D.lists.map(l => [l.id, l.title]),
+    listNew: [['new', 'the new list']].concat(D.lists.map(l => [l.id, l.title])),
+    pos: [['bottom', 'bottom'], ['top', 'top']],
+    sortBy: D.sort_by,
+    unique: [['', 'new'], ['1', 'unique']],
     label: D.labels.map(l => [l.id, l.name]),
     person: D.people.map(p => [p.id, p.name]),
     personOpt: [['', 'nobody']].concat(D.people.map(p => [p.id, p.name])),
@@ -38,39 +43,66 @@
   const N = (k, min, max, def, blank) => ({ t: 'num', k, min, max, def, blank });
   const I = (k, ph, req = true) => ({ t: 'input', k, ph, req });
   const A = (k, ph) => ({ t: 'area', k, ph });
+  const W = k => ({ t: 'days', k });
+  const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   // ---------- sentences ----------
   const RULE_TRIGGERS = [
     { tab: 'Card move', fixed: { trigger: 'card_added' }, tokens: [T('when a card is added to list'), S('trigger_list', 'list'), S('by_whom', 'by')] },
     { tab: 'Card move', fixed: { trigger: 'card_moved' }, tokens: [T('when a card is moved into list'), S('trigger_list', 'list'), S('by_whom', 'by')] },
+    { tab: 'Card move', fixed: { trigger: 'board_added' }, tokens: [T('when a card is added to the board'), S('by_whom', 'by')], hint: '“Added” means created, copied, moved in from another board or made from a template.' },
+    { tab: 'Card move', fixed: { trigger: 'card_archived' }, tokens: [T('when a card is archived'), S('by_whom', 'by')] },
     { tab: 'Card changes', fixed: { trigger: 'card_completed' }, tokens: [T('when a card is marked complete'), S('by_whom', 'by')] },
     { tab: 'Card changes', fixed: { trigger: 'label_added' }, tokens: [T('when the label'), S('trigger_label', 'label'), T('is added to a card'), S('by_whom', 'by')] },
     { tab: 'Card changes', fixed: { trigger: 'member_added' }, tokens: [T('when'), S('member_who', 'who'), T('added to a card')] },
+    { tab: 'Card changes', fixed: { trigger: 'attachment_added' }, tokens: [T('when an attachment is added to a card'), S('by_whom', 'by')] },
+    { tab: 'Dates', fixed: { trigger: 'due_set' }, tokens: [T('when a due date is set on a card'), S('by_whom', 'by')] },
+    { tab: 'Dates', fixed: { trigger: 'due_removed' }, tokens: [T('when the due date is removed from a card'), S('by_whom', 'by')] },
     { tab: 'Checklists', fixed: { trigger: 'checklist_done' }, tokens: [T('when every checklist item on a card is done'), S('by_whom', 'by')] },
+    { tab: 'Card content', fixed: { trigger: 'comment_added' }, tokens: [T('when a comment is posted to a card'), S('by_whom', 'by')] },
+    { tab: 'Card content', fixed: { trigger: 'mentioned' }, tokens: [T('when'), S('member_who', 'who'), T('mentioned in a comment'), S('by_whom', 'by')] },
+    { tab: 'Fields', fixed: { trigger: 'field_set' }, tokens: [T('when the custom field'), S('trigger_field', 'field'), T('is set on a card'), S('by_whom', 'by')] },
+    { tab: 'Lists', fixed: { trigger: 'list_count' }, tokens: [T('when list'), S('trigger_list', 'list'), T('has exactly'), N('trigger_count', 0, 500, 1), T('cards')], hint: 'Checked whenever a card is added to or moved into that list.' },
+    { tab: 'Lists', fixed: { trigger: 'list_created' }, tokens: [T('when a list is created'), S('by_whom', 'by')], hint: 'Actions for this one work on the board — “the new list” means the list just made.' },
   ];
   const DUE_TRIGGERS = [
     { tab: 'Dates', fixed: { trigger: 'card_overdue', trigger_hours: 0 }, tokens: [T('the moment a card is due')] },
     { tab: 'Dates', fixed: { trigger: 'card_due_soon' }, tokens: [S('trigger_hours', 'hours', 24), T('before a card is due')] },
     { tab: 'Dates', fixed: { trigger: 'card_overdue' }, tokens: [S('trigger_hours', 'after', 24), T('a card is due')] },
+    { tab: 'Dates', fixed: { trigger: 'due_weekday' }, tokens: [T('on the'), S('trigger_weekday', 'weekday', 0), T('before a card is due, at'), S('trigger_hours', 'clock', 9)] },
   ];
   const at = [T('at'), S('hour', 'clock', 7)];
   const SCHED_TRIGGERS = [
     { tab: 'Schedule', fixed: { frequency: 'daily' }, tokens: [T('every day'), ...at] },
     { tab: 'Schedule', fixed: { frequency: 'weekdays' }, tokens: [T('every weekday (Mon–Fri)'), ...at] },
-    { tab: 'Schedule', fixed: { frequency: 'weekly' }, tokens: [T('every'), S('weekday', 'weekday'), ...at] },
+    { tab: 'Schedule', fixed: { frequency: 'weekly', interval: 1 }, tokens: [T('every'), W('weekdays'), ...at] },
+    { tab: 'Schedule', fixed: { frequency: 'weekly' }, tokens: [T('every'), N('interval', 2, 52, 2), T('weeks on'), W('weekdays'), ...at] },
     { tab: 'Schedule', fixed: { frequency: 'month_nth' }, tokens: [T('every'), S('nth', 'nth'), S('weekday', 'weekday'), T('of the month'), ...at] },
     { tab: 'Schedule', fixed: { frequency: 'monthly' }, tokens: [T('every month on the'), S('month_day', 'mday'), ...at] },
     { tab: 'Schedule', fixed: { frequency: 'yearly' }, tokens: [T('every year on the'), S('month_day', 'mday'), T('of'), S('month', 'month'), ...at] },
   ];
+  const FILTERS = [
+    { tab: 'Filters', fixed: { type: 'label' }, tokens: [T('with the'), S('label', 'label'), T('label')] },
+    { tab: 'Filters', fixed: { type: 'no_label' }, tokens: [T('without the'), S('label', 'label'), T('label')] },
+    { tab: 'Filters', fixed: { type: 'has_due' }, tokens: [T('with a due date')] },
+    { tab: 'Filters', fixed: { type: 'no_due' }, tokens: [T('without a due date')] },
+    { tab: 'Filters', fixed: { type: 'member' }, tokens: [T('with'), S('user', 'person'), T('on the card')] },
+    { tab: 'Filters', fixed: { type: 'complete' }, tokens: [T('that is complete')] },
+    { tab: 'Filters', fixed: { type: 'incomplete' }, tokens: [T("that isn't complete")] },
+    { tab: 'Filters', fixed: { type: 'in_list' }, tokens: [T('in list'), S('list', 'list')] },
+  ];
   const CARD_ACTIONS = [
-    { tab: 'Move', fixed: { type: 'move' }, tokens: [T('move the card to list'), S('list', 'list')] },
+    { tab: 'Move', fixed: { type: 'move' }, tokens: [T('move the card to the'), S('position', 'pos'), T('of list'), S('list', 'list')] },
     { tab: 'Move', fixed: { type: 'move_top' }, tokens: [T('move the card to the top of its list')] },
+    { tab: 'Move', fixed: { type: 'move_bottom' }, tokens: [T('move the card to the bottom of its list')] },
+    { tab: 'Move', fixed: { type: 'copy' }, tokens: [T('copy the card to the'), S('position', 'pos'), T('of list'), S('list', 'list')] },
     { tab: 'Move', fixed: { type: 'archive' }, tokens: [T('archive the card')] },
     { tab: 'Add/Remove', fixed: { type: 'add_label' }, tokens: [T('add the'), S('label', 'label'), T('label')] },
     { tab: 'Add/Remove', fixed: { type: 'remove_label' }, tokens: [T('remove the'), S('label', 'label'), T('label')] },
     { tab: 'Add/Remove', fixed: { type: 'add_sticker' }, tokens: [T('add the sticker'), S('sticker', 'sticker')] },
     { tab: 'Dates', fixed: { type: 'set_due' }, tokens: [T('set the due date'), N('days', 0, 365, 1), T('days from now')] },
     { tab: 'Dates', fixed: { type: 'set_due_workdays' }, tokens: [T('set the due date'), N('days', 0, 260, 5), T('working days from now')] },
+    { tab: 'Dates', fixed: { type: 'set_start' }, tokens: [T('set the start date'), N('days', 0, 365, 0), T('days from now')] },
     { tab: 'Dates', fixed: { type: 'clear_due' }, tokens: [T('remove the due date')] },
     { tab: 'Dates', fixed: { type: 'complete' }, tokens: [T('mark the card complete')] },
     { tab: 'Dates', fixed: { type: 'incomplete' }, tokens: [T('mark the card incomplete')] },
@@ -78,12 +110,19 @@
     { tab: 'Checklists', fixed: { type: 'check_all' }, tokens: [T('tick every checklist item')] },
     { tab: 'Members', fixed: { type: 'add_member' }, tokens: [T('add'), S('user', 'person'), T('to the card')] },
     { tab: 'Members', fixed: { type: 'add_me' }, tokens: [T('add me (whoever presses it) to the card')], only: 'cardbtn' },
+    { tab: 'Members', fixed: { type: 'remove_member' }, tokens: [T('remove'), S('user', 'person'), T('from the card')] },
     { tab: 'Members', fixed: { type: 'clear_members' }, tokens: [T('remove all members from the card')] },
     { tab: 'Content', fixed: { type: 'comment' }, tokens: [T('post the comment'), I('text', 'Comment')] },
     { tab: 'Content', fixed: { type: 'notify' }, tokens: [T("notify the card's members"), I('text', 'with a message (optional)', false)] },
+    { tab: 'Content', fixed: { type: 'rename' }, tokens: [T('rename the card to'), I('text', 'New name — {cardname} keeps the old one')] },
+    { tab: 'Content', fixed: { type: 'set_description' }, tokens: [T('set the description to'), A('text', 'Description — {cardname} and {date} work here')] },
+    { tab: 'Fields', fixed: { type: 'set_field' }, tokens: [T('set custom field'), S('field', 'field'), T('to'), I('value', 'Value (leave empty to clear)', false)] },
+    { tab: 'Sort', fixed: { type: 'sort_list' }, tokens: [T("sort the card's list by"), S('by', 'sortBy')] },
+    { tab: 'Cascade', fixed: { type: 'cascade' }, tokens: [T("turn the card's unticked checklist items into new cards in list"), S('list', 'list')] },
   ];
   const BOARD_ACTIONS = [
-    { tab: 'Add card', fixed: { type: 'create_card' }, tokens: [T('create a card titled'), I('text', 'Card title'), T('in list'), S('list', 'list')], extras: MODE === 'schedule' },
+    { tab: 'Add card', fixed: { type: 'create_card' }, tokens: [T('create a'), S('unique', 'unique'), T('card titled'), I('text', 'Card title'), T('in list'), S('list', 'list')], extras: MODE === 'schedule', hint: 'A “unique” card is only made if there isn’t already one with that title in the list.' },
+    { tab: 'Add card', fixed: { type: 'copy_named' }, tokens: [T('find the card'), I('text', 'Card name, e.g. a template'), T('and copy it to list'), S('list', 'list')] },
     { tab: 'Move cards', fixed: { type: 'move_all' }, tokens: [T('move every card from list'), S('from_list', 'list'), T('to list'), S('list', 'list')] },
     { tab: 'Move cards', fixed: { type: 'move_random' }, tokens: [T('move'), N('count', 1, 50, 1), T('random cards from list'), S('from_list', 'list'), T('to list'), S('list', 'list')] },
     { tab: 'Lists', fixed: { type: 'create_list' }, tokens: [T('create a list called'), I('text', 'List name')] },
@@ -92,6 +131,9 @@
     { tab: 'Sort', fixed: { type: 'sort_field' }, tokens: [T('sort list'), S('list', 'list'), T('by'), S('field', 'field'), S('order', 'order')] },
     { tab: 'Other', fixed: { type: 'archive_done' }, tokens: [T('archive every complete card')] },
   ];
+  // "When a list is created" runs board actions; their lists can be "the new list".
+  const NEW_LIST_ACTIONS = BOARD_ACTIONS.filter(r => r.fixed.type !== 'move_random')
+    .map(r => ({ ...r, extras: false, tokens: r.tokens.map(t => t.t === 'sel' && t.k === 'list' ? { ...t, o: 'listNew', def: 'new' } : t) }));
 
   const CFG = {
     rule: { title: 'Create a Rule', steps: true, triggers: RULE_TRIGGERS, actions: CARD_ACTIONS },
@@ -100,7 +142,8 @@
     cardbtn: { title: 'Create a Card Button', button: true, actions: CARD_ACTIONS },
     boardbtn: { title: 'Create a Board Button', button: true, actions: BOARD_ACTIONS },
   }[MODE];
-  const ACTIONS = CFG.actions.filter(r => !r.only || r.only === MODE);
+  const BASE_ACTIONS = CFG.actions.filter(r => !r.only || r.only === MODE);
+  const actionsNow = () => (st.trigger && st.trigger.data.trigger === 'list_created' ? NEW_LIST_ACTIONS : BASE_ACTIONS);
   const tabsOf = rows => [...new Set(rows.map(r => r.tab))];
 
   // ---------- sentence rendering ----------
@@ -112,7 +155,15 @@
       if (tok.t === 'sel') return `<b>${esc(optLabel(tok.o, v))}</b>`;
       if (tok.t === 'num') return `<b>${esc(v)}</b>`;
       if (tok.t === 'input') return v ? `<b>“${esc(v)}”</b>` : '';
-      if (tok.t === 'area') { const n = (v || '').split('\n').filter(x => x.trim()).length; return `<b>${n} item${n === 1 ? '' : 's'}</b>`; }
+      if (tok.t === 'area') {
+        if (row.fixed.type === 'set_description') return v ? `<b>“${esc(v.length > 40 ? v.slice(0, 40) + '…' : v)}”</b>` : '<b>(empty)</b>';
+        const n = (v || '').split('\n').filter(x => x.trim()).length; return `<b>${n} item${n === 1 ? '' : 's'}</b>`;
+      }
+      if (tok.t === 'days') {
+        const ds = String(v || '').split(',').filter(x => x !== '').map(Number);
+        const names = ds.map(d => D.weekdays[d][1]);
+        return `<b>${esc(names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.slice(-1) : names[0] || '?')}</b>`;
+      }
       return '';
     }).filter(Boolean).join(' ') + (vals._extras || '');
   }
@@ -127,6 +178,10 @@
     if (tok.t === 'num') return `<input type="number" data-k="${tok.k}" min="${tok.min}" max="${tok.max}" value="${esc(v ?? '')}" class="ab-num">`;
     if (tok.t === 'input') return `<input data-k="${tok.k}" placeholder="${esc(tok.ph)}" value="${esc(v ?? '')}" class="ab-text"${tok.req ? ' data-req' : ''}>`;
     if (tok.t === 'area') return `<textarea data-k="${tok.k}" rows="2" placeholder="${esc(tok.ph)}" class="ab-area">${esc(v ?? '')}</textarea>`;
+    if (tok.t === 'days') {
+      const on = String(v ?? '0').split(',');
+      return `<span class="ab-days" data-k="${tok.k}" data-days>${DAY.map((d, i) => `<label><input type="checkbox" value="${i}"${on.includes(String(i)) ? ' checked' : ''}><span>${d}</span></label>`).join('')}</span>`;
+    }
     return '';
   }
   function rowHTML(row, i, kind) {
@@ -134,45 +189,62 @@
       <div class="ab-line"><span class="ab-word">assign to</span>${control(S('member', 'personOpt'), '')}
       <span class="ab-word">due in</span><input type="number" data-k="due_in_days" min="0" max="365" class="ab-num" placeholder="—"><span class="ab-word">days</span></div>
       <textarea data-k="checklist" rows="2" class="ab-area" placeholder="Checklist — one item per line (optional)"></textarea></details>` : '';
-    return `<div class="ab-row" data-row="${kind}:${i}"><div class="ab-line">${row.tokens.map(t => control(t)).join('')}</div>${extras}
+    const hint = row.hint ? `<p class="ab-hint">${esc(row.hint)}</p>` : '';
+    return `<div class="ab-row" data-row="${kind}:${i}"><div class="ab-line">${row.tokens.map(t => control(t)).join('')}</div>${hint}${extras}
       <button type="button" class="ab-plus" data-add="${kind}:${i}" title="Add" aria-label="Add">+</button></div>`;
   }
 
   // ---------- state ----------
-  const st = { trigger: null, actions: [], pickTrigger: false, pickAction: true, tTab: null, aTab: null, name: '', icon: '' };
+  const FRESH = () => ({ trigger: null, actions: [], filters: [], pickTrigger: false, pickAction: true, pickFilter: false,
+                         tTab: null, aTab: null, name: '', icon: '', enabled: true, closeCard: false, editId: null });
+  const st = FRESH();
 
   function readRow(el, row) {
     const vals = {};
     let bad = null;
     el.querySelectorAll('[data-k]').forEach(c => {
+      if (c.hasAttribute('data-days')) {
+        const v = [...c.querySelectorAll('input:checked')].map(x => x.value).join(',');
+        if (!v) bad = c.querySelector('input');
+        vals[c.dataset.k] = v;
+        return;
+      }
       let v = c.value;
       if (c.type === 'number') v = c.value === '' ? '' : Number(c.value);
       if (c.hasAttribute('data-req') && !String(v).trim()) bad = c;
       vals[c.dataset.k] = typeof v === 'string' ? v.trim() : v;
     });
     if (row.tokens.some(t => t.t === 'sel' && !O[t.o].length)) return { error: 'There’s nothing to pick here yet.' };
-    if (bad) { bad.focus(); bad.classList.add('ab-shake'); setTimeout(() => bad.classList.remove('ab-shake'), 500); return { error: 'Fill this in first.' }; }
+    if (bad) {
+      const box = bad.closest('.ab-days') || bad;
+      bad.focus(); box.classList.add('ab-shake'); setTimeout(() => box.classList.remove('ab-shake'), 500);
+      return { error: bad.closest('.ab-days') ? 'Pick at least one day.' : 'Fill this in first.' };
+    }
     if (row.fixed.type === 'move_all' && vals.from_list === vals.list) return { error: 'Pick two different lists.' };
     return { vals };
   }
 
   // ---------- render ----------
+  const isListCreated = () => st.trigger && st.trigger.data.trigger === 'list_created';
   function render() {
     const c = CFG;
     const ready = (c.button ? st.name.trim() : st.trigger) && st.actions.length;
     const step = !st.trigger ? 1 : !st.actions.length ? 2 : 3;
-    let h = `<header class="ab-head"><h2>${esc(c.title)}</h2>
+    const title = st.editId ? c.title.replace(/^Create an? /, 'Edit ').replace('Edit Rule', 'Edit rule') : c.title;
+    let h = `<header class="ab-head"><h2>${esc(title)}</h2>
       <div class="ab-head-btns"><button type="button" class="btn primary" data-ab-save ${ready ? '' : 'disabled'}>Save</button>
       <button type="button" class="btn ghost" data-ab-cancel>Cancel</button></div></header>`;
     if (c.steps) {
-      const s = (n, t) => `<span class="ab-step${step > n ? ' done' : step === n ? ' on' : ''}"><i>${step > n ? '✓' : n}</i>${t}</span>`;
-      h += `<div class="ab-steps">${s(1, 'Select trigger')}<b>›</b>${s(2, 'Select action')}<b>›</b>${s(3, 'Review and save')}</div>`;
+      const sp = (n, t) => `<span class="ab-step${step > n ? ' done' : step === n ? ' on' : ''}"><i>${step > n ? '✓' : n}</i>${t}</span>`;
+      h += `<div class="ab-steps">${sp(1, 'Select trigger')}<b>›</b>${sp(2, 'Select action')}<b>›</b>${sp(3, 'Review and save')}</div>`;
     }
     if (c.note) h += `<p class="ab-note">ⓘ ${esc(c.note)}</p>`;
 
     if (c.button) {
       h += `<div class="ab-btnmeta"><label>Icon<select data-ab-icon>${D.icons.map(i => `<option value="${esc(i)}"${i === st.icon ? ' selected' : ''}>${i || '—'}</option>`).join('')}</select></label>
-        <label class="grow">Title<input data-ab-name maxlength="40" value="${esc(st.name)}" placeholder="Button name, e.g. ${MODE === 'cardbtn' ? 'Delivered' : 'New week'}"></label></div>`;
+        <label class="grow">Title<input data-ab-name maxlength="40" value="${esc(st.name)}" placeholder="Button name, e.g. ${MODE === 'cardbtn' ? 'Delivered' : 'New week'}"></label></div>
+        <div class="ab-opts"><label><input type="checkbox" data-ab-enabled${st.enabled ? ' checked' : ''}> Enabled — show it ${MODE === 'cardbtn' ? 'on every card' : 'in the board header'}</label>
+        ${MODE === 'cardbtn' ? `<label><input type="checkbox" data-ab-close${st.closeCard ? ' checked' : ''}> Close the card after pressing</label>` : ''}</div>`;
     } else {
       h += `<section class="ab-sec"><h3>Trigger</h3>`;
       if (st.trigger) {
@@ -186,10 +258,22 @@
         if (tabs.length > 1) h += `<div class="ab-tabs">${tabs.map(t => `<button type="button" data-ttab="${esc(t)}" class="${t === st.tTab ? 'on' : ''}">${esc(t)}</button>`).join('')}</div>`;
         h += c.triggers.map((r, i) => r.tab === st.tTab ? rowHTML(r, i, 't') : '').join('');
       }
+      // Advanced: filters on card triggers
+      if (st.trigger && MODE !== 'schedule' && !isListCreated()) {
+        st.filters.forEach((f, i) => {
+          h += `<div class="ab-chosen"><span>only for cards ${f.html}</span><button type="button" class="icon-btn" data-del-filter="${i}" title="Remove filter" aria-label="Remove filter">🗑</button><span class="ab-gap"></span></div>`;
+        });
+        if (st.pickFilter) {
+          h += `<h4>Only run for cards…</h4>` + FILTERS.map((r, i) => rowHTML(r, i, 'f')).join('');
+        } else if (st.filters.length < 6) {
+          h += `<button type="button" class="ab-link" data-pick-filter>+ Add a filter (Advanced)</button>`;
+        }
+      }
       h += `</section>`;
     }
 
     if (c.button || st.trigger) {
+      const acts = actionsNow();
       h += `<section class="ab-sec"><h3>${c.button ? 'Actions' : st.actions.length ? 'Action' : 'Select action'}</h3>`;
       if (!st.actions.length && c.button) h += `<p class="ab-empty">Your button doesn’t do anything yet. Add some actions below.</p>`;
       st.actions.forEach((a, i) => {
@@ -199,10 +283,11 @@
       });
       const room = st.actions.length < D.max_actions;
       if (st.pickAction && room) {
-        const tabs = tabsOf(ACTIONS); st.aTab = st.aTab || tabs[0];
+        const tabs = tabsOf(acts);
+        if (!tabs.includes(st.aTab)) st.aTab = tabs[0];
         if (st.actions.length) h += `<h4>Add another action</h4>`;
         h += `<div class="ab-tabs">${tabs.map(t => `<button type="button" data-atab="${esc(t)}" class="${t === st.aTab ? 'on' : ''}">${esc(t)}</button>`).join('')}</div>`;
-        h += ACTIONS.map((r, i) => r.tab === st.aTab ? rowHTML(r, i, 'a') : '').join('');
+        h += acts.map((r, i) => r.tab === st.aTab ? rowHTML(r, i, 'a') : '').join('');
       } else if (room) {
         h += `<button type="button" class="ab-another" data-pick-action>+ Add another action</button>`;
       }
@@ -215,6 +300,7 @@
     root.innerHTML = h;
   }
   const error = msg => { const e = root.querySelector('[data-ab-error]'); if (e) { e.textContent = msg; e.hidden = !msg; } };
+  const saveBtn = () => root.querySelector('[data-ab-save]');
 
   // ---------- events ----------
   root.addEventListener('click', e => {
@@ -224,49 +310,59 @@
     if (b.matches('[data-ab-save]')) return save();
     if (b.matches('[data-pick-trigger]')) { st.pickTrigger = true; return render(); }
     if (b.matches('[data-pick-action]')) { st.pickAction = true; return render(); }
+    if (b.matches('[data-pick-filter]')) { st.pickFilter = true; return render(); }
     if (b.dataset.ttab) { st.tTab = b.dataset.ttab; return render(); }
     if (b.dataset.atab) { st.aTab = b.dataset.atab; return render(); }
     if (b.matches('[data-del-trigger]')) { st.trigger = null; st.pickTrigger = true; return render(); }
+    if (b.dataset.delFilter != null) { st.filters.splice(+b.dataset.delFilter, 1); return render(); }
     if (b.dataset.delAction != null) { st.actions.splice(+b.dataset.delAction, 1); if (!st.actions.length) st.pickAction = true; return render(); }
     if (b.dataset.upAction != null) { const i = +b.dataset.upAction; [st.actions[i - 1], st.actions[i]] = [st.actions[i], st.actions[i - 1]]; return render(); }
     if (b.dataset.add) {
       const [kind, idx] = b.dataset.add.split(':');
-      const row = (kind === 't' ? CFG.triggers : ACTIONS)[+idx];
-      const el = b.closest('.ab-row');
-      const r = readRow(el, row);
+      const row = (kind === 't' ? CFG.triggers : kind === 'f' ? FILTERS : actionsNow())[+idx];
+      const r = readRow(b.closest('.ab-row'), row);
       if (r.error) return error(r.error);
       add(kind, row, r.vals);
     }
   });
   root.addEventListener('input', e => {
-    if (e.target.matches('[data-ab-name]')) { st.name = e.target.value; root.querySelector('[data-ab-save]').disabled = !(st.name.trim() && st.actions.length); }
+    if (e.target.matches('[data-ab-name]')) { st.name = e.target.value; saveBtn().disabled = !(st.name.trim() && st.actions.length); }
   });
-  root.addEventListener('change', e => { if (e.target.matches('[data-ab-icon]')) st.icon = e.target.value; });
+  root.addEventListener('change', e => {
+    if (e.target.matches('[data-ab-icon]')) st.icon = e.target.value;
+    if (e.target.matches('[data-ab-enabled]')) st.enabled = e.target.checked;
+    if (e.target.matches('[data-ab-close]')) st.closeCard = e.target.checked;
+  });
   root.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && e.target.matches('.ab-row input')) { e.preventDefault(); e.target.closest('.ab-row').querySelector('[data-add]').click(); }
+    if (e.key === 'Enter' && e.target.matches('.ab-row input:not([type=checkbox])')) { e.preventDefault(); e.target.closest('.ab-row').querySelector('[data-add]').click(); }
   });
 
+  function extrasOf(row, vals) {
+    if (!row.extras) return { txt: '', on: false };
+    const bits = [];
+    if (vals.member) bits.push(`assigned to <b>${esc(optLabel('personOpt', vals.member))}</b>`);
+    if (vals.due_in_days !== '' && vals.due_in_days != null) bits.push(`due in <b>${vals.due_in_days}</b> days`);
+    const n = (vals.checklist || '').split('\n').filter(x => x.trim()).length;
+    if (n) bits.push(`with a <b>${n}-item</b> checklist`);
+    return { txt: bits.length ? ', ' + bits.join(', ') : '', on: bits.length > 0 };
+  }
   function add(kind, row, vals) {
-    const data = { ...row.fixed, ...vals };
-    let extrasTxt = '', extras = false;
-    if (row.extras) {
-      const bits = [];
-      if (vals.member) { bits.push(`assigned to <b>${esc(optLabel('personOpt', vals.member))}</b>`); extras = true; }
-      if (vals.due_in_days !== '' && vals.due_in_days != null) { bits.push(`due in <b>${vals.due_in_days}</b> days`); extras = true; }
-      const n = (vals.checklist || '').split('\n').filter(x => x.trim()).length;
-      if (n) { bits.push(`with a <b>${n}-item</b> checklist`); extras = true; }
-      if (bits.length) extrasTxt = ', ' + bits.join(', ');
-    }
-    const item = { data, extras, html: describe(row, { ...vals, _extras: extrasTxt }) };
-    if (kind === 't') { st.trigger = item; st.pickTrigger = false; st.pickAction = true; }
+    const ex = extrasOf(row, vals);
+    const item = { data: { ...row.fixed, ...vals }, extras: ex.on, html: describe(row, { ...vals, _extras: ex.txt }) };
+    if (kind === 't') {
+      const wasNew = isListCreated();
+      st.trigger = item; st.pickTrigger = false; st.pickAction = true;
+      if (wasNew !== isListCreated()) st.actions = [];        // card actions ↔ board actions
+      if (isListCreated()) st.filters = [];
+    } else if (kind === 'f') { st.filters.push(item); st.pickFilter = false; }
     else { st.actions.push(item); st.pickAction = false; }
     error(''); render();
   }
 
-  // ---------- save: build the POST the server already understands ----------
+  // ---------- save: build the POST the server understands ----------
   function save() {
-    const f = {};
-    f.section = D.section;
+    const f = { section: SECTION };
+    if (st.editId) f.edit_id = st.editId;
     let url;
     const actionFields = (prefix, list) => list.forEach((a, i) => {
       Object.entries(a.data).forEach(([k, v]) => {
@@ -277,11 +373,12 @@
     if (MODE === 'rule' || MODE === 'due') {
       url = D.urls.rule;
       Object.assign(f, st.trigger.data);
+      f.filters = JSON.stringify(st.filters.map(x => x.data));
       actionFields('', st.actions);
     } else if (MODE === 'schedule') {
       url = D.urls.schedule;
       Object.assign(f, st.trigger.data);
-      const only = st.actions.length === 1 && st.actions[0].data.type === 'create_card' ? st.actions[0].data : null;
+      const only = st.actions.length === 1 && st.actions[0].data.type === 'create_card' && !st.actions[0].data.unique ? st.actions[0].data : null;
       if (only) {
         Object.assign(f, { kind: 'card', title: only.text, target_list: only.list, member: only.member || '',
                            due_in_days: only.due_in_days ?? '', checklist: only.checklist || '' });
@@ -291,7 +388,8 @@
       }
     } else {
       url = D.urls.button;
-      Object.assign(f, { kind: MODE === 'cardbtn' ? 'card' : 'board', name: st.name.trim(), icon: st.icon });
+      Object.assign(f, { kind: MODE === 'cardbtn' ? 'card' : 'board', name: st.name.trim(), icon: st.icon,
+                         enabled: st.enabled ? '1' : '0', close_card: st.closeCard ? '1' : '0' });
       actionFields(MODE === 'cardbtn' ? 'b' : 'bb', st.actions);
     }
     form.action = url;
@@ -299,13 +397,13 @@
     Object.entries(f).forEach(([k, v]) => {
       const inp = document.createElement('input'); inp.type = 'hidden'; inp.name = k; inp.value = v ?? ''; form.appendChild(inp);
     });
-    root.querySelector('[data-ab-save]').disabled = true;
+    saveBtn().disabled = true;
     form.submit();
   }
 
   // ---------- open / close ----------
   function open(prefill) {
-    Object.assign(st, { trigger: null, actions: [], pickTrigger: false, pickAction: true, tTab: null, aTab: null, name: '', icon: '' });
+    Object.assign(st, FRESH());
     if (prefill) applyPrefill(prefill);
     home.hidden = true; root.hidden = false;
     render();
@@ -318,10 +416,12 @@
   }
   document.querySelector('[data-ab-open]')?.addEventListener('click', () => open());
   document.querySelectorAll('[data-example]').forEach(b => b.addEventListener('click', () => open(JSON.parse(b.dataset.example))));
+  document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => open(JSON.parse(b.dataset.edit))));
 
-  // ---------- examples & links from list menus → builder state ----------
+  // ---------- examples, edits and list-menu links → builder state ----------
   function resolveList(want) {
     if (want == null) return undefined;
+    if (want === 'new') return 'new';
     const L = D.lists;
     if (!L.length) return undefined;
     if (typeof want === 'number') return (L.find(l => l.id === want) || L[0]).id;
@@ -334,49 +434,53 @@
   }
   function resolveLabel(want) {
     if (!D.labels.length) return undefined;
+    if (typeof want === 'number') return (D.labels.find(l => l.id === want) || D.labels[0]).id;
     const w = String(want).toLowerCase();
     return (D.labels.find(l => l.colour === w) || D.labels.find(l => l.name.toLowerCase().includes(w)) || D.labels[0]).id;
   }
-  function itemFrom(rows, data, kind) {
-    const row = rows.find(r => Object.entries(r.fixed).every(([k, v]) => data[k] === v || (k === 'trigger_hours' && Number(data[k] || 0) === v)));
+  const DEFAULTS = { trigger_hours: 0, interval: 1 };
+  function itemFrom(rows, data) {
+    const row = rows.find(r => Object.entries(r.fixed).every(([k, v]) => String(data[k] ?? DEFAULTS[k]) === String(v)));
     if (!row) return null;
+    if (row.tokens.some(t => t.t === 'sel' && !O[t.o].length)) return null;
     const vals = {};
     row.tokens.forEach(tok => {
       if (tok.t === 'text') return;
       let v = data[tok.k];
       if (tok.k === 'cltitle') v = data.title ?? data.cltitle;
       if (tok.k === 'clitems') v = data.text ?? data.clitems ?? '';
+      if (tok.k === 'unique') v = data.unique ? '1' : '';
+      if (tok.k === 'trigger_hours' && tok.o === 'clock' && v == null) v = 9;
+      if (tok.t === 'days') v = data.weekdays || String(data.weekday ?? 0);
       if (tok.t === 'sel') {
-        if (tok.o === 'list') v = resolveList(v ?? 'first');
+        if (tok.o === 'list' || tok.o === 'listNew') v = resolveList(v ?? (tok.def || 'first'));
         else if (tok.o === 'label') v = resolveLabel(v ?? '');
-        else if (tok.o === 'person') v = v ?? (D.people[0] || {}).id;
-        else if (tok.o === 'field') v = v ?? (D.fields[0] || {}).id;
-        else if (v == null) v = tok.def ?? (O[tok.o][0] || [])[0];
-        if (v === undefined || !O[tok.o].some(([k]) => String(k) === String(v))) v = tok.def ?? (O[tok.o][0] || [])[0];
+        if (v === undefined || v === null || !O[tok.o].some(([k]) => String(k) === String(v))) v = tok.def ?? (O[tok.o][0] || [])[0];
       }
-      if (tok.t === 'num' && v == null) v = tok.def;
-      if (tok.t === 'input' && v == null) v = '';
+      if (tok.t === 'num' && (v == null || v === '')) v = tok.def;
+      if ((tok.t === 'input' || tok.t === 'area') && v == null) v = '';
       vals[tok.k] = v;
     });
-    let extrasTxt = '', extras = false;
-    if (row.extras && data.checklist) {
-      vals.checklist = data.checklist; extras = true;
-      const n = data.checklist.split('\n').filter(x => x.trim()).length;
-      extrasTxt = `, with a <b>${n}-item</b> checklist`;
-    }
-    return { data: { ...row.fixed, ...vals }, extras, html: describe(row, { ...vals, _extras: extrasTxt }) };
+    if (row.extras) ['member', 'due_in_days', 'checklist'].forEach(k => { if (data[k] != null && data[k] !== '') vals[k] = data[k]; });
+    const ex = extrasOf(row, vals);
+    return { data: { ...row.fixed, ...vals }, extras: ex.on, html: describe(row, { ...vals, _extras: ex.txt }) };
   }
   function applyPrefill(d) {
+    st.editId = d.id || null;
     if (CFG.triggers) {
-      let t = null;
-      if (MODE === 'schedule') t = itemFrom(CFG.triggers, d, 't');
-      else if (d.trigger) t = itemFrom(CFG.triggers, d, 't');
+      const t = (MODE === 'schedule' || d.trigger) ? itemFrom(CFG.triggers, d) : null;
       if (t) st.trigger = t; else st.pickTrigger = true;
     }
+    (d.filters || []).forEach(f => { const it = itemFrom(FILTERS, f); if (it) st.filters.push(it); });
     if (d.name) { st.name = d.name; st.icon = d.icon || ''; }
+    if (d.enabled === false) st.enabled = false;
+    if (d.close_card) st.closeCard = true;
     let acts = d.actions || [];
-    if (MODE === 'schedule' && d.kind === 'card') acts = [{ type: 'create_card', text: d.title, list: d.target_list, checklist: d.checklist }];
-    acts.forEach(a => { const it = itemFrom(ACTIONS, a, 'a'); if (it) st.actions.push(it); });
+    if (MODE === 'schedule' && d.kind === 'card') {
+      acts = [{ type: 'create_card', text: d.title, list: d.target_list, checklist: d.checklist, member: d.member, due_in_days: d.due_in_days }];
+    }
+    const rows = actionsNow();
+    acts.forEach(a => { const it = itemFrom(rows, a); if (it) st.actions.push(it); });
     st.pickAction = !st.actions.length;
   }
 

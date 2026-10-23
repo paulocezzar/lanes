@@ -521,9 +521,11 @@
     const press = t.closest('[data-press-card]');
     if (press) {
       press.disabled = true;
+      const closeAfter = press.hasAttribute('data-close-after');
       return post(`/api/cards/${openCardId}/buttons/${press.dataset.pressCard}/`).then(data => {
         applyCard(data);
         toast(data.summary);
+        if (closeAfter) closeCard();
       }).finally(() => (press.disabled = false));
     }
     if (t.closest('[data-toggle-complete]')) {
