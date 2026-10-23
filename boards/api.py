@@ -700,6 +700,20 @@ def board_update(request, board_id):
         import secrets
         board.public_token = secrets.token_urlsafe(18) if d["public"] else ""
         audit.record(request, "board_public_on" if d["public"] else "board_public_off", board=board)
+    if "is_project" in d:
+        board.is_project = bool(d["is_project"])
+    if "project_owner" in d:
+        owner = d["project_owner"]
+        board.project_owner = (BoardMember.objects.filter(board=board, user_id=owner).select_related("user").first().user
+                               if owner and BoardMember.objects.filter(board=board, user_id=owner).exists() else None)
+    if "budget" in d:
+        raw = str(d["budget"] or "").replace(",", "").replace("£", "").strip()
+        try:
+            board.budget = round(float(raw), 2) if raw else None
+        except ValueError:
+            raise ApiError("The budget needs to be an amount in pounds.")
+        if board.budget is not None and board.budget < 0:
+            raise ApiError("The budget can't be negative.")
     if "collection" in d:
         from .models import Collection
         value = d["collection"]
@@ -1239,3 +1253,19 @@ def card_dependencies(request, card_id):
     from .signals import bump
     bump(board.pk)
     return card_response(card.pk, request)
+
+
+@api
+def board_status(request, board_id):
+    """Project status update — anyone who can edit the board."""
+    board = get_object_or_404(Board, pk=board_id, is_archived=False)
+    _edit(board, request.user)
+    d = request.data
+    if d.get("rag") in dict(Board.RAG):
+        board.rag = d["rag"]
+    if "status_note" in d:
+        board.status_note = (d.get("status_note") or "").strip()[:300]
+    board.status_updated_at = timezone.now()
+    board.save(update_fields=["rag", "status_note", "status_updated_at"])
+    log(board, request.user, "status_updated", rag=board.get_rag_display(), note=board.status_note)
+    return {"ok": True}

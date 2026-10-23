@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import (api, views, views_automation, views_board, views_files, views_notify, views_people, views_planner,
+from . import (api, views, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio,
                views_company, views_export, views_public, views_search)
 
 urlpatterns = [
@@ -10,6 +10,8 @@ urlpatterns = [
     path("p/<str:token>/", views_public.public_board, name="public_board"),
     path("p/<str:token>/c/<int:card_id>/", views_public.public_card, name="public_card"),
     path("my-cards/", views.my_cards, name="my_cards"),
+    path("portfolio/", views_portfolio.portfolio_page, name="portfolio"),
+    path("b/<int:board_id>/report/", views_portfolio.status_report, name="status_report"),
     path("company/", views_company.usage, name="company_usage"),
     path("company/audit/", views_company.audit_log, name="company_audit"),
     path("company/people/", views_company.people, name="company_people"),
@@ -89,6 +91,7 @@ urlpatterns = [
     path("b/<int:board_id>/automation/buttons/<int:button_id>/", views_automation.button_update,
          name="button_update"),
     path("api/boards/<int:board_id>/update/", api.board_update),
+    path("api/boards/<int:board_id>/status/", api.board_status),
     path("api/lists/<int:list_id>/", api.list_update),
     path("api/lists/<int:list_id>/move/", api.list_move),
     path("api/lists/<int:list_id>/copy/", api.list_copy),

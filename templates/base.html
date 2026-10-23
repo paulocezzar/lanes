@@ -19,6 +19,7 @@
       <a href="{% url 'home' %}" class="{% if request.resolver_match.url_name == 'home' %}on{% endif %}">Boards</a>
       <a href="{% url 'planner' %}" class="{% if request.resolver_match.url_name == 'planner' %}on{% endif %}">Planner</a>
       <a href="{% url 'my_cards' %}" class="{% if request.resolver_match.url_name == 'my_cards' %}on{% endif %}">My cards</a>
+      <a href="{% url 'portfolio' %}" class="{% if request.resolver_match.url_name == 'portfolio' %}on{% endif %}">Portfolio</a>
     </nav>
     <form class="top-search" method="get" action="{% url 'search' %}" role="search">
       <input type="search" name="q" placeholder="Search cards" value="{% if request.resolver_match.url_name == 'search' %}{{ request.GET.q }}{% endif %}" aria-label="Search cards" autocomplete="off" data-top-search>

@@ -1,0 +1,20 @@
+{{ board.title }} — weekly status, {{ date }}
+Status: {{ h.rag_label }}{% if board.status_note %} — "{{ board.status_note }}"{% endif %}
+{% if h.reasons %}Watch: {{ h.reasons|join:" · " }}
+{% endif %}
+Done: {{ h.pct }}% ({{ h.done }} of {{ h.total }})
+Planned finish: {{ h.finish|date:"D j M"|default:"—" }}
+Next milestone: {% if h.next_ms %}{{ h.next_ms.title }} — {{ h.next_ms.due_at|date:"D j M" }}{% else %}—{% endif %}
+Overdue: {{ h.overdue|length }}{% if h.budget %}
+Budget: £{{ h.spent|floatformat:"0g" }} of £{{ h.budget|floatformat:"0g" }} ({{ h.budget_pct }}%){% endif %}
+{% if h.done_week %}
+DONE THIS WEEK{% for c in h.done_week|slice:":10" %}
+- {{ c.title }}{% endfor %}
+{% endif %}{% if h.due_week %}
+DUE IN THE NEXT 7 DAYS{% for c in h.due_week|slice:":10" %}
+- {{ c.title }} ({{ c.due_at|date:"D j M" }}){% endfor %}
+{% endif %}{% if h.overdue %}
+OVERDUE{% for c in h.overdue|slice:":10" %}
+- {{ c.title }} (was due {{ c.due_at|date:"D j M" }}){% endfor %}
+{% endif %}
+Full report: {{ link }}

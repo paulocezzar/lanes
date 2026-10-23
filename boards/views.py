@@ -179,6 +179,7 @@ def run_automations_hook(request):
     result = {"recurring": run_due_schedules(), "rules": run_due_rules(), "reminders": send_due_reminders()}
     result["notification_emails"] = mailer.notification_emails()
     result["digests"] = mailer.daily_digests()
+    result["status_reports"] = mailer.weekly_status_reports()
     result["sent"] = mailer.flush(limit=80, budget=40 - (time.monotonic() - started))
     return JsonResponse(result)
 

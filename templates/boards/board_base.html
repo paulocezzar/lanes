@@ -156,6 +156,7 @@
     <hr>
     {% if can_manage %}<button class="mitem" data-goto="settings" data-title="Settings">{% include "boards/_icon.html" with i="gear" %}<span>Settings</span></button>
     <button class="mitem" data-goto="background" data-title="Change background"><span class="mitem-swatch bg-{{ board.background }}"></span><span>Change background</span></button>{% endif %}
+    <button class="mitem" data-goto="project" data-title="Project">📊<span>Project{% if board.is_project %}<small>{{ board.get_rag_display }}{% if board.status_note %} — {{ board.status_note|truncatechars:40 }}{% endif %}</small>{% else %}<small>Status, budget, Gantt, report</small>{% endif %}</span></button>
     {% if can_edit %}<button class="mitem" data-goto="fields" data-title="Custom fields">{% include "boards/_icon.html" with i="field" %}<span>Custom fields</span></button>{% endif %}
     <hr>
     <a class="mitem" href="{% url 'board_automation' board.pk %}">{% include "boards/_icon.html" with i="bolt" %}<span>Automation</span></a>
@@ -276,6 +277,35 @@
     </form>
   </div>
   {% if can_manage %}
+  <div class="drawer-pane" data-pane="project" hidden>
+    {% if can_manage %}
+    <label class="toggle-row"><input type="checkbox" data-board-flag="is_project" {% if board.is_project %}checked{% endif %}> <span><b>This board is a project</b><small>It appears on the Portfolio page with its status, progress and budget, and gets a weekly status report.</small></span></label>
+    {% elif not board.is_project %}<p class="muted small">A board admin can make this board a project, so it shows on the Portfolio page.</p>{% endif %}
+    {% if board.is_project %}
+    {% if can_manage %}
+    <h4 class="section-label">Project owner</h4>
+    <select data-board-select="project_owner" aria-label="Project owner"><option value="">Nobody</option>{% for u in people %}<option value="{{ u.pk }}" {% if u.pk == board.project_owner_id %}selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select>
+    <h4 class="section-label">Budget (£)</h4>
+    <form class="row" data-project-budget><input name="budget" inputmode="decimal" value="{{ board.budget|default_if_none:'' }}" placeholder="e.g. 12000"><button class="btn sm">Save</button></form>
+    {% endif %}
+    {% if can_edit %}
+    <h4 class="section-label">Status</h4>
+    <form class="stack" data-project-status>
+      <select name="rag" aria-label="Status">{% for k, v in board.RAG %}<option value="{{ k }}" {% if k == board.rag %}selected{% endif %}>{% if k == "green" %}🟢 {% elif k == "amber" %}🟠 {% elif k == "red" %}🔴 {% else %}⚙️ {% endif %}{{ v }}</option>{% endfor %}</select>
+      <textarea name="status_note" rows="3" maxlength="300" placeholder="One line on where things stand, e.g. “Packaging delayed a week — supplier chasing.”">{{ board.status_note }}</textarea>
+      <button class="btn primary sm">Update status</button>
+      {% if board.status_updated_at %}<small class="muted">Last updated {{ board.status_updated_at|date:"j M, H:i" }}</small>{% endif %}
+    </form>
+    {% endif %}
+    {% endif %}
+    <h4 class="section-label">Project views</h4>
+    <div class="mlist">
+      <a class="mitem" href="{% url 'board_gantt' board.pk %}">📈<span>Gantt chart<small>Dependencies, milestones, critical path</small></span></a>
+      <a class="mitem" href="{% url 'status_report' board.pk %}">📝<span>Status report<small>One page, ready to print or send</small></span></a>
+      <a class="mitem" href="{% url 'portfolio' %}">🗂<span>Portfolio<small>All projects at a glance</small></span></a>
+    </div>
+  </div>
+
   <div class="drawer-pane" data-pane="settings" hidden>
     <h4 class="section-label">Collection</h4>
     <select data-board-collection aria-label="Collection">

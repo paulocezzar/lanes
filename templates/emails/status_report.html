@@ -1,0 +1,20 @@
+{% extends "emails/_base.html" %}
+{% block body %}
+<p style="font-size:12px;color:#626f86;margin:0">Weekly status · {{ date }}</p>
+<h2 style="font-size:20px;margin:4px 0 8px">{{ board.title }}</h2>
+<p style="margin:0 0 12px"><span style="display:inline-block;padding:4px 12px;border-radius:99px;color:#fff;font-weight:700;background:{% if h.rag == 'green' %}#1f845a{% elif h.rag == 'amber' %}#c76a00{% else %}#c9372c{% endif %}">{{ h.rag_label }}</span>
+{% if board.status_note %}<span style="margin-left:8px;font-style:italic">“{{ board.status_note }}”</span>{% endif %}</p>
+{% if h.reasons %}<p style="font-size:13px;color:#626f86">Watch: {{ h.reasons|join:" · " }}</p>{% endif %}
+<table style="border-collapse:collapse;margin:10px 0;font-size:14px">
+<tr><td style="padding:4px 14px 4px 0;color:#626f86">Done</td><td><b>{{ h.pct }}%</b> ({{ h.done }} of {{ h.total }})</td></tr>
+<tr><td style="padding:4px 14px 4px 0;color:#626f86">Planned finish</td><td><b>{{ h.finish|date:"D j M"|default:"—" }}</b></td></tr>
+<tr><td style="padding:4px 14px 4px 0;color:#626f86">Next milestone</td><td>{% if h.next_ms %}<b>{{ h.next_ms.title }}</b> — {{ h.next_ms.due_at|date:"D j M" }}{% else %}—{% endif %}</td></tr>
+<tr><td style="padding:4px 14px 4px 0;color:#626f86">Overdue</td><td><b style="color:{% if h.overdue %}#c9372c{% else %}#172b4d{% endif %}">{{ h.overdue|length }}</b></td></tr>
+{% if h.budget %}<tr><td style="padding:4px 14px 4px 0;color:#626f86">Budget</td><td><b>£{{ h.spent|floatformat:"0g" }}</b> of £{{ h.budget|floatformat:"0g" }} ({{ h.budget_pct }}%)</td></tr>{% endif %}
+</table>
+{% if h.done_week %}<h3 style="font-size:15px;margin:16px 0 4px">Done this week</h3>{% for c in h.done_week|slice:":10" %}<div>✓ {{ c.title }}</div>{% endfor %}{% endif %}
+{% if h.due_week %}<h3 style="font-size:15px;margin:16px 0 4px">Due in the next 7 days</h3>{% for c in h.due_week|slice:":10" %}<div>{{ c.title }} <span style="color:#626f86;font-size:12px">{{ c.due_at|date:"D j M" }}</span></div>{% endfor %}{% endif %}
+{% if h.overdue %}<h3 style="font-size:15px;margin:16px 0 4px;color:#c9372c">Overdue</h3>{% for c in h.overdue|slice:":10" %}<div>{{ c.title }} <span style="color:#626f86;font-size:12px">was due {{ c.due_at|date:"D j M" }}</span></div>{% endfor %}{% endif %}
+<p style="margin-top:18px"><a href="{{ link }}" style="display:inline-block;background:#0c66e4;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Open the full report</a></p>
+{% endblock %}
+{% block footer %}You get this because you run or watch this project on Lanes.{% endblock %}

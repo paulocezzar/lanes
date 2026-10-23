@@ -942,6 +942,17 @@
     await post(`/api/boards/${boardId}/update/`, { [cb.dataset.boardFlag]: cb.checked });
     location.reload();
   }));
+  $('[data-project-budget]', drawer)?.addEventListener('submit', async e => {
+    e.preventDefault();
+    try { await post(`/api/boards/${boardId}/update/`, { budget: e.target.budget.value }); toast('Budget saved.'); }
+    catch (err) { toast(err.message || 'Could not save that.'); }
+  });
+  $('[data-project-status]', drawer)?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target;
+    await post(`/api/boards/${boardId}/status/`, { rag: f.rag.value, status_note: f.status_note.value });
+    toast('Status updated.');
+  });
   $$('[data-board-select]', drawer).forEach(sel => sel.addEventListener('change', async () => {
     await post(`/api/boards/${boardId}/update/`, { [sel.dataset.boardSelect]: sel.value });
     toast('Saved.');

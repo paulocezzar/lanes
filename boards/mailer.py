@@ -171,9 +171,40 @@ def daily_digests(now=None, hour=7):
     return count
 
 
+def weekly_status_reports(now=None, hour=8):
+    """Monday from 08:00: each project board's status report to its owner, admins and watchers."""
+    from .models import Activity, Board, BoardMember, Watch
+    from .portfolio import health
+    if not enabled():
+        return 0
+    now = now or timezone.now()
+    local = timezone.localtime(now)
+    if local.weekday() != 0 or local.hour < hour:
+        return 0
+    week = local.date().isoformat()
+    sent = 0
+    for board in Board.objects.filter(is_project=True, is_archived=False).select_related("project_owner", "workspace"):
+        if Activity.objects.filter(board=board, verb="report_sent", data__week=week).exists():
+            continue
+        people = {m.user for m in BoardMember.objects.filter(board=board, role="admin").select_related("user")}
+        people |= {w.user for w in Watch.objects.filter(board=board).select_related("user")}
+        if board.project_owner:
+            people.add(board.project_owner)
+        h = health(board, now)
+        text, html = render("status_report", {"h": h, "board": board, "link": url(f"/b/{board.pk}/report/"),
+                                              "date": local.strftime("%A %-d %B")})
+        for u in people:
+            if u.is_active and u.email:
+                queue(u.email, f"{board.title}: {h['rag_label']} — weekly status", text, html, "status_report")
+        Activity.objects.create(board=board, actor=None, verb="report_sent", data={"to": len(people), "week": week})
+        sent += 1
+    return sent
+
+
 def run(now=None):
     """Called by the cron job."""
     n = notification_emails(now)
     d = daily_digests(now)
+    weekly_status_reports(now)
     s = flush()
     return n, d, s

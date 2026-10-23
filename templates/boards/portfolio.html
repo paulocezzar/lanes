@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Portfolio · Lanes{% endblock %}
+{% block content %}
+<main class="home pf">
+  <header class="pf-head">
+    <div>
+      <h1>Portfolio</h1>
+      <p class="muted">Every project you can see, with its status, progress, next milestone and budget.</p>
+    </div>
+    <div class="pf-actions">
+      <form method="get" class="pf-filter">
+        <select name="dept" onchange="this.form.submit()" aria-label="Department"><option value="">All departments</option>{% for d in depts %}<option value="{{ d.pk }}" {% if dept == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select>
+        {% if rag %}<input type="hidden" name="rag" value="{{ rag }}">{% endif %}
+      </form>
+      <button type="button" class="btn light sm" onclick="window.print()">Print / PDF</button>
+    </div>
+  </header>
+  <div class="pf-summary">
+    <a href="?{% if dept %}dept={{ dept }}&{% endif %}" class="pf-count all{% if not rag %} on{% endif %}"><b>{{ rows|length }}</b> projects</a>
+    <a href="?{% if dept %}dept={{ dept }}&{% endif %}rag=green" class="pf-count green{% if rag == 'green' %} on{% endif %}"><b>{{ counts.green }}</b> on track</a>
+    <a href="?{% if dept %}dept={{ dept }}&{% endif %}rag=amber" class="pf-count amber{% if rag == 'amber' %} on{% endif %}"><b>{{ counts.amber }}</b> at risk</a>
+    <a href="?{% if dept %}dept={{ dept }}&{% endif %}rag=red" class="pf-count red{% if rag == 'red' %} on{% endif %}"><b>{{ counts.red }}</b> off track</a>
+  </div>
+  {% if rows %}
+  <div class="pf-table-wrap">
+  <table class="pf-table">
+    <thead><tr><th>Project</th><th>Status</th><th>Progress</th><th>Next milestone</th><th class="num">Overdue</th><th>Finishes</th><th>Budget</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows %}<tr>
+      <td><a class="pf-name" href="{% url 'board' r.board.pk %}">{{ r.board.title }}</a><small>{{ r.board.workspace.name }}{% if r.board.project_owner %} · {{ r.board.project_owner.display_name }}{% endif %}</small></td>
+      <td><span class="rag rag-{{ r.rag }}">{{ r.rag_label }}</span>{% if r.auto %}<small class="muted" title="Worked out automatically">auto</small>{% endif %}
+        {% if r.board.status_note %}<div class="pf-note">“{{ r.board.status_note }}”</div>{% endif %}
+        {% if r.reasons %}<div class="pf-why">{{ r.reasons|join:" · " }}</div>{% endif %}</td>
+      <td><div class="pf-bar"><i style="width: {{ r.pct }}%"></i></div><small>{{ r.done }} of {{ r.total }} cards · {{ r.pct }}%</small></td>
+      <td>{% if r.next_ms %}◆ {{ r.next_ms.title }}<small>{{ r.next_ms.due_at|date:"D j M" }}</small>{% else %}<span class="muted">—</span>{% endif %}{% if r.late_ms %}<div class="pf-late">◆ {{ r.late_ms|length }} late</div>{% endif %}</td>
+      <td class="num{% if r.overdue %} pf-late{% endif %}">{{ r.overdue|length }}</td>
+      <td>{{ r.finish|date:"j M Y"|default:"—" }}</td>
+      <td>{% if r.budget %}<div class="pf-bar money{% if r.budget_pct >= 100 %} over{% elif r.budget_pct >= 90 %} warn{% endif %}"><i style="width: {% if r.budget_pct > 100 %}100{% else %}{{ r.budget_pct }}{% endif %}%"></i></div><small>£{{ r.spent|floatformat:"0g" }} of £{{ r.budget|floatformat:"0g" }} · {{ r.budget_pct }}%</small>{% elif r.spent %}<small>£{{ r.spent|floatformat:"0g" }} spent · no budget set</small>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="pf-links"><a href="{% url 'status_report' r.board.pk %}">Report</a> · <a href="{% url 'board_gantt' r.board.pk %}">Gantt</a></td>
+    </tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state"><h3>No projects yet</h3><p class="muted">Open any board → ⋯ Menu → <b>Project</b> and switch on “This board is a project”. It then appears here with its status, progress and budget.</p></div>
+  {% endif %}
+</main>
+{% endblock %}

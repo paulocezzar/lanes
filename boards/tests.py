@@ -3569,3 +3569,89 @@ class GanttTests(TestCase):
         empty = Board.objects.create(workspace=self.b.workspace, title="Empty")
         BoardMember.objects.create(board=empty, user=self.u, role="admin")
         self.assertEqual(self.client.get(f"/b/{empty.pk}/gantt/").status_code, 200)
+
+
+class PortfolioTests(TestCase):
+    def setUp(self):
+        from django.test import override_settings
+        self.o = override_settings(EMAIL_ENABLED=True, EMAIL_VIA="test",
+                                   EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+                                   SITE_URL="https://lanes.example")
+        self.o.enable(); self.addCleanup(self.o.disable)
+        self.u = User.objects.create_user("pf@x.com", "pw", first_name="Pat")
+        self.ws = Workspace.objects.create(name="Production")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.b = Board.objects.create(workspace=self.ws, title="Christmas", is_project=True,
+                                      status_updated_at=timezone.now())
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.l = List.objects.create(board=self.b, title="Plan")
+        self.client.force_login(self.u)
+
+    def j(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_auto_rag_rules_and_override(self):
+        from datetime import timedelta
+        from decimal import Decimal
+        from .models import CostItem
+        from .portfolio import health
+        now = timezone.now()
+        Card.objects.create(list=self.l, title="Fine", due_at=now + timedelta(days=3))
+        self.assertEqual(health(self.b)["rag"], "green")
+        Card.objects.create(list=self.l, title="Late", due_at=now - timedelta(days=1))
+        self.assertEqual(health(self.b)["rag"], "amber")
+        Card.objects.create(list=self.l, title="Launch", due_at=now - timedelta(days=1), is_milestone=True)
+        h = health(self.b)
+        self.assertEqual(h["rag"], "red")
+        self.assertIn("milestone overdue: Launch", h["reasons"])
+        Card.objects.filter(title__in=["Late", "Launch"]).update(is_complete=True)
+        self.b.budget = Decimal("100"); self.b.save()
+        CostItem.objects.create(board=self.b, description="Flour", amount=Decimal("95"), day=timezone.localdate())
+        h = health(self.b)
+        self.assertEqual((h["rag"], h["budget_pct"]), ("amber", 95))
+        CostItem.objects.create(board=self.b, description="Butter", amount=Decimal("10"), day=timezone.localdate())
+        self.assertEqual(health(self.b)["rag"], "red")
+        self.b.rag = "green"; self.b.save()
+        h = health(self.b)
+        self.assertEqual((h["rag"], h["auto_rag"]), ("green", "red"))
+
+    def test_labour_cost_from_time(self):
+        from decimal import Decimal
+        from .models import TimeEntry
+        from .portfolio import spend
+        self.u.hourly_rate = Decimal("12"); self.u.save()
+        c = Card.objects.create(list=self.l, title="Dough")
+        TimeEntry.objects.create(card=c, user=self.u, day=timezone.localdate(), minutes=90)
+        self.assertEqual(spend(self.b)[1], Decimal("18.00"))
+
+    def test_pages_status_api_and_settings(self):
+        r = self.client.get("/portfolio/")
+        self.assertContains(r, "Christmas")
+        self.assertContains(self.client.get(f"/b/{self.b.pk}/report/"), "Christmas")
+        self.assertEqual(self.j(f"/api/boards/{self.b.pk}/status/", {"rag": "amber", "status_note": "Short of butter"}).status_code, 200)
+        self.b.refresh_from_db()
+        self.assertEqual((self.b.rag, self.b.status_note), ("amber", "Short of butter"))
+        self.assertContains(self.client.get("/portfolio/?rag=amber"), "Short of butter")
+        self.assertNotContains(self.client.get("/portfolio/?rag=green"), "Short of butter")
+        # someone outside can't see it
+        other = User.objects.create_user("out@x.com", "pw")
+        self.client.force_login(other)
+        self.assertNotContains(self.client.get("/portfolio/"), "Christmas")
+        self.assertEqual(self.client.get(f"/b/{self.b.pk}/report/").status_code, 404)
+
+    def test_weekly_email_mondays_once(self):
+        from datetime import datetime
+        from django.core import mail
+        from . import mailer
+        tz = timezone.get_current_timezone()
+        tue = timezone.make_aware(datetime(2026, 11, 3, 9), tz)
+        mon = timezone.make_aware(datetime(2026, 11, 2, 9), tz)
+        early = timezone.make_aware(datetime(2026, 11, 2, 6), tz)
+        self.assertEqual(mailer.weekly_status_reports(tue), 0)
+        self.assertEqual(mailer.weekly_status_reports(early), 0)
+        self.assertEqual(mailer.weekly_status_reports(mon), 1)
+        self.assertEqual(mailer.weekly_status_reports(mon), 0)
+        mailer.flush()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Christmas", mail.outbox[0].subject)
+        self.assertIn("/b/%d/report/" % self.b.pk, mail.outbox[0].body)

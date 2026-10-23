@@ -455,6 +455,8 @@ class Activity(models.Model):
             "attachment_renamed": f"renamed an attachment to {d.get('name', '?')}",
             "dependency_added": f"made this card wait for {d.get('name', 'another card')}",
             "dependency_removed": "removed a dependency from this card",
+            "report_sent": f"sent the weekly status report to {d.get('to', 0)} people",
+            "status_updated": f"updated the project status: {d.get('rag', '')}{(' — ' + d['note']) if d.get('note') else ''}",
             "card_moved_board": f"moved this card here from {d.get('frm', '')} ({d.get('to', '')})",
             "card_moved_out": f"moved “{d.get('title', '')}” to {d.get('to', '')}",
             "card_deleted": f"deleted the card “{d.get('title', '')}”",
