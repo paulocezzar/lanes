@@ -3397,3 +3397,36 @@ class AgencyBoardSetupTests(TestCase):
         self.assertEqual((prep.list.title, prep.is_complete), ("Done", True))
         self.assertEqual(self.client.get(f"/b/{b.pk}/").status_code, 200)
         self.assertEqual(self.client.get(f"/b/{b.pk}/calendar/?d=2026-12-15").status_code, 200)
+
+
+class AgencyBoardRedoTests(TestCase):
+    def test_rebuild_to_pauls_layout(self):
+        from io import StringIO
+        from django.core.management import call_command
+        u = User.objects.create_user("ar@x.com", "pw", is_superuser=True)
+        ws = Workspace.objects.create(name="Bakery"); WorkspaceMember.objects.create(workspace=ws, user=u, role="admin")
+        self.client.force_login(u)
+        self.client.post(reverse("board_create"), {"workspace": ws.pk, "title": "Agency staff"})
+        b = Board.objects.get(title="Agency staff")
+        first = b.lists.order_by("position").first(); first.title = "Prep before they arrive"; first.save()
+        call_command("setup_agency_board", board=str(b.pk), stdout=StringIO())
+        call_command("redo_agency_board", board=str(b.pk), stdout=StringIO())
+        call_command("redo_agency_board", board=str(b.pk), stdout=StringIO())
+        live = lambda t: b.lists.get(title=t, is_archived=False).cards.filter(is_archived=False)
+        self.assertEqual(list(b.lists.filter(is_archived=False).order_by("position").values_list("title", flat=True)),
+                         ["Prep Checks", "1st Day", "Jobs", "People", "Shifts", "Done"])
+        self.assertEqual(list(live("Prep Checks").values_list("title", flat=True)),
+                         ["Induction pack ready", "Timesheet printed", "Shoes", "PPE and uniforms", "Rota for the week"])
+        self.assertEqual(live("1st Day").count(), 4)
+        self.assertEqual(live("Jobs").count(), 11)
+        self.assertEqual(live("People").count(), 1)
+        self.assertEqual(list(live("Shifts").values_list("is_template", flat=True)), [True])
+        plan = live("1st Day").get(title="Production Plan").checklists.get().items.count()
+        self.assertEqual(plan, 10)
+        self.assertEqual(Card.objects.filter(list__board=b, is_archived=True).count(), 25)   # old cards kept, archived
+        # finishing a job moves it to Done
+        job = live("Jobs").get(title="Mincemeat")
+        self.client.post(f"/api/cards/{job.pk}/update/", json.dumps({"is_complete": True}), content_type="application/json")
+        job.refresh_from_db()
+        self.assertEqual(job.list.title, "Done")
+        self.assertEqual(self.client.get(f"/b/{b.pk}/").status_code, 200)
