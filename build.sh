@@ -11,3 +11,4 @@ python manage.py add_example_cards
 python manage.py setup_agency_board
 python manage.py redo_agency_board
 python manage.py setup_production_plan
+python manage.py setup_christmas_production
