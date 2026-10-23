@@ -3353,3 +3353,47 @@ class AttachmentMenuTests(TestCase):
         modal = self.client.get(f"/cards/{card.pk}/")
         self.assertContains(modal, f'data-pop="att{f.pk}"')
         self.assertContains(modal, "?download=1")
+
+
+class AgencyBoardSetupTests(TestCase):
+    def test_fills_board_once_and_rules_work(self):
+        from io import StringIO
+        from django.core.management import call_command
+        from .models import Button, CustomField, Rule
+        u = User.objects.create_user("ag@x.com", "pw", is_superuser=True)
+        ws = Workspace.objects.create(name="Bakery"); WorkspaceMember.objects.create(workspace=ws, user=u, role="admin")
+        self.client.force_login(u)
+        self.client.post(reverse("board_create"), {"workspace": ws.pk, "title": "Agency staff"})
+        b = Board.objects.get(title="Agency staff")
+        b.lists.order_by("position").first().__class__.objects.filter(pk=b.lists.order_by("position").first().pk).update(title="Prep before they arrive")
+        call_command("setup_agency_board", board=str(b.pk), stdout=StringIO())
+        call_command("setup_agency_board", board=str(b.pk), stdout=StringIO())
+        b.refresh_from_db()
+        self.assertEqual((b.title, b.visibility), ("Agency staff — Christmas", "private"))
+        self.assertEqual(list(b.lists.filter(is_archived=False).order_by("position").values_list("title", flat=True)),
+                         ["Prep before they arrive", "Jobs", "People", "Shifts", "Done"])
+        counts = {l.title: l.cards.count() for l in b.lists.all()}
+        self.assertEqual((counts["Prep before they arrive"], counts["Jobs"], counts["People"], counts["Shifts"]), (8, 5, 1, 12))
+        self.assertEqual(CustomField.objects.filter(board=b).count(), 5)
+        self.assertEqual((Rule.objects.filter(board=b).count(), Button.objects.filter(board=b).count()), (4, 2))
+        # add a worker from the template → induction label; tick everything → comment
+        people = b.lists.get(title="People")
+        tpl = people.cards.get(is_template=True)
+        j = lambda url, d: self.client.post(url, json.dumps(d), content_type="application/json")
+        new_id = j(f"/api/lists/{people.pk}/from-template/", {"template_id": tpl.pk}).json()["card_id"]
+        card = Card.objects.get(pk=new_id)
+        self.assertEqual(card.checklists.count(), 1)
+        self.assertTrue(card.labels.filter(name="Induction").exists())
+        for it in card.checklists.get().items.all():
+            j(f"/api/items/{it.pk}/", {"is_done": True})
+        card.refresh_from_db()
+        self.assertFalse(card.labels.filter(name="Induction").exists())
+        self.assertTrue(card.comments.filter(body="Induction complete ✅").exists())
+        # finishing a prep card's checklist moves it to Done
+        prep = b.lists.get(title="Prep before they arrive").cards.first()
+        for it in prep.checklists.get().items.all():
+            j(f"/api/items/{it.pk}/", {"is_done": True})
+        prep.refresh_from_db()
+        self.assertEqual((prep.list.title, prep.is_complete), ("Done", True))
+        self.assertEqual(self.client.get(f"/b/{b.pk}/").status_code, 200)
+        self.assertEqual(self.client.get(f"/b/{b.pk}/calendar/?d=2026-12-15").status_code, 200)
