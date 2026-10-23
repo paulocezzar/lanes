@@ -3037,3 +3037,42 @@ class ErrorPageTests(TestCase):
         from django.template.loader import render_to_string
         html = render_to_string("500.html")
         self.assertIn("Something went wrong", html)
+
+
+class SetupMyWorkTests(TestCase):
+    def test_sets_up_personal_board_once(self):
+        from io import StringIO
+        from django.core.management import call_command
+        from .models import Rule, Schedule
+        u = User.objects.create_user("me@x.com", "pw", is_superuser=True)
+        ws = Workspace.objects.create(name="Dept")
+        WorkspaceMember.objects.create(workspace=ws, user=u, role="admin")
+        self.client.force_login(u)
+        self.client.post(reverse("board_create"), {"workspace": ws.pk, "title": "Paulo", "visibility": "private"})
+        b = Board.objects.get(title="Paulo")
+        call_command("setup_my_work", board=str(b.pk), stdout=StringIO())
+        self.assertEqual(list(b.lists.order_by("position").values_list("title", flat=True)),
+                         ["Inbox", "This week", "Today", "Waiting on", "Done"])
+        self.assertEqual(set(b.labels.exclude(name="").values_list("name", flat=True)),
+                         {"People", "Christmas", "Food safety", "Urgent", "Development", "Systems"})
+        self.assertEqual(b.labels.count(), 6)
+        self.assertEqual(Rule.objects.filter(board=b).count(), 3)
+        eow = Schedule.objects.get(board=b, title__startswith="EOW")
+        self.assertEqual(timezone.localtime(eow.next_run_at).weekday(), 4)
+        call_command("setup_my_work", board=str(b.pk), stdout=StringIO())        # second run changes nothing
+        self.assertEqual(Rule.objects.filter(board=b).count(), 3)
+        self.assertEqual(b.lists.count(), 5)
+        # the rules work: moving into Waiting on sets a due date; completing moves to Done
+        inbox = b.lists.get(title="Inbox"); waiting = b.lists.get(title="Waiting on")
+        c = Card.objects.create(list=inbox, title="Chase supplier")
+        j = lambda url, d: self.client.post(url, json.dumps(d), content_type="application/json")
+        j(f"/api/cards/{c.pk}/move/", {"list_id": waiting.pk})
+        c.refresh_from_db(); self.assertIsNotNone(c.due_at)
+        j(f"/api/cards/{c.pk}/update/", {"is_complete": True})
+        c.refresh_from_db(); self.assertEqual(c.list.title, "Done")
+        # the schedules run
+        from . import automation
+        Schedule.objects.filter(board=b).update(next_run_at=timezone.now() - timezone.timedelta(minutes=1))
+        automation.run_due_schedules()
+        self.assertTrue(Card.objects.filter(list__board=b, title="Plan the week").exists())
+        self.assertTrue(Card.objects.filter(list__board=b, title__startswith="EOW review", checklists__items__text="Send").exists())
