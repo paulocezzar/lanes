@@ -447,6 +447,13 @@ def board_gantt(request, board_id):
         if not months or months[-1]["key"] != (d.year, d.month):
             months.append({"key": (d.year, d.month), "label": d.strftime("%b %Y"), "n": 0})
         months[-1]["n"] += 1
+    for m in months:          # a short label when only a few days of the month are showing
+        w = m["n"] * col_w
+        y_, mo = m["key"]
+        if w < 40:
+            m["label"] = ""
+        elif w < 80:
+            m["label"] = date(y_, mo, 1).strftime("%b")
     crit_days = sum(r["days"] or 0 for r in rows if r.get("critical"))
     ctx.update({
         "zoom": zoom, "zooms": [("day", "Days"), ("week", "Weeks"), ("month", "Months")], "col_w": col_w,
