@@ -100,6 +100,8 @@ urlpatterns = [
     path("api/boards/<int:board_id>/update/", api.board_update),
     path("api/boards/<int:board_id>/status/", api.board_status),
     path("api/boards/<int:board_id>/costs/", api.board_costs),
+    path("api/boards/<int:board_id>/setup/", api.board_setup),
+    path("api/boards/<int:board_id>/setup/draft/", api.board_setup_draft),
     path("api/lists/<int:list_id>/", api.list_update),
     path("api/lists/<int:list_id>/move/", api.list_move),
     path("api/lists/<int:list_id>/copy/", api.list_copy),

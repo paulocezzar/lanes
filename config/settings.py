@@ -122,6 +122,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # AI features (inbox capture, suggest steps). Off unless a key is set.
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
+ANTHROPIC_DRAFT_MODEL = os.environ.get("ANTHROPIC_DRAFT_MODEL", "claude-sonnet-5-5")   # setting up boards
 
 # Shared secret the Render cron job sends to /internal/run-automations/.
 CRON_TOKEN = os.environ.get("CRON_TOKEN", "")

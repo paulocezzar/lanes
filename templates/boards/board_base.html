@@ -130,32 +130,58 @@
   {% include "boards/_inbox_panel.html" with inbox_html='<p class="muted small inbox-empty">Loading…</p>' %}
   <p class="muted small inbox-hint">Drag an item onto a list to turn it into a card.</p>
 </aside>
-<dialog id="product-dialog" class="dialog wide" aria-label="New card with amounts">
-  <form method="dialog" data-product-form>
-    <div class="dialog-head"><h3>New card with amounts</h3><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
-    <p class="muted small">Type what it's for and how many on the first line, then what it needs — one per line. Each line becomes something you can count off.</p>
-    <ul class="np-help muted small">
-      <li><b>1 x Chair</b> — this many for each one (200 guests → 200 chairs). Follows the amount if it changes.</li>
-      <li><b>30 kg Salad</b> — a total to count towards.</li>
-      <li><b>Setup:</b> — a line ending in “:” starts a section.</li>
-      <li><b>[x] …</b> — already done. A line with no number is a plain tick.</li>
-      <li>Before the first section, <b>Name: value</b> fills in a field (e.g. <b>Forecast: 180</b>, <b>Deadline: 6 Oct</b>, <b>Notes: …</b>).</li>
-    </ul>
-    <div class="np-grid">
-      <textarea name="text" rows="14" spellcheck="false" placeholder="Summer fair — 200 guests
-Forecast: 180
-Notes: numbers from last year plus 10%
+<dialog id="setup-dialog" class="dialog xwide" aria-label="Set up cards">
+  <form method="dialog" data-setup-form>
+    <div class="dialog-head"><h3>Set up cards</h3><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+    <div class="seg-tabs su-tabs" role="tablist">
+      <button type="button" class="{% if ai_enabled %}on{% endif %}" data-su-tab="ai" role="tab">✨ Describe or paste anything</button>
+      <button type="button" class="{% if not ai_enabled %}on{% endif %}" data-su-tab="type" role="tab">✎ Type it</button>
+    </div>
+    <section data-su-pane="ai" {% if not ai_enabled %}hidden{% endif %}>
+      {% if ai_enabled %}
+      <p class="muted small">Paste a spreadsheet, a list or an email — or just describe it. You can add screenshots too. Lanes drafts the cards; you check them before anything is made.</p>
+      <textarea name="source" rows="9" placeholder="e.g. Summer fair for 200 guests — we need a chair each, a table for every 8, 30 kg of salad, plates, and to book a band.
+
+…or paste rows from Excel, a supplier email, or a screenshot of another system."></textarea>
+      <div class="su-shots" data-su-shots></div>
+      <div class="su-ai-row">
+        <label class="btn light sm su-file">📷 Add screenshot<input type="file" accept="image/*" multiple hidden data-su-file></label>
+        <span class="muted small">or paste an image straight into the box</span>
+        <button type="button" class="btn primary" data-su-draft>Draft cards</button>
+      </div>
+      {% else %}
+      <p class="muted">AI isn't switched on for Lanes yet, so drafting isn't available. Use <b>Type it</b>.</p>
+      {% endif %}
+    </section>
+    <section data-su-pane="type" {% if ai_enabled %}hidden{% endif %}>
+      <details class="np-help-wrap"><summary class="muted small">How to type it</summary>
+      <ul class="np-help muted small">
+        <li>First line of a card: what it's for and how many — <b>Summer fair — 200 guests</b>. A <b>blank line</b> starts the next card.</li>
+        <li><b>1 x Chair</b> — this many for each one (200 guests → 200). <b>30 kg Salad</b> — a total.</li>
+        <li><b>Setup:</b> — a line ending in “:” starts a section. <b>[x] …</b> — already done. No number — a plain tick.</li>
+        <li>Under the first line, <b>Name: value</b> fills a field (<b>Deadline: 6 Oct</b>, <b>Notes: …</b>). <b># List name</b> puts the next cards in that list.</li>
+      </ul></details>
+      <div class="np-grid">
+        <textarea name="text" rows="16" spellcheck="false" placeholder="Summer fair — 200 guests
+Deadline: 4 Jul
 Setup:
 1 x Chair
 0.125 x Table
 Food:
 30 kg Salad
 1 x Plate
-Before the day:
-Book the band"></textarea>
-      <div class="np-preview" data-product-preview><p class="muted small">A preview appears here as you type.</p></div>
+Book the band
+
+Winter fair — 120 guests
+Setup:
+1 x Chair"></textarea>
+        <div class="np-preview" data-su-preview><p class="muted small">A preview appears here as you type.</p></div>
+      </div>
+    </section>
+    <div class="dialog-actions su-foot">
+      <label class="muted small">Add to <select name="list_id" data-su-list>{% for l in add_lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</select></label>
+      <button class="btn primary" value="create" data-su-create disabled>Create cards</button>
     </div>
-    <div class="dialog-actions"><button class="btn primary" value="create">Create card</button></div>
   </form>
 </dialog>
 <dialog id="ai-dialog" class="dialog wide">
@@ -184,6 +210,7 @@ Book the band"></textarea>
     <hr>
     {% if can_manage %}<button class="mitem" data-goto="settings" data-title="Settings">{% include "boards/_icon.html" with i="gear" %}<span>Settings</span></button>
     <button class="mitem" data-goto="background" data-title="Change background"><span class="mitem-swatch bg-{{ board.background }}"></span><span>Change background</span></button>{% endif %}
+    {% if can_edit %}<button class="mitem" data-setup-board>＃<span>Set up cards<small>Describe it, paste a list or a screenshot, or type it</small></span></button>{% endif %}
     <button class="mitem" data-goto="project" data-title="Project">📊<span>Project{% if board.is_project %}<small>{{ board.get_rag_display }}{% if board.status_note %} — {{ board.status_note|truncatechars:40 }}{% endif %}</small>{% else %}<small>Status, budget, Gantt, report</small>{% endif %}</span></button>
     {% if can_edit %}<button class="mitem" data-goto="fields" data-title="Custom fields">{% include "boards/_icon.html" with i="field" %}<span>Custom fields</span></button>{% endif %}
     <hr>

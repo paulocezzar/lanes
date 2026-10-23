@@ -26,14 +26,18 @@ def enabled():
     return bool(settings.ANTHROPIC_API_KEY)
 
 
-def _call(system, user_text, max_tokens=1500):
+def _call(system, user_text, max_tokens=1500, images=(), max_input=MAX_INPUT, timeout=45, model=None):
     if not enabled():
         raise AIUnavailable("AI isn't switched on for Lanes yet.")
+    content = user_text[:max_input]
+    if images:
+        content = [{"type": "image", "source": {"type": "base64", "media_type": mt, "data": data}}
+                   for mt, data in images] + [{"type": "text", "text": content}]
     body = json.dumps({
-        "model": settings.ANTHROPIC_MODEL,
+        "model": model or settings.ANTHROPIC_MODEL,
         "max_tokens": max_tokens,
         "system": system,
-        "messages": [{"role": "user", "content": user_text[:MAX_INPUT]}],
+        "messages": [{"role": "user", "content": content}],
     }).encode()
     req = urllib.request.Request(API_URL, data=body, method="POST", headers={
         "x-api-key": settings.ANTHROPIC_API_KEY,
@@ -41,7 +45,7 @@ def _call(system, user_text, max_tokens=1500):
         "content-type": "application/json",
     })
     try:
-        with urllib.request.urlopen(req, timeout=45) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read())
     except urllib.error.HTTPError as e:
         log.error("Claude API error %s: %s", e.code, e.read()[:500])
@@ -229,3 +233,39 @@ def write_description(title, notes):
     if not text:
         raise AIUnavailable("The AI didn't write anything. Try again.")
     return text[:6000]
+
+
+DRAFT_SYSTEM = """You set up boards in Lanes, a Trello-style app. The person pastes or describes what they need to
+track — a spreadsheet, a list, an email, a screenshot of another system, or a sentence — and you write the cards
+in Lanes' plain-text format so they can check it before anything is created.
+
+The format (follow it exactly; plain text only, no markdown, no commentary):
+- Cards are separated by ONE blank line. Never put blank lines inside a card.
+- Optional: a line "# List name" puts the cards after it into that list.
+- First line of a card: what it is, then " — ", then how many and a unit, e.g. "AF Christmas Cake — 430 cakes" or
+  "Summer fair — 200 guests". If there is no meaningful quantity, just the name.
+- Optional field lines straight after the first line, as "Name: value", e.g. "Forecast: 407", "Launch: 6 Oct 2026",
+  "Deadline: 12/11/2026", "Notes: one short sentence". Only use facts that are in the input.
+- Then sections: a line ending in ":" e.g. "Packaging:", "Make:", "Finish:", "Setup:". Group lines sensibly.
+- Lines in a section:
+  "1 x Thing" — this many for EACH one of the card's quantity (1 tin per cake, 6 cases per pack of 6).
+  "217.417 kg Thing" — a fixed total, with a unit (kg, g, l, ml, each, boxes, packs, sheets, trays, labels…).
+  "[x] …" — already done/made/ordered in the input.
+  A line with no number — a plain tick, e.g. "Artwork approved".
+- Prefer "N x" when the input shows a per-unit amount or the total divides evenly by the card's quantity
+  (e.g. 430 labels for 430 cakes -> "1 x Printed Product Label"; 12,000 cases for 2,000 packs -> "6 x Mince Pie Case").
+  Otherwise give the total.
+- Keep the names and numbers from the input exactly. Never invent quantities; if a quantity is unknown, write the
+  line without a number.
+- End each card with a short last section for the finishing work when it is obvious (e.g. "Finish:" with "1 x Pack").
+- At most 40 cards."""
+
+
+def draft_cards(text, images=()):
+    """Turn anything pasted (text and/or screenshots) into Lanes' card text format."""
+    prompt = (text or "").strip() or "Set up the cards shown in the image."
+    reply = _call(DRAFT_SYSTEM, f"Today is {date.today():%-d %B %Y}.\n\nWhat to set up:\n{prompt}",
+                  max_tokens=6000, images=images, max_input=40000, timeout=55,
+                  model=getattr(settings, "ANTHROPIC_DRAFT_MODEL", None))
+    reply = re.sub(r"^```[a-z]*\n|\n```$", "", reply.strip())
+    return reply.strip()

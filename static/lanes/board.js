@@ -345,44 +345,105 @@
       .catch(err => toast(err.message || 'Could not add those.'));
   });
 
-  // ---------- new product: name + what it needs → card with quantity checklists ----------
-  const productDlg = document.getElementById('product-dialog');
-  let productList = null, previewTimer = null;
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  function openProductDialog(listId) {
-    if (!productDlg) return;
-    productList = listId;
-    const f = productDlg.querySelector('form');
-    f.text.value = '';
-    productDlg.querySelector('[data-product-preview]').innerHTML = '<p class="muted small">A preview appears here as you type.</p>';
-    productDlg.showModal(); f.text.focus();
+  // ---------- set up cards: describe / paste anything (AI) or type several cards at once ----------
+  const setupDlg = document.getElementById('setup-dialog');
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let previewTimer = null, shots = [];
+  function suTab(name) {
+    $$('[data-su-tab]', setupDlg).forEach(b => b.classList.toggle('on', b.dataset.suTab === name));
+    $$('[data-su-pane]', setupDlg).forEach(p => { p.hidden = p.dataset.suPane !== name; });
+    $('[data-su-create]', setupDlg).hidden = name !== 'type';
+    (name === 'type' ? $('textarea[name=text]', setupDlg) : $('textarea[name=source]', setupDlg))?.focus();
   }
-  window.LanesNewProduct = openProductDialog;
-  productDlg?.querySelector('textarea').addEventListener('input', e => {
-    clearTimeout(previewTimer);
-    previewTimer = setTimeout(async () => {
-      const box = productDlg.querySelector('[data-product-preview]');
-      if (!e.target.value.trim()) { box.innerHTML = ''; return; }
-      try {
-        const p = await post(`/api/lists/${productList}/product/`, { text: e.target.value, preview: true });
-        box.innerHTML = `<h4>${esc(p.title)}${p.planned ? ` <span class="muted">· ${esc(p.planned)} ${esc(p.unit)}</span>` : ''}</h4>` +
-          (p.fields.length ? `<div class="np-fields">${p.fields.map(f => `<span><b>${esc(f.name)}</b> ${esc(f.value)}</span>`).join('')}</div>` : '') +
-          (p.notes ? `<p class="muted small">${esc(p.notes)}</p>` : '') +
-          p.sections.map(s => `<div class="np-sec"><b>${esc(s.title)}</b>${s.items.map(i =>
-            `<div class="np-item${i.done ? ' done' : ''}"><span>${i.done ? '✓ ' : ''}${esc(i.text)}</span><span class="muted">${
-              i.target ? `${i.done ? i.target : 0} / ${esc(i.target)} ${esc(i.unit)}${i.per && !i.unit ? ` <small>(${esc(i.per)} each)</small>` : ''}` : 'tick'}</span></div>`).join('')}</div>`).join('');
-      } catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; }
-    }, 250);
+  function openSetup(listId) {
+    if (!setupDlg) return;
+    const f = $('[data-setup-form]', setupDlg);
+    if (listId) f.list_id.value = listId;
+    setupDlg.showModal();
+    suTab($('[data-su-pane="ai"] textarea', setupDlg) && !f.text.value.trim() ? 'ai' : 'type');
+  }
+  function openProductDialog(listId) { openSetup(listId); }
+  window.LanesSetupCards = openSetup;
+  document.addEventListener('click', e => { if (e.target.closest('[data-setup-board]')) { $('[data-close-drawer]')?.click(); openSetup(); } });
+  setupDlg?.addEventListener('click', e => {
+    const tab = e.target.closest('[data-su-tab]');
+    if (tab) return suTab(tab.dataset.suTab);
+    const x = e.target.closest('[data-su-shot-x]');
+    if (x) { shots.splice(+x.dataset.suShotX, 1); renderShots(); }
   });
-  productDlg?.querySelector('form').addEventListener('submit', async e => {
+  // screenshots: shrink in the browser so they upload quickly
+  function shrink(file) {
+    return new Promise((ok, bad) => {
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        const url = c.toDataURL('image/jpeg', 0.85); URL.revokeObjectURL(img.src);
+        ok({ media_type: 'image/jpeg', data: url.split(',')[1], preview: url });
+      };
+      img.onerror = () => bad(new Error('That image could not be read.'));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  function renderShots() {
+    const box = $('[data-su-shots]', setupDlg);
+    if (box) box.innerHTML = shots.map((s, i) => `<span class="su-shot"><img src="${s.preview}" alt=""><button type="button" data-su-shot-x="${i}" aria-label="Remove">×</button></span>`).join('');
+  }
+  async function addShots(files) {
+    for (const f of files) {
+      if (!f.type.startsWith('image/')) continue;
+      if (shots.length >= 4) { toast('Up to 4 screenshots.'); break; }
+      try { shots.push(await shrink(f)); } catch (err) { toast(err.message); }
+    }
+    renderShots();
+  }
+  $('[data-su-file]', setupDlg)?.addEventListener('change', e => { addShots([...e.target.files]); e.target.value = ''; });
+  $('textarea[name=source]', setupDlg)?.addEventListener('paste', e => {
+    const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
+    if (files.length) { e.preventDefault(); addShots(files); }
+  });
+  $('[data-su-draft]', setupDlg)?.addEventListener('click', async e => {
+    const btn = e.currentTarget, f = $('[data-setup-form]', setupDlg);
+    const text = f.source.value.trim();
+    if (!text && !shots.length) return toast('Paste or describe what you want to set up first.');
+    btn.disabled = true; const label = btn.textContent; btn.textContent = 'Drafting… (up to a minute)';
+    try {
+      const d = await post(`/api/boards/${boardId}/setup/draft/`, { text, images: shots.map(s => ({ media_type: s.media_type, data: s.data })) });
+      f.text.value = d.text; suTab('type'); preview();
+      toast('Drafted — check it, change anything, then Create cards.');
+    } catch (err) { toast(err.message || 'Could not draft that.'); }
+    finally { btn.disabled = false; btn.textContent = label; }
+  });
+  async function preview() {
+    const f = $('[data-setup-form]', setupDlg), box = $('[data-su-preview]', setupDlg), go = $('[data-su-create]', setupDlg);
+    if (!f.text.value.trim()) { box.innerHTML = ''; go.disabled = true; go.textContent = 'Create cards'; return; }
+    try {
+      const d = await post(`/api/boards/${boardId}/setup/`, { text: f.text.value, preview: true });
+      go.disabled = !d.cards.length; go.textContent = `Create ${d.cards.length} card${d.cards.length === 1 ? '' : 's'}`;
+      box.innerHTML = d.cards.map(p => `<div class="su-card">${p.list ? `<div class="muted small">→ ${esc(p.list)}</div>` : ''}<h4>${esc(p.title)}${p.planned ? ` <span class="muted">· ${esc(p.planned)} ${esc(p.unit)}</span>` : ''}</h4>` +
+        (p.fields.length ? `<div class="np-fields">${p.fields.map(x => `<span><b>${esc(x.name)}</b> ${esc(x.value)}</span>`).join('')}</div>` : '') +
+        (p.notes ? `<p class="muted small">${esc(p.notes)}</p>` : '') +
+        p.sections.map(s => `<div class="np-sec"><b>${esc(s.title)}</b>${s.items.map(i =>
+          `<div class="np-item${i.done ? ' done' : ''}"><span>${i.done ? '✓ ' : ''}${esc(i.text)}</span><span class="muted">${
+            i.target ? `${i.done ? esc(i.target) : 0} / ${esc(i.target)} ${esc(i.unit)}` : i.per ? `${esc(i.per)} per one` : 'tick'}</span></div>`).join('')}</div>`).join('') + '</div>').join('');
+    } catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; go.disabled = true; }
+  }
+  $('textarea[name=text]', setupDlg)?.addEventListener('input', () => { clearTimeout(previewTimer); previewTimer = setTimeout(preview, 300); });
+  $('[data-setup-form]', setupDlg)?.addEventListener('submit', async e => {
     if (e.submitter?.value !== 'create') return;
     e.preventDefault();
+    const f = e.target, btn = e.submitter; btn.disabled = true;
     try {
-      const d = await post(`/api/lists/${productList}/product/`, { text: e.target.text.value });
-      productDlg.close(); forceRefresh();
-      if (d.card_id) openCard(d.card_id);
-    } catch (err) { toast(err.message || 'Could not create that.'); }
+      const d = await post(`/api/boards/${boardId}/setup/`, { text: f.text.value, list_id: +f.list_id.value });
+      setupDlg.close(); f.text.value = ''; if (f.source) f.source.value = ''; shots = []; renderShots();
+      $('[data-su-preview]', setupDlg).innerHTML = '';
+      toast(`Created ${d.created} card${d.created === 1 ? '' : 's'}.`);
+      forceRefresh();
+      if (d.created === 1) openCard(d.card_ids[0]);
+    } catch (err) { toast(err.message || 'Could not create those.'); btn.disabled = false; }
   });
+
   window.addEventListener('lanes:timer-stopped', () => { if (openCardId) openCard(openCardId); });
   async function openCard(id) {
     const res = await fetch(`/cards/${id}/`, { credentials: 'same-origin' });

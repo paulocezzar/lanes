@@ -211,6 +211,62 @@ def _typed_fields(card, board, p):
             "value": f"{var:+,.0f} ({var / float(fc) * 100:+.1f}%)" if var else "—"})
 
 
+def split_cards(text):
+    """Several cards in one box: a blank line (or '---') starts the next card; a line '# Name'
+    puts the cards after it into that list. Returns [(list name or None, card text)]."""
+    out, cur, lst = [], [], None
+
+    def flush():
+        if any(ln.strip() for ln in cur):
+            out.append((lst, "\n".join(cur).strip()))
+        cur.clear()
+
+    for raw in (text or "").splitlines():
+        line = raw.rstrip()
+        st = line.strip()
+        if st.startswith("#") and not st.startswith("#x") and len(st.lstrip("#").strip()) > 0 and st.lstrip("#")[:1] == " ":
+            flush()
+            lst = st.lstrip("#").strip()[:120]
+        elif not st or set(st) <= {"-", "—", "="}:
+            flush()
+        else:
+            cur.append(line)
+    flush()
+    return out
+
+
+def parse_many(text):
+    """[{list, title, planned, unit, sections, fields, notes}] — raises ValueError on an empty box."""
+    blocks = split_cards(text)
+    if not blocks:
+        raise ValueError("Type at least one card — what it's for on the first line, then what it needs.")
+    cards = []
+    for lst, block in blocks[:60]:
+        p = parse(block)
+        p["list"] = lst
+        p["text"] = block
+        cards.append(p)
+    return cards
+
+
+def create_many(board, text, user, default_list):
+    """Make every card in the box. Lists named with '# Name' are found (or made). Returns the cards."""
+    from .models import List
+    cards = []
+    with transaction.atomic():
+        lists = {lst.title.strip().lower(): lst for lst in board.lists.filter(is_archived=False)}
+        for p in parse_many(text):
+            target = default_list
+            if p["list"]:
+                key = p["list"].strip().lower()
+                if key not in lists:
+                    lists[key] = List.objects.create(board=board, title=p["list"],
+                                                     position=positions.end_position(board.lists.all()))
+                target = lists[key]
+            cards.append(create(target, p["text"], user))
+    return cards
+
+
 EXAMPLE = """Summer fair — 200 guests
 Forecast: 180
 Notes: numbers from last year plus 10%

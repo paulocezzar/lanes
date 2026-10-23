@@ -3892,3 +3892,58 @@ class AmountsAnyCardTests(TestCase):
         new = Card.objects.get(pk=r.json()["card_id"])
         self.assertEqual(int(ChecklistItem.objects.get(checklist__card=new, text="Chair").qty_target), 50)
         self.assertEqual(new.amount()["amount"], "50")
+
+
+class SetupCardsTests(TestCase):
+    TEXT = """Summer fair — 200 guests
+Deadline: 4 Jul 2026
+Setup:
+1 x Chair
+30 kg Salad
+
+Winter fair — 120 guests
+Setup:
+1 x Chair
+
+# Done
+Book venue"""
+
+    def setUp(self):
+        self.u = User.objects.create_user("su@x.com", "pw")
+        ws = Workspace.objects.create(name="E"); WorkspaceMember.objects.create(workspace=ws, user=self.u)
+        self.b = Board.objects.create(workspace=ws, title="Events")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.todo = List.objects.create(board=self.b, title="To do", position=1)
+        self.client.force_login(self.u)
+
+    def j(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_preview_then_create_many(self):
+        from .models import ChecklistItem
+        url = f"/api/boards/{self.b.pk}/setup/"
+        p = self.j(url, {"text": self.TEXT, "preview": True}).json()
+        self.assertEqual([c["title"] for c in p["cards"]], ["Summer fair", "Winter fair", "Book venue"])
+        self.assertEqual(p["cards"][2]["list"], "Done")
+        self.assertFalse(Card.objects.filter(list__board=self.b).exists())
+        r = self.j(url, {"text": self.TEXT, "list_id": self.todo.pk}).json()
+        self.assertEqual(r["created"], 3)
+        self.assertEqual(Card.objects.get(title="Summer fair").list, self.todo)
+        self.assertEqual(Card.objects.get(title="Book venue").list.title, "Done")       # list made from '# Done'
+        self.assertEqual(int(ChecklistItem.objects.get(checklist__card__title="Winter fair", text="Chair").qty_target), 120)
+        self.assertEqual(self.j(url, {"text": "   "}).status_code, 400)
+
+    def test_draft_uses_ai_and_validates(self):
+        from unittest import mock
+        from django.test import override_settings
+        url = f"/api/boards/{self.b.pk}/setup/draft/"
+        with override_settings(ANTHROPIC_API_KEY=""):
+            self.assertEqual(self.j(url, {"text": "a fair"}).status_code, 503)
+        with override_settings(ANTHROPIC_API_KEY="k"), mock.patch("boards.ai._call", return_value="```\n" + self.TEXT + "\n```") as call:
+            r = self.j(url, {"text": "Summer fair for 200", "images": [{"media_type": "image/png", "data": "iVBORw0KGgo="}]})
+            self.assertEqual(r.status_code, 200)
+            self.assertTrue(r.json()["text"].startswith("Summer fair — 200 guests"))
+            self.assertEqual(call.call_args.kwargs["images"], [("image/png", "iVBORw0KGgo=")])
+            self.assertEqual(self.j(url, {"text": "x", "images": [{"media_type": "text/html", "data": "x"}]}).status_code, 400)
+            self.assertEqual(self.j(url, {"text": ""}).status_code, 400)
+        self.assertContains(self.client.get(f"/b/{self.b.pk}/"), "data-setup-board")

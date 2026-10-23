@@ -1561,3 +1561,67 @@ def _budget_warning(board, before, actor):
                             text=f"{board.title} {word}: £{after:,.0f} of £{board.budget:,.0f}",
                             dedupe_key=f"budget:{board.pk}:{pct}:{board.budget}")
             break
+
+
+def _preview_card(p):
+    f = lambda v: None if v is None else ChecklistItem.fmt_qty(v)  # noqa: E731
+    return {"list": p.get("list"), "title": p["title"], "planned": f(p["planned"]), "unit": p["unit"],
+            "fields": [{"name": k, "value": v} for k, v in p["fields"]], "notes": p["notes"],
+            "sections": [{"title": s["title"], "items": [
+                {"text": i["text"], "target": f(i["target"]), "unit": i["unit"], "per": f(i["per_unit"]),
+                 "done": i["done"]} for i in s["items"]]} for s in p["sections"]]}
+
+
+@api
+def board_setup(request, board_id):
+    """'Set up cards': several cards typed in one box (blank line between). preview → what would be made."""
+    from . import products
+    board = get_object_or_404(Board, pk=board_id, is_archived=False)
+    _edit(board, request.user)
+    text = (request.data.get("text") or "")[:60000]
+    try:
+        parsed = products.parse_many(text)
+    except ValueError as e:
+        raise ApiError(str(e))
+    if request.data.get("preview"):
+        return {"cards": [_preview_card(p) for p in parsed]}
+    lst = board.lists.filter(pk=request.data.get("list_id") or 0, is_archived=False).first() \
+        or board.lists.filter(is_archived=False).order_by("position").first()
+    if not lst:
+        lst = List.objects.create(board=board, title="To do", position=positions.GAP)
+    cards = products.create_many(board, text, request.user, lst)
+    for c in cards:
+        log(board, request.user, "card_created", card=c, list=c.list.title)
+        automation.fire(c, Rule.ADDED, list_=c.list, actor=request.user)
+    from .signals import bump
+    bump(board.pk)
+    return {"ok": True, "created": len(cards), "card_ids": [c.pk for c in cards]}
+
+
+@api
+def board_setup_draft(request, board_id):
+    """AI: turn anything pasted (text, screenshots) into the card text, for the person to check."""
+    import base64
+    from . import ai
+    board = get_object_or_404(Board, pk=board_id, is_archived=False)
+    _edit(board, request.user)
+    text = str(request.data.get("text") or "")[:40000]
+    images = []
+    for img in (request.data.get("images") or [])[:4]:
+        mt, data = str(img.get("media_type", "")), str(img.get("data", ""))
+        if mt not in ("image/png", "image/jpeg", "image/gif", "image/webp"):
+            raise ApiError("Images need to be PNG, JPEG, GIF or WebP.")
+        if len(data) > 7_000_000:
+            raise ApiError("That image is too big — keep it under 5 MB.")
+        try:
+            base64.b64decode(data[:100] + "=" * (-len(data[:100]) % 4), validate=False)
+        except Exception:
+            raise ApiError("That image couldn't be read.")
+        images.append((mt, data))
+    if not text.strip() and not images:
+        raise ApiError("Paste or describe what you want to set up, or add a screenshot.")
+    try:
+        draft = ai.draft_cards(text, images)
+    except ai.AIUnavailable as e:
+        raise ApiError(str(e), 503)
+    return {"text": draft}
