@@ -3947,3 +3947,26 @@ Book venue"""
             self.assertEqual(self.j(url, {"text": "x", "images": [{"media_type": "text/html", "data": "x"}]}).status_code, 400)
             self.assertEqual(self.j(url, {"text": ""}).status_code, 400)
         self.assertContains(self.client.get(f"/b/{self.b.pk}/"), "data-setup-board")
+
+
+class DepartmentSettingsTests(TestCase):
+    def test_rename_and_delete_only_when_empty(self):
+        admin = User.objects.create_user("da@x.com", "pw")
+        other = User.objects.create_user("do@x.com", "pw")
+        ws = Workspace.objects.create(name="Christmas 2027")
+        WorkspaceMember.objects.create(workspace=ws, user=admin, role="admin")
+        WorkspaceMember.objects.create(workspace=ws, user=other, role="member")
+        url = f"/departments/{ws.pk}/settings/"
+        self.client.force_login(other)
+        self.assertEqual(self.client.post(url, {"name": "X"}).status_code, 404)
+        self.client.force_login(admin)
+        self.client.post(url, {"name": "Events"})
+        ws.refresh_from_db(); self.assertEqual(ws.name, "Events")
+        b = Board.objects.create(workspace=ws, title="Fair")
+        self.client.post(url, {"action": "delete", "confirm": "Events"})
+        self.assertTrue(Workspace.objects.filter(pk=ws.pk).exists())          # has a board
+        b.is_archived = True; b.save()
+        self.client.post(url, {"action": "delete", "confirm": "wrong"})
+        self.assertTrue(Workspace.objects.filter(pk=ws.pk).exists())          # name not typed
+        self.client.post(url, {"action": "delete", "confirm": "events"})
+        self.assertFalse(Workspace.objects.filter(pk=ws.pk).exists())

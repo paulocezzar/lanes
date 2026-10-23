@@ -75,6 +75,7 @@ urlpatterns = [
     path("api/lists/<int:list_id>/from-template/", api.card_from_template),
     path("departments/new/", views_people.workspace_create, name="workspace_create"),
     path("departments/<int:workspace_id>/people/", views_people.workspace_members, name="workspace_members"),
+    path("departments/<int:workspace_id>/settings/", views_people.workspace_settings, name="workspace_settings"),
     path("departments/<int:workspace_id>/people/add/", views_people.workspace_member_add, name="workspace_member_add"),
     path("departments/<int:workspace_id>/people/<int:user_id>/", views_people.workspace_member_update,
          name="workspace_member_update"),

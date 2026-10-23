@@ -1756,3 +1756,7 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .np-help-wrap summary { cursor: pointer; }
 @media (max-width: 700px) { .su-ai-row [data-su-draft] { margin-left: 0; width: 100%; } }
 .su-foot label { display: flex; align-items: center; gap: 6px; margin: 0; }
+.dept-settings .row-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin: 8px 0; }
+.dept-settings .row-form label { flex: 1 1 240px; }
+.danger-zone { margin-top: 14px; }
+.danger-zone summary { cursor: pointer; color: #c9372c; font-weight: 600; }

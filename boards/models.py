@@ -883,6 +883,8 @@ class AuditEvent(models.Model):
         "login": "signed in",
         "login_failed": "failed to sign in as {email}",
         "dept_created": "created the department {dept}",
+        "dept_renamed": "renamed the department {old} to {dept}",
+        "dept_deleted": "deleted the department {dept}",
         "dept_member_added": "added {name} to {dept}",
         "dept_account_created": "created an account for {name} in {dept}",
         "dept_member_removed": "removed {name} from {dept}",
