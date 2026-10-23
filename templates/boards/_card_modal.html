@@ -53,6 +53,8 @@
               <label>Due<input type="datetime-local" name="due_at" value="{% if card.due_at %}{{ card.due_at|date:'Y-m-d\TH:i' }}{% endif %}"></label>
               <label>Recurring<select name="recur">{% for k, v in card.RECUR %}<option value="{{ k }}" {% if k == card.recur %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
               <label>Due date reminder<select name="reminder_minutes">{% for k, v in card.REMINDERS %}<option value="{{ k }}" {% if k == card.reminder_minutes %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+              <label>Estimate (hours of work)<input type="number" name="estimate_hours" min="0" max="9999" step="0.25" value="{{ card.estimate_hours|default_if_none:'' }}" placeholder="e.g. 6"></label>
+              <label class="check-row"><input type="checkbox" name="is_milestone" {% if card.is_milestone %}checked{% endif %}> Milestone — a key date, shown as ◆ on the Gantt</label>
               <p class="muted small">Reminders go to the card's members and watchers. A recurring card makes the next one when you mark it complete.</p>
               <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-clear-dates>Remove</button></div>
             </form>
@@ -212,6 +214,20 @@
           </div>
           {% endfor %}
         </div>
+      </section>
+      {% endif %}
+
+      {% if waits_for or needed_by or can_edit and dep_choices %}
+      <section class="cm-section deps">
+        <h4 class="cm-h">⛓ Dependencies</h4>
+        {% if waits_for %}<div class="dep-row"><span class="dep-k">Waits for</span>{% for d in waits_for %}<span class="dep-chip{% if not d.depends_on.is_complete %} open{% endif %}"><a href="?card={{ d.depends_on.pk }}" data-card-open="{{ d.depends_on.pk }}">{% if d.depends_on.is_complete %}✓ {% endif %}{{ d.depends_on.title }}</a>{% if d.depends_on.due_at %}<small>{{ d.depends_on.due_at|date:"j M" }}</small>{% endif %}{% if d.lag_days %}<small>+{{ d.lag_days }}d</small>{% endif %}{% if can_edit %}<button type="button" class="x" data-dep-remove="{{ d.depends_on.pk }}" title="Stop waiting for this" aria-label="Remove">×</button>{% endif %}</span>{% endfor %}</div>{% endif %}
+        {% if needed_by %}<div class="dep-row"><span class="dep-k">Needed by</span>{% for d in needed_by %}<span class="dep-chip"><a href="?card={{ d.card.pk }}" data-card-open="{{ d.card.pk }}">{{ d.card.title }}</a>{% if d.card.due_at %}<small>{{ d.card.due_at|date:"j M" }}</small>{% endif %}</span>{% endfor %}</div>{% endif %}
+        {% if waits_for %}{% with blocked=waits_for|dictsort:"depends_on.is_complete"|first %}{% if blocked and not blocked.depends_on.is_complete %}<p class="dep-blocked">⏳ Blocked — waiting for {{ blocked.depends_on.title }}.</p>{% endif %}{% endwith %}{% endif %}
+        {% if can_edit and dep_choices %}<form class="dep-add" data-dep-add>
+          <select name="depends_on" aria-label="This card waits for"><option value="">This card waits for…</option>{% for c in dep_choices %}<option value="{{ c.pk }}">{{ c.list.title }} · {{ c.title|truncatechars:60 }}</option>{% endfor %}</select>
+          <label class="dep-lag">+ <input type="number" name="lag_days" value="0" min="-30" max="365" aria-label="Days gap"> days</label>
+          <button class="btn sm">Add</button>
+        </form>{% endif %}
       </section>
       {% endif %}
 

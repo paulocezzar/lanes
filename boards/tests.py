@@ -3488,3 +3488,84 @@ class ProductionPlanTests(TestCase):
         planned = sum(int(i.text.split(" — ")[1].split()[0].replace(",", "")) for i in ChecklistItem.objects.filter(
             checklist__card__in=self.plan_cards(), text__startswith="Mince pie case stamping", is_done=False))
         self.assertEqual(planned, 15000 - 5000 - 0)   # day 1's ticked 2,000 is already inside Made so far
+
+
+class GanttTests(TestCase):
+    def setUp(self):
+        from datetime import date as d
+        self.d = d
+        self.u = User.objects.create_user("gt@x.com", "pw")
+        ws = Workspace.objects.create(name="G"); WorkspaceMember.objects.create(workspace=ws, user=self.u)
+        self.b = Board.objects.create(workspace=ws, title="Project")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.l = List.objects.create(board=self.b, title="Plan")
+        self.client.force_login(self.u)
+
+    def card(self, title, start, end, **kw):
+        from datetime import datetime, time
+        due = timezone.make_aware(datetime.combine(end, time(17)))
+        return Card.objects.create(list=self.l, title=title, start_date=start, due_at=due, **kw)
+
+    def j(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_critical_path_and_float(self):
+        from .models import Dependency
+        from .schedule import analyse
+        d = self.d
+        a = self.card("A", d(2026, 11, 2), d(2026, 11, 4))
+        b = self.card("B", d(2026, 11, 5), d(2026, 11, 10))
+        c = self.card("C", d(2026, 11, 5), d(2026, 11, 6))      # Fri: spare Mon + Tue before D
+        dd = self.card("D", d(2026, 11, 11), d(2026, 11, 12))
+        for s, p in ((b, a), (c, a), (dd, b), (dd, c)):
+            Dependency.objects.create(card=s, depends_on=p)
+        res = analyse([a, b, c, dd], Dependency.objects.values_list("card_id", "depends_on_id", "lag_days"))
+        self.assertEqual({k for k, v in res.items() if v["critical"]}, {a.pk, b.pk, dd.pk})
+        self.assertEqual(res[c.pk]["float"], 2)
+
+    def test_dependency_api_pushes_later_tasks_and_blocks_cycles(self):
+        d = self.d
+        a = self.card("Dough", d(2026, 11, 2), d(2026, 11, 4))
+        b = self.card("Stamp", d(2026, 11, 3), d(2026, 11, 5))     # overlaps A
+        c = self.card("Freeze", d(2026, 11, 6), d(2026, 11, 6))
+        self.assertEqual(self.j(f"/api/cards/{c.pk}/dependencies/", {"depends_on": b.pk}).status_code, 200)
+        self.assertEqual(self.j(f"/api/cards/{b.pk}/dependencies/", {"depends_on": a.pk}).status_code, 200)
+        b.refresh_from_db(); c.refresh_from_db()
+        self.assertEqual((b.start_date, timezone.localtime(b.due_at).date()), (d(2026, 11, 5), d(2026, 11, 7)))  # pushed, same length
+        self.assertEqual(timezone.localtime(c.due_at).date(), d(2026, 11, 9))       # next one too, skipping the weekend
+        r = self.j(f"/api/cards/{a.pk}/dependencies/", {"depends_on": c.pk})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("circle", r.json()["error"])
+        # A slips two days: everything after moves
+        self.j(f"/api/cards/{a.pk}/update/", {"due_at": "2026-11-06T17:00"})
+        b.refresh_from_db(); c.refresh_from_db()
+        self.assertEqual(b.start_date, d(2026, 11, 9))                               # Monday after Friday
+        self.assertEqual(timezone.localtime(c.due_at).date(), d(2026, 11, 12))
+        # remove a link
+        self.j(f"/api/cards/{c.pk}/dependencies/", {"remove": b.pk})
+        self.assertFalse(c.dependencies.exists())
+
+    def test_milestone_estimate_and_page(self):
+        d = self.d
+        a = self.card("Kickoff", None, d(2026, 11, 2))
+        self.j(f"/api/cards/{a.pk}/update/", {"is_milestone": True, "estimate_hours": "6.5"})
+        a.refresh_from_db()
+        self.assertTrue(a.is_milestone)
+        self.assertEqual(float(a.estimate_hours), 6.5)
+        self.assertEqual(self.j(f"/api/cards/{a.pk}/update/", {"estimate_hours": "lots"}).status_code, 400)
+        b = self.card("Build", d(2026, 11, 3), d(2026, 11, 9))
+        self.j(f"/api/cards/{b.pk}/dependencies/", {"depends_on": a.pk})
+        page = self.client.get(f"/b/{self.b.pk}/gantt/?z=day")
+        self.assertContains(page, 'class="gt-ms')
+        self.assertContains(page, 'class="gt-arrow')
+        self.assertContains(page, "Finishes")
+        self.assertContains(page, 'data-gt-bar="%d"' % b.pk)
+        for z in ("week", "month"):
+            self.assertEqual(self.client.get(f"/b/{self.b.pk}/gantt/?z={z}").status_code, 200)
+        modal = self.client.get(f"/cards/{b.pk}/")
+        self.assertContains(modal, "Waits for")
+        self.assertContains(modal, "Kickoff")
+        # empty board still renders
+        empty = Board.objects.create(workspace=self.b.workspace, title="Empty")
+        BoardMember.objects.create(board=empty, user=self.u, role="admin")
+        self.assertEqual(self.client.get(f"/b/{empty.pk}/gantt/").status_code, 200)

@@ -1,0 +1,70 @@
+{% extends "boards/board_base.html" %}
+{% load static %}
+{% block board_body %}
+<div class="view-wrap gantt-view" data-gantt data-lo="{{ lo|date:'Y-m-d' }}" data-col-w="{{ col_w }}" data-can-edit="{{ can_edit|yesno:'1,0' }}">
+  <div class="gt-shell">
+    <div class="gt-toolbar">
+      <div class="cal-nav">
+        <a class="btn light sm" href="?z={{ zoom }}&from={{ prev }}" aria-label="Earlier">‹</a>
+        <a class="btn light sm" href="?z={{ zoom }}">Fit</a>
+        <a class="btn light sm" href="?z={{ zoom }}&from={{ next }}" aria-label="Later">›</a>
+      </div>
+      <div class="seg">{% for k, v in zooms %}<a class="btn light sm{% if k == zoom %} on{% endif %}" href="?z={{ k }}">{{ v }}</a>{% endfor %}</div>
+      <label class="gt-toggle"><input type="checkbox" data-gt-critical checked> Critical path</label>
+      <span class="gt-stats">
+        {% if project_end %}<span>Finishes <b>{{ project_end|date:"D j M" }}</b></span>{% endif %}
+        <span><i class="gt-key crit"></i>{{ critical_count }} critical</span>
+        {% if late_count %}<span class="gt-warn">⚠ {{ late_count }} start{{ late_count|pluralize:"s," }} before what {{ late_count|pluralize:"it waits,they wait" }} for</span>{% endif %}
+        {% if undated %}<span class="muted">{{ undated }} not scheduled</span>{% endif %}
+      </span>
+      <button type="button" class="btn light sm" data-gt-print>Print / PDF</button>
+    </div>
+    {% if can_edit %}<p class="gt-help muted small">Drag a bar to move it, its ends to change dates. Drag the ● at a bar's end onto another bar to make that one wait for it. Click an arrow to remove the link. Later tasks move back automatically when one runs late.</p>{% endif %}
+    <div class="gt-scroll">
+      <div class="gt-grid" style="--row: {{ row_h }}px; --colw: {{ col_w }}px;">
+        <div class="gt-left">
+          <div class="gt-head-left"><span>Task</span><span>Owner</span><span>Start</span><span>Due</span><span class="num">Days</span><span class="num">%</span></div>
+          {% for r in rows %}{% if r.group %}
+          <div class="gt-lrow gt-group">{{ r.group }}</div>
+          {% else %}
+          <div class="gt-lrow{% if r.critical %} crit{% endif %}{% if r.card.is_complete %} done{% endif %}" data-row-card="{{ r.card.pk }}">
+            <a href="?card={{ r.card.pk }}" data-card-open="{{ r.card.pk }}" class="gt-title" title="{{ r.card.title }}">{% if r.milestone %}◆ {% endif %}{{ r.card.title }}</a>
+            <span class="gt-owners">{% for u in r.owners %}<span class="avatar xs" style="--h:{{ u.avatar_hue }}" title="{{ u.display_name }}">{{ u.initials }}</span>{% endfor %}</span>
+            <span>{{ r.start|date:"j M"|default:"—" }}</span>
+            <span>{{ r.end|date:"j M"|default:"—" }}</span>
+            <span class="num">{{ r.days|default:"" }}</span>
+            <span class="num">{{ r.pct }}</span>
+          </div>
+          {% endif %}{% endfor %}
+        </div>
+        <div class="gt-right" style="width: {{ chart_w }}px">
+          <div class="gt-head-right">
+            <div class="gt-months">{% for m in months %}<span style="width: {% widthratio m.n 1 col_w %}px">{{ m.label }}</span>{% endfor %}</div>
+            <div class="gt-days">{% for d in days %}<span class="{% if d.weekday >= 5 %}we{% endif %}{% if d.weekday == 0 %} mon{% endif %}">{% if zoom == "day" %}{{ d|date:"D"|slice:":1" }}<b>{{ d.day }}</b>{% elif zoom == "week" and d.weekday == 0 %}<b>{{ d.day }}</b>{% elif zoom == "month" and d.day == 1 %}<b>1</b>{% endif %}</span>{% endfor %}</div>
+          </div>
+          <div class="gt-body" style="height: {{ chart_h }}px">
+            <div class="gt-cols">{% for d in days %}<i class="{% if d.weekday >= 5 %}we{% endif %}{% if d.weekday == 0 %} mon{% endif %}"></i>{% endfor %}</div>
+            {% for r in rows %}{% if r.group %}<div class="gt-band" style="top: {{ r.y }}px"></div>{% endif %}{% endfor %}
+            {% if today_x is not None %}<div class="gt-today" style="left: {{ today_x }}px" title="Today"></div>{% endif %}
+            <svg class="gt-arrows" width="{{ chart_w }}" height="{{ chart_h }}" aria-hidden="true">
+              <defs><marker id="gt-ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="context-stroke"/></marker></defs>
+              {% for a in arrows %}<path d="{{ a.d }}" class="gt-arrow{% if a.critical %} crit{% endif %}{% if a.late %} late{% endif %}" marker-end="url(#gt-ah)" data-dep-card="{{ a.card }}" data-dep-on="{{ a.dep }}"/>{% endfor %}
+            </svg>
+            {% for r in rows %}{% if r.x is not None and r.visible %}
+            {% if r.milestone %}
+            <div class="gt-ms{% if r.critical %} crit{% endif %}{% if r.card.is_complete %} done{% endif %}" style="top: {{ r.y }}px; left: {{ r.x }}px" data-gt-bar="{{ r.card.pk }}" data-start="{{ r.start|date:'Y-m-d' }}" data-end="{{ r.end|date:'Y-m-d' }}" data-ms="1" title="◆ {{ r.card.title }} — {{ r.end|date:'D j M' }}"><i></i><span>{{ r.card.title }}</span>{% if can_edit %}<b class="gt-dot" data-gt-link></b>{% endif %}</div>
+            {% else %}
+            <div class="gt-bar{% if r.critical %} crit{% endif %}{% if r.late %} late{% endif %}{% if r.card.is_complete %} done{% endif %}" style="top: {{ r.y }}px; left: {{ r.x }}px; width: {{ r.w }}px" data-gt-bar="{{ r.card.pk }}" data-start="{{ r.start|date:'Y-m-d' }}" data-end="{{ r.end|date:'Y-m-d' }}" title="{{ r.card.title }} — {{ r.start|date:'j M' }} to {{ r.end|date:'j M' }}{% if r.float is not None and r.float > 0 %} · {{ r.float }} day{{ r.float|pluralize }} spare{% endif %}">
+              <i class="gt-fill" style="width: {{ r.pct }}%"></i><span>{{ r.card.title }}</span>
+              {% if can_edit %}<b class="gt-h l" data-gt-h="l"></b><b class="gt-h r" data-gt-h="r"></b><b class="gt-dot" data-gt-link></b>{% endif %}
+            </div>
+            {% endif %}
+            {% endif %}{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'lanes/gantt.js' %}"></script>{% endblock %}

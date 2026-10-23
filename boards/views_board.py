@@ -367,3 +367,98 @@ def board_map(request, board_id=None):
         "location_field": board.custom_fields.filter(kind=CustomField.LOCATION).first() if board else None,
     })
     return render(request, "boards/view_map.html", ctx)
+
+
+@login_required
+def board_gantt(request, board_id):
+    """Gantt chart: task table + bars, finish-to-start arrows, milestones, critical path."""
+    from .models import Dependency
+    from .schedule import analyse, board_cards, span
+    board, ctx = board_context(request, board_id, "gantt")
+    today = timezone.localdate()
+    zooms = {"day": 34, "week": 16, "month": 6}
+    zoom = request.GET.get("z") if request.GET.get("z") in zooms else "week"
+    col_w = zooms[zoom]
+    cards = list(board_cards(board).order_by("list__position", "position"))
+    deps = list(Dependency.objects.filter(card__in=cards).values_list("card_id", "depends_on_id", "lag_days"))
+    info = analyse(cards, deps)
+    dated = [v for v in info.values()]
+    if dated:
+        lo = min(v["start"] for v in dated) - timedelta(days=3)
+        hi = max(v["end"] for v in dated) + timedelta(days=10)
+    else:
+        lo, hi = today - timedelta(days=3), today + timedelta(days=60)
+    lo, hi = min(lo, today - timedelta(days=3)), max(hi, today + timedelta(days=14))
+    try:
+        lo = date.fromisoformat(request.GET["from"])
+    except (KeyError, ValueError):
+        pass
+    if zoom != "day":
+        lo -= timedelta(days=lo.weekday())
+    span_days = max((hi - lo).days + 1, 42 if zoom != "month" else 120)
+    days = [lo + timedelta(days=i) for i in range(span_days)]
+    ROW = 36
+
+    rows, y, pos = [], 0, {}
+    by_list = OrderedDict()
+    for c in cards:
+        by_list.setdefault(c.list, []).append(c)
+    for lst, items in by_list.items():
+        rows.append({"group": lst.title, "y": y})
+        y += ROW
+        items.sort(key=lambda c: (info[c.pk]["start"] if c.pk in info else date.max, c.position))
+        for c in items:
+            i = info.get(c.pk)
+            total = done = 0
+            for cl in c.checklists.all():
+                for it in cl.items.all():
+                    total += 1
+                    done += it.is_done
+            prog = c.progress() if hasattr(c, "progress") else None
+            pct = 100 if c.is_complete else (prog["pct"] if prog else (round(100 * done / total) if total else 0))
+            row = {"card": c, "y": y, "pct": pct, "owners": list(c.members.all())[:3],
+                   "start": i["start"] if i else None, "end": i["end"] if i else None,
+                   "days": ((i["end"] - i["start"]).days + 1) if i else None,
+                   "critical": bool(i and i["critical"]), "late": bool(i and i["late"]),
+                   "float": i["float"] if i else None, "milestone": c.is_milestone}
+            if i:
+                x = (i["start"] - lo).days * col_w
+                w = ((i["end"] - i["start"]).days + 1) * col_w
+                row.update(x=x, w=w, visible=i["end"] >= lo and i["start"] <= days[-1])
+                pos[c.pk] = (x, w, y + ROW // 2)
+            rows.append(row)
+            y += ROW
+    arrows = []
+    for cid, pid, lag in deps:
+        if cid in pos and pid in pos:
+            px, pw, py = pos[pid]
+            sx, _, sy = pos[cid]
+            x1, x2 = px + pw, sx
+            if x2 - x1 >= 16:
+                mid = x1 + 8
+                d = f"M{x1},{py} H{mid} V{sy} H{x2 - 2}"
+            else:
+                drop = sy - (ROW // 2) if sy > py else sy + (ROW // 2)
+                d = f"M{x1},{py} H{x1 + 8} V{drop} H{x2 - 10} V{sy} H{x2 - 2}"
+            crit = info[cid]["critical"] and info[pid]["critical"]
+            arrows.append({"d": d, "critical": crit, "late": info[cid]["late"], "card": cid, "dep": pid})
+    months = []
+    for d in days:
+        if not months or months[-1]["key"] != (d.year, d.month):
+            months.append({"key": (d.year, d.month), "label": d.strftime("%b %Y"), "n": 0})
+        months[-1]["n"] += 1
+    crit_days = sum(r["days"] or 0 for r in rows if r.get("critical"))
+    ctx.update({
+        "zoom": zoom, "zooms": [("day", "Days"), ("week", "Weeks"), ("month", "Months")], "col_w": col_w,
+        "days": days, "months": months, "rows": rows, "arrows": arrows, "row_h": ROW,
+        "chart_w": len(days) * col_w, "chart_h": y, "lo": lo,
+        "today_x": (today - lo).days * col_w + col_w // 2 if lo <= today <= days[-1] else None,
+        "critical_count": sum(1 for r in rows if r.get("critical")),
+        "late_count": sum(1 for r in rows if r.get("late")),
+        "project_end": max((v["end"] for v in dated), default=None),
+        "undated": sum(1 for r in rows if "card" in r and not r["start"]),
+        "dep_count": len(deps), "crit_days": crit_days,
+        "prev": (lo - timedelta(days=28 if zoom != "month" else 90)).isoformat(),
+        "next": (lo + timedelta(days=28 if zoom != "month" else 90)).isoformat(),
+    })
+    return render(request, "boards/view_gantt.html", ctx)

@@ -331,6 +331,7 @@
   let openCardId = null;
   let openPop = null;
 
+  window.LanesOpenCard = id => openCard(id);
   async function openCard(id) {
     const res = await fetch(`/cards/${id}/`, { credentials: 'same-origin' });
     if (!res.ok) { toast('That card could not be opened.'); return; }
@@ -575,6 +576,8 @@
     if (tplBtn) return cardPost('update', { is_template: tplBtn.dataset.templateToggle === '1' });
     const cover = t.closest('[data-cover]');
     if (cover) return post(`/api/attachments/${cover.dataset.cover}/`, { cover: cover.dataset.on === '1' }).then(applyCard);
+    const depX = t.closest('[data-dep-remove]');
+    if (depX) return cardPost('dependencies', { remove: +depX.dataset.depRemove });
     const attC = t.closest('[data-att-comment]');
     if (attC) {
       hidePops();
@@ -622,6 +625,12 @@
 
   dialogBody.addEventListener('submit', e => {
     const f = e.target;
+    if (f.matches('[data-dep-add]')) {
+      e.preventDefault();
+      if (!f.depends_on.value) return;
+      return cardPost('dependencies', { depends_on: +f.depends_on.value, lag_days: +f.lag_days.value || 0 })
+        .catch(err => toast(err.message || 'Could not add that.'));
+    }
     if (f.matches('[data-att-edit]')) {
       e.preventDefault();
       const data = { name: f.name.value };
@@ -637,7 +646,9 @@
       e.preventDefault();
       hidePops();
       return cardPost('update', { due_at: f.due_at.value, start_date: f.start_date.value,
-                                  recur: f.recur.value, reminder_minutes: +f.reminder_minutes.value });
+                                  recur: f.recur.value, reminder_minutes: +f.reminder_minutes.value,
+                                  estimate_hours: f.estimate_hours ? f.estimate_hours.value : '',
+                                  is_milestone: f.is_milestone ? f.is_milestone.checked : false });
     }
     if (f.matches('[data-checklist-new]')) {
       e.preventDefault();

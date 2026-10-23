@@ -43,6 +43,8 @@ class User(AbstractUser):
                    ("daily", "Once a day — a morning summary"), ("off", "Never — just the bell in Lanes")]
     ical_token = models.CharField(max_length=40, blank=True, db_index=True)   # private calendar-feed link
     recent_boards = models.JSONField(default=list, blank=True)   # board ids, most recent first
+    capacity_hours = models.DecimalField(max_digits=5, decimal_places=2, default=37.5)   # working hours a week
+    hourly_rate = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)  # for labour cost
     colourblind = models.BooleanField(default=False)       # patterns on labels as well as colour
     only_unread = models.BooleanField(default=False)       # notifications panel: hide read ones
     email_notifications = models.CharField(max_length=10, choices=EMAIL_PREFS, default="instant")

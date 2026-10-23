@@ -11,6 +11,7 @@ VIEW_TABS = [
     ("calendar", "Calendar", "board_calendar"),
     ("table", "Table", "board_table"),
     ("timeline", "Timeline", "board_timeline"),
+    ("gantt", "Gantt", "board_gantt"),
     ("dashboard", "Dashboard", "board_dashboard"),
     ("map", "Map", "board_map"),
 ]

@@ -247,6 +247,16 @@ def card_update(request, card_id):
                 fire_after.append(Rule.DUE_REMOVED)
     if "start_date" in d:
         card.start_date = parse_date(d["start_date"]) if d["start_date"] else None
+    if "is_milestone" in d:
+        card.is_milestone = bool(d["is_milestone"])
+    if "estimate_hours" in d:
+        try:
+            est = round(float(d["estimate_hours"]), 2) if str(d["estimate_hours"]).strip() != "" else None
+        except (TypeError, ValueError):
+            raise ApiError("The estimate needs to be a number of hours.")
+        if est is not None and not (0 <= est <= 9999):
+            raise ApiError("The estimate needs to be between 0 and 9,999 hours.")
+        card.estimate_hours = est
     if "recur" in d and d["recur"] in dict(Card.RECUR):
         card.recur = d["recur"]
     if "reminder_minutes" in d:
@@ -282,6 +292,12 @@ def card_update(request, card_id):
     was_complete = Card.objects.filter(pk=card.pk).values_list("is_complete", flat=True).first()
     just_completed = "is_complete" in d and card.is_complete and not was_complete
     card.save()
+    pushed = []
+    if "due_at" in d or "start_date" in d or "is_milestone" in d:
+        from .schedule import push_dependants
+        pushed = push_dependants(card)
+        for c in pushed:
+            log(board, user, "due_set", card=c, due=timezone.localtime(c.due_at).strftime("%-d %b %Y, %H:%M"))
     for trig in fire_after:
         automation.fire(card, trig, actor=user)
     if "is_complete" in d and was_complete and not card.is_complete:
@@ -1191,3 +1207,35 @@ def editable_boards(request):
                     "can_edit": permissions.can_edit(b, request.user), "bg": b.background})
     out.sort(key=lambda b: (not b["starred"], b["dept"].lower(), b["title"].lower()))
     return J({"boards": out})
+
+
+@api
+def card_dependencies(request, card_id):
+    """Make this card wait for another (finish-to-start), or stop waiting."""
+    from .models import Dependency
+    from .schedule import push_dependants, would_cycle
+    card = _card(request, card_id)
+    board = card.list.board
+    _edit(board, request.user)
+    d = request.data
+    if d.get("remove"):
+        Dependency.objects.filter(card=card, depends_on_id=d["remove"]).delete()
+        log(board, request.user, "dependency_removed", card=card)
+    else:
+        other = Card.objects.filter(pk=d.get("depends_on") or 0, list__board=board, is_archived=False).first()
+        if not other:
+            raise ApiError("Pick a card on this board.")
+        if would_cycle(card, other):
+            raise ApiError(f"“{other.title}” already waits for this card, so that would go round in a circle.")
+        try:
+            lag = max(-30, min(int(d.get("lag_days") or 0), 365))
+        except (TypeError, ValueError):
+            lag = 0
+        Dependency.objects.update_or_create(card=card, depends_on=other, defaults={"lag_days": lag})
+        log(board, request.user, "dependency_added", card=card, name=other.title)
+        moved = push_dependants(other)
+        for c in moved:
+            log(board, request.user, "due_set", card=c, due=timezone.localtime(c.due_at).strftime("%-d %b %Y, %H:%M"))
+    from .signals import bump
+    bump(board.pk)
+    return card_response(card.pk, request)

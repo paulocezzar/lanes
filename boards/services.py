@@ -109,6 +109,11 @@ def render_modal(card, request):
         "move_tree": _move_tree(card, board, user) if permissions.can_edit(board, user) else None,
         "recent_board_links": [{"url": f"{settings.SITE_URL}/b/{b.pk}/", "title": b.title} for b in
                                permissions.visible_boards(user).filter(pk__in=(user.recent_boards or [])[:6])],
+        "waits_for": card.dependencies.select_related("depends_on").filter(depends_on__is_archived=False),
+        "needed_by": card.dependants.select_related("card").filter(card__is_archived=False),
+        "dep_choices": (Card.objects.filter(list__board=board, is_archived=False, is_template=False, list__is_archived=False)
+                        .exclude(pk=card.pk).order_by("list__position", "position").select_related("list")[:300]
+                        if can_edit else []),
         "copyable_checklists": (Checklist.objects.filter(card__list__board=board, card__is_archived=False)
                                 .exclude(card=card).select_related("card").order_by("card__title", "title")[:60]
                                 if can_edit else []),

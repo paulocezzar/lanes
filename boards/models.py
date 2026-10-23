@@ -102,6 +102,14 @@ class Board(models.Model):
     member_permission = models.CharField(max_length=10, choices=MEMBER_PERMS, default="admins")
     show_complete = models.BooleanField(default=True)    # ✓ complete status on card fronts
     covers_enabled = models.BooleanField(default=True)   # show image/colour covers on card fronts
+    # project management
+    RAG = [("auto", "Automatic"), ("green", "On track"), ("amber", "At risk"), ("red", "Off track")]
+    is_project = models.BooleanField(default=False)      # shows on the Portfolio page
+    rag = models.CharField(max_length=6, choices=RAG, default="auto")
+    status_note = models.CharField(max_length=300, blank=True)
+    status_updated_at = models.DateTimeField(null=True, blank=True)
+    project_owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    budget = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
         ordering = ["title"]
@@ -186,6 +194,8 @@ class Card(models.Model):
     is_complete = models.BooleanField(default=False)
     is_archived = models.BooleanField(default=False)
     is_template = models.BooleanField(default=False)
+    is_milestone = models.BooleanField(default=False)      # a diamond on the Gantt, no duration
+    estimate_hours = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     cover = models.ForeignKey("Attachment", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     cover_colour = models.CharField(max_length=10, blank=True)      # colour cover when there's no image
     cover_full = models.BooleanField(default=False)    # cover fills the whole card front, title on top
@@ -443,6 +453,8 @@ class Activity(models.Model):
             "mirror_added": f"mirrored a card here from {d.get('source', '')} ({d.get('list', '')})",
             "attachment_added": f"attached {d.get('name', 'a file')}",
             "attachment_renamed": f"renamed an attachment to {d.get('name', '?')}",
+            "dependency_added": f"made this card wait for {d.get('name', 'another card')}",
+            "dependency_removed": "removed a dependency from this card",
             "card_moved_board": f"moved this card here from {d.get('frm', '')} ({d.get('to', '')})",
             "card_moved_out": f"moved “{d.get('title', '')}” to {d.get('to', '')}",
             "card_deleted": f"deleted the card “{d.get('title', '')}”",
@@ -912,3 +924,45 @@ class OutgoingEmail(models.Model):
     class Meta:
         ordering = ["created_at"]
         indexes = [models.Index(fields=["sent_at", "created_at"])]
+
+
+class Dependency(models.Model):
+    """`card` can't start until `depends_on` is finished (finish-to-start), plus `lag_days`."""
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="dependencies")
+    depends_on = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="dependants")
+    lag_days = models.SmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["card", "depends_on"], name="uniq_dependency")]
+
+
+class TimeEntry(models.Model):
+    """Time spent on a card. A running timer has started_at and no minutes yet."""
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="time_entries")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="time_entries")
+    day = models.DateField()
+    minutes = models.PositiveIntegerField(default=0)
+    started_at = models.DateTimeField(null=True, blank=True)    # set while the timer runs
+    note = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-day", "-created_at"]
+
+
+class CostItem(models.Model):
+    """Money spent on a project board (labour comes from time entries × hourly rates)."""
+    CATEGORIES = [("agency", "Agency staff"), ("materials", "Materials"), ("equipment", "Equipment"),
+                  ("services", "Services"), ("other", "Other")]
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="costs")
+    card = models.ForeignKey(Card, on_delete=models.SET_NULL, null=True, blank=True, related_name="costs")
+    description = models.CharField(max_length=200)
+    category = models.CharField(max_length=12, choices=CATEGORIES, default="other")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    day = models.DateField()
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-day", "-created_at"]

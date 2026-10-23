@@ -41,6 +41,8 @@ urlpatterns = [
     path("b/<int:board_id>/calendar/", views_board.board_calendar, name="board_calendar"),
     path("b/<int:board_id>/table/", views_board.board_table, name="board_table"),
     path("b/<int:board_id>/timeline/", views_board.board_timeline, name="board_timeline"),
+    path("b/<int:board_id>/gantt/", views_board.board_gantt, name="board_gantt"),
+    path("api/cards/<int:card_id>/dependencies/", api.card_dependencies),
     path("b/<int:board_id>/dashboard/", views_board.board_dashboard, name="board_dashboard"),
     path("b/<int:board_id>/automation/", views_automation.automation_page, name="board_automation"),
     path("b/<int:board_id>/automation/rules/", views_automation.rule_create, name="rule_create"),
