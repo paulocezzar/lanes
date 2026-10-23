@@ -11,16 +11,17 @@
   </nav>
 
   <div class="auto-main">
+    <div data-ab-home>
     <header class="auto-head">
       <h2>{% for k, label, n in sections %}{% if k == section %}{{ label }}{% endif %}{% endfor %}</h2>
-      {% if can_edit and section != "activity" %}<button type="button" class="btn primary" data-open-form>Create {% if section == "rules" or section == "due" %}rule{% elif section == "scheduled" %}scheduled job{% else %}button{% endif %}</button>{% endif %}
+      {% if can_edit and section != "activity" %}<button type="button" class="btn primary" data-ab-open>Create {% if section == "card-buttons" or section == "board-buttons" %}button{% else %}automation{% endif %}</button>{% endif %}
     </header>
 
     {% if section != "activity" %}
     <div class="auto-intro">
       <p class="auto-lead">{% if section == "rules" %}Rules are simple: when one thing happens, another thing happens automatically.
-        {% elif section == "due" %}Due-date rules run as a card's due date gets close, or once it's passed. They're checked every few minutes.
-        {% elif section == "scheduled" %}Scheduled jobs run on a timetable — create the same card every week, or tidy the board every Friday.
+        {% elif section == "due" %}Due-date automations run as a card's due date gets close, or once it's passed. They're checked every few minutes.
+        {% elif section == "scheduled" %}Scheduled automations run on a timetable — create the same card every week, or tidy the board every Friday.
         {% elif section == "card-buttons" %}Card buttons show on every card on this board and do several things in one click.
         {% else %}Board buttons sit in the board's header and act on the whole board at once.{% endif %}</p>
       {% if examples %}
@@ -34,10 +35,8 @@
 
     {% if section == "rules" %}
       {% include "boards/auto/_rule_rows.html" with items=rules %}
-      {% if can_edit %}{% include "boards/auto/_rule_form.html" with trigs=event_triggers %}{% endif %}
     {% elif section == "due" %}
       {% include "boards/auto/_rule_rows.html" with items=due_rules %}
-      {% if can_edit %}{% include "boards/auto/_rule_form.html" with trigs=time_triggers %}{% endif %}
     {% elif section == "scheduled" %}
       {% for row in schedules %}{% with s=row.s %}
       <div class="auto-row{% if not s.is_enabled %} off{% endif %}">
@@ -49,44 +48,16 @@
         {% if can_edit %}
         <form method="post" action="{% url 'schedule_update' board.pk s.pk %}">{% csrf_token %}<input type="hidden" name="section" value="scheduled"><input type="hidden" name="action" value="run"><button class="btn ghost sm" title="Run it once now">Run now</button></form>
         <form method="post" action="{% url 'schedule_update' board.pk s.pk %}">{% csrf_token %}<input type="hidden" name="section" value="scheduled"><button class="btn sm {% if s.is_enabled %}ghost{% else %}primary{% endif %}">{% if s.is_enabled %}Pause{% else %}Turn on{% endif %}</button></form>
-        <form method="post" action="{% url 'schedule_update' board.pk s.pk %}" data-confirm="Delete this scheduled job?" data-confirm-ok="Delete" data-danger>{% csrf_token %}<input type="hidden" name="section" value="scheduled"><input type="hidden" name="action" value="delete"><button class="icon-btn xs" title="Delete">{% include "boards/_icon.html" with i="close" %}</button></form>
+        <form method="post" action="{% url 'schedule_update' board.pk s.pk %}" data-confirm="Delete this scheduled automation?" data-confirm-ok="Delete" data-danger>{% csrf_token %}<input type="hidden" name="section" value="scheduled"><input type="hidden" name="action" value="delete"><button class="icon-btn xs" title="Delete">{% include "boards/_icon.html" with i="close" %}</button></form>
         {% endif %}
       </div>
       {% endwith %}{% endfor %}
-      {% if can_edit %}
-      <form method="post" action="{% url 'schedule_create' board.pk %}" class="auto-form" data-schedule-form data-builder {% if not open_form %}hidden{% endif %}>
-        {% csrf_token %}<input type="hidden" name="section" value="scheduled">
-        <h4 class="section-label">New scheduled job</h4>
-        <div class="auto-line">
-          <select name="frequency" data-frequency aria-label="How often">{% for k, v in frequencies %}<option value="{{ k }}" {% if k == 'weekly' %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-          <select name="nth" data-freq-show="month_nth" aria-label="Which">{% for k, v in nths %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
-          <select name="weekday" data-freq-show="weekly month_nth" aria-label="Day">{% for i, d in weekdays %}<option value="{{ i }}">{{ d }}</option>{% endfor %}</select>
-          <select name="month_day" data-freq-show="monthly yearly" aria-label="Day of month">{% for d in month_days %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select>
-          <select name="month" data-freq-show="yearly" aria-label="Month">{% for k, v in months %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
-          <span class="auto-word">at</span>
-          <select name="hour" aria-label="Time">{% for h in hours %}<option value="{{ h }}" {% if h == 7 %}selected{% endif %}>{{ h|stringformat:"02d" }}:00</option>{% endfor %}</select>
-          <select name="kind" data-sched-kind aria-label="What to do"><option value="card">create a card</option><option value="actions">run board actions</option></select>
-        </div>
-        <div data-kind-panel="card" class="auto-form-inner">
-          <label>Card title<input name="title" maxlength="250" placeholder="e.g. Weekly check"></label>
-          <label>Put it in list<select name="target_list" data-list>{% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</select></label>
-          <label>Checklist (one item per line, optional)<textarea name="checklist" rows="3" placeholder="First step&#10;Second step&#10;Third step"></textarea></label>
-          <div class="auto-line">
-            <label>Assign to<select name="member"><option value="">Nobody</option>{% for u in people %}<option value="{{ u.pk }}">{{ u.display_name }}</option>{% endfor %}</select></label>
-            <label>Label<select name="label"><option value="">None</option>{% for l in labels %}<option value="{{ l.pk }}">{{ l }}</option>{% endfor %}</select></label>
-            <label>Due after (days)<input name="due_in_days" type="number" min="0" max="365" placeholder="—"></label>
-          </div>
-        </div>
-        <div data-kind-panel="actions" hidden>{% include "boards/auto/_board_action_rows.html" with p="s" %}</div>
-        <div class="row"><button type="button" class="btn ghost sm" data-close-form>Cancel</button><button class="btn primary sm">Save scheduled job</button></div>
-      </form>
-      {% endif %}
     {% elif section == "card-buttons" %}
       {% include "boards/auto/_button_section.html" with items=card_buttons kind="card" %}
     {% elif section == "board-buttons" %}
       {% include "boards/auto/_button_section.html" with items=board_buttons kind="board" %}
     {% else %}
-      <p class="muted">Everything rules, scheduled jobs and buttons have done on this board, newest first.</p>
+      <p class="muted">Everything rules, scheduled automations and buttons have done on this board, newest first.</p>
       {% for a in auto_activity %}
       <div class="feed-item">
         {% if a.actor %}{% include "boards/_avatar.html" with u=a.actor %}{% else %}<span class="auto-bolt">⚡</span>{% endif %}
@@ -97,151 +68,16 @@
     {% endif %}
 
     {% if not can_edit %}<p class="muted small">Only board admins and members can change automation.</p>{% endif %}
+    </div>
+    {% if can_edit and section != "activity" %}
+    <div class="ab" data-autobuilder hidden></div>
+    <form method="post" data-ab-form hidden>{% csrf_token %}</form>
+    {{ auto_data|json_script:"auto-data" }}
+    {% endif %}
   </div>
  </div>
 </div>
 {% endblock %}
 {% block scripts %}{{ block.super }}
-<script>
-(() => {
-  // ----- action rows: show the right parameter fields -----
-  const showParams = row => {
-    const t = row.querySelector('[data-action]').value;
-    row.querySelectorAll('[data-param]').forEach(el => {
-      el.hidden = !el.dataset.param.split(' ').includes(t);
-      el.disabled = el.hidden || row.hidden || !!row.closest('[hidden]');
-    });
-    row.querySelector('[data-action]').disabled = row.hidden || !!row.closest('[data-kind-panel][hidden]');
-  };
-  const refresh = form => form.querySelectorAll('[data-action-row]').forEach(showParams);
-  document.querySelectorAll('[data-actions-form]').forEach(f => {
-    const rows = [...f.querySelectorAll('[data-action-row]')];
-    rows.forEach(row => row.querySelector('[data-action]').addEventListener('change', () => showParams(row)));
-    f.querySelector('[data-more-actions]').addEventListener('click', e => {
-      const next = rows.find(r => r.hidden);
-      if (next) { next.hidden = false; next.querySelector('[data-action]').selectedIndex = 1; showParams(next); }
-      e.target.hidden = !rows.some(r => r.hidden);
-    });
-  });
-
-  // ----- rule trigger extras -----
-  const showTrig = rf => {
-    const trig = rf.querySelector('[data-trigger]');
-    rf.querySelectorAll('[data-show-for]').forEach(el => { el.hidden = !el.dataset.showFor.split(' ').includes(trig.value); el.disabled = el.hidden; });
-    const by = rf.querySelector('[name=by_whom]');
-    if (by) by.hidden = trig.value === 'member_added';
-  };
-  document.querySelectorAll('[data-rule-form]').forEach(rf => {
-    rf.querySelector('[data-trigger]').addEventListener('change', () => showTrig(rf)); showTrig(rf);
-  });
-
-  // ----- scheduled job form -----
-  const sf = document.querySelector('[data-schedule-form]');
-  const syncSched = () => {
-    if (!sf) return;
-    const f = sf.querySelector('[data-frequency]');
-    sf.querySelectorAll('[data-freq-show]').forEach(el => { el.hidden = !el.dataset.freqShow.split(' ').includes(f.value); });
-    const kind = sf.querySelector('[data-sched-kind]').value;
-    sf.querySelectorAll('[data-kind-panel]').forEach(p => {
-      p.hidden = p.dataset.kindPanel !== kind;
-      p.querySelectorAll('input, select, textarea').forEach(el => { if (p.hidden) el.disabled = true; else if (!el.closest('[data-action-row]')) el.disabled = false; });
-    });
-    refresh(sf);
-  };
-  if (sf) { sf.addEventListener('change', e => { if (e.target.matches('[data-frequency], [data-sched-kind]')) syncSched(); }); syncSched(); }
-
-  // ----- open / close the builder -----
-  const builder = document.querySelector('[data-builder]');
-  const openBtn = document.querySelector('[data-open-form]');
-  const open = () => {
-    if (!builder) return;
-    builder.hidden = false; if (openBtn) openBtn.hidden = true;
-    refresh(builder); syncSched();
-    builder.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    builder.classList.remove('flash'); void builder.offsetWidth; builder.classList.add('flash');
-  };
-  openBtn?.addEventListener('click', () => { open(); builder.querySelector('select, input:not([type=hidden])')?.focus(); });
-  document.querySelector('[data-close-form]')?.addEventListener('click', () => { builder.hidden = true; if (openBtn) openBtn.hidden = false; });
-  if (builder && !builder.hidden) open();
-
-  // ----- examples: fill the builder -----
-  const pickList = (sel, want) => {
-    if (!sel || want == null) return;
-    const opts = [...sel.options];
-    let o = typeof want === 'number' ? opts.find(x => x.value == want) : null;
-    if (!o && want === 'first') o = opts[0];
-    if (!o && want === 'last') o = opts[opts.length - 1];
-    if (!o && want === 'second') o = opts[1] || opts[0];
-    if (!o) o = opts.find(x => x.text.replace(/^from /, '').trim().toLowerCase() === String(want).toLowerCase())
-             || opts.find(x => x.text.toLowerCase().includes(String(want).toLowerCase()))
-             || (want === 'done' ? opts[opts.length - 1] : null);
-    if (o) sel.value = o.value;
-  };
-  const pickLabel = (sel, want) => {
-    if (!sel) return;
-    const o = [...sel.options].find(x => x.dataset.colour === want || x.text.toLowerCase().includes(want));
-    if (o) sel.value = o.value;
-  };
-  const set = (form, name, v) => {
-    const el = form.querySelector(`[name="${name}"]:not([disabled])`) || form.querySelector(`[name="${name}"]`);
-    if (el && v != null) el.value = v;
-  };
-  const fillActions = (form, actions) => {
-    const rows = [...form.querySelectorAll('[data-action-row]')].filter(r => !r.closest('[data-kind-panel][hidden]'));
-    rows.forEach((row, i) => {
-      const a = actions[i];
-      row.hidden = !a && i > 0;
-      const sel = row.querySelector('[data-action]');
-      if (!a) { if (i > 0) sel.value = ''; showParams(row); return; }
-      sel.value = a.type; showParams(row);
-      const vis = q => [...row.querySelectorAll(q)].find(el => !el.hidden);
-      if (a.list != null) pickList(vis('[data-list]'), a.list);
-      if (a.from_list != null) pickList(vis('[data-from-list]'), a.from_list);
-      if (a.label) pickLabel(vis('[data-label]'), a.label);
-      if (a.days != null) { const d = vis('[data-days]'); if (d) d.value = a.days; }
-      if (a.text != null) { const t = vis('[data-text]'); if (t) t.value = a.text; }
-      if (a.title != null) { const t = vis('[data-cltitle]'); if (t) t.value = a.title; }
-      if (a.sticker) { const t = vis('[data-sticker]'); if (t) t.value = a.sticker; }
-      if (a.count != null) { const t = vis('[data-count]'); if (t) t.value = a.count; }
-      if (a.order) { const t = vis('[data-order]'); if (t) t.value = a.order; }
-    });
-    const more = form.querySelector('[data-kind-panel]:not([hidden]) [data-more-actions]') || form.querySelector('[data-more-actions]');
-    if (more) more.hidden = !rows.some(r => r.hidden);
-  };
-  document.querySelectorAll('[data-example]').forEach(btn => btn.addEventListener('click', () => applyExample(JSON.parse(btn.dataset.example))));
-  function applyExample(d) {
-    if (!builder) return;
-    builder.hidden = false;
-    if (d.trigger) {
-      set(builder, 'trigger', d.trigger); showTrig(builder);
-      if (d.trigger_list) pickList(builder.querySelector('[name=trigger_list]'), d.trigger_list);
-      set(builder, 'trigger_hours', d.trigger_hours); set(builder, 'by_whom', d.by_whom || 'anyone');
-      set(builder, 'member_who', d.member_who || 'anyone');
-    }
-    if (d.frequency) {
-      set(builder, 'frequency', d.frequency); set(builder, 'weekday', d.weekday); set(builder, 'month_day', d.month_day);
-      set(builder, 'hour', d.hour); set(builder, 'nth', d.nth); set(builder, 'month', d.month);
-      set(builder, 'kind', d.kind); syncSched();
-      set(builder, 'title', d.title); set(builder, 'checklist', d.checklist);
-      if (d.target_list) pickList(builder.querySelector('[name=target_list]'), d.target_list);
-    }
-    if (d.name) { set(builder, 'name', d.name); set(builder, 'icon', d.icon); }
-    if (d.actions) fillActions(builder, d.actions);
-    open();
-  }
-
-  // ----- arriving from a list's menu: ?trigger=card_added&list=12, or ?sort_list=12&every=daily|monday -----
-  const qs = new URLSearchParams(location.search);
-  if (qs.get('sort_list') && builder?.matches('[data-schedule-form]')) {
-    const monday = qs.get('every') === 'monday';
-    applyExample({ kind: 'actions', frequency: monday ? 'weekly' : 'daily', weekday: 0, hour: 6,
-                   actions: [{ type: 'sort_due', list: Number(qs.get('sort_list')) }] });
-  }
-  if (qs.get('trigger') && builder?.matches('[data-rule-form]')) {
-    set(builder, 'trigger', qs.get('trigger')); showTrig(builder);
-    if (qs.get('list')) pickList(builder.querySelector('[name=trigger_list]'), Number(qs.get('list')));
-    open();
-  }
-})();
-</script>
+{% load static %}<script src="{% static 'lanes/autobuilder.js' %}"></script>
 {% endblock %}

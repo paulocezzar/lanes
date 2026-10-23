@@ -12,16 +12,3 @@
   {% endif %}
 </div>
 {% endwith %}{% endfor %}
-{% if can_edit %}
-<form method="post" action="{% url 'button_create' board.pk %}" class="auto-form" data-builder {% if not open_form %}hidden{% endif %}>
-  {% csrf_token %}<input type="hidden" name="section" value="{{ section }}"><input type="hidden" name="kind" value="{{ kind }}">
-  <h4 class="section-label">New {{ kind }} button</h4>
-  <div class="auto-line">
-    <select name="icon" aria-label="Icon">{% for i in button_icons %}<option value="{{ i }}">{{ i|default:"no icon" }}</option>{% endfor %}</select>
-    <input name="name" maxlength="40" required placeholder="Button name, e.g. {% if kind == 'card' %}Delivered{% else %}New week{% endif %}">
-  </div>
-  {% if kind == "card" %}{% include "boards/auto/_card_action_rows.html" with p="b" word="it will" add_me=True %}
-  {% else %}{% include "boards/auto/_board_action_rows.html" with p="bb" %}{% endif %}
-  <div class="row"><button type="button" class="btn ghost sm" data-close-form>Cancel</button><button class="btn primary sm">Save button</button></div>
-</form>
-{% endif %}

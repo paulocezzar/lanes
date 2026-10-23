@@ -11,7 +11,7 @@ from . import automation, permissions
 from .board_context import board_context
 from .models import STICKERS, Board, BoardMember, Label, List, Rule, Schedule
 
-MAX_ACTIONS = 4
+MAX_ACTIONS = 8
 NEEDS = {"move": "list", "add_label": "label", "remove_label": "label", "add_member": "user",
          "set_due": "days", "set_due_workdays": "days", "comment": "text", "add_sticker": "sticker",
          "notify": "message", "add_checklist": "checklist"}
@@ -142,6 +142,25 @@ def automation_page(request, board_id):
         "stickers": STICKERS,
         "fields": board.custom_fields.all(),
     })
+    lists = list(board.lists.filter(is_archived=False).order_by("position"))
+    ctx["auto_data"] = {
+        "section": section,
+        "lists": [{"id": l.pk, "title": l.title} for l in lists],
+        "labels": [{"id": l.pk, "name": str(l), "colour": l.colour} for l in board.labels.all()],
+        "people": [{"id": m.user_id, "name": m.user.display_name}
+                   for m in BoardMember.objects.filter(board=board).select_related("user")],
+        "fields": [{"id": f.pk, "name": f.name} for f in board.custom_fields.all()],
+        "stickers": STICKERS,
+        "hours": [[k, v] for k, v in Rule.HOURS],
+        "after": [[k, v] for k, v in Rule.AFTER if k],
+        "weekdays": list(enumerate(automation.WEEKDAYS)),
+        "months": [[k, v] for k, v in Schedule.MONTHS],
+        "nths": [[k, v] for k, v in Schedule.NTH],
+        "icons": ["", "✅", "🚚", "📦", "🔥", "⭐", "🧹", "📌", "⏰", "👋", "📣", "🧾", "🛒", "🔔"],
+        "max_actions": MAX_ACTIONS,
+        "urls": {"rule": reverse("rule_create", args=[board.pk]), "schedule": reverse("schedule_create", args=[board.pk]),
+                 "button": reverse("button_create", args=[board.pk])},
+    }
     return render(request, "boards/automation.html", ctx)
 
 
