@@ -206,6 +206,9 @@
       toggleCollapsed(listEl.dataset.listId, true);
     } else if (e.target.closest('[data-expand-list]')) {
       toggleCollapsed(listEl.dataset.listId, false);
+    } else if (e.target.closest('[data-new-product]')) {
+      e.target.closest('details')?.removeAttribute('open');
+      openProductDialog(listEl.dataset.listId);
     } else if (e.target.closest('[data-list-copy]')) {
       e.target.closest('details')?.removeAttribute('open');
       const t = await LanesUI.ask('Copy list', { value: `${$('.list-title', listEl).textContent.trim()} (copy)`, ok: 'Copy', hint: 'All its cards are copied too.' });
@@ -332,6 +335,43 @@
   let openPop = null;
 
   window.LanesOpenCard = id => openCard(id);
+
+  // ---------- new product: name + what it needs → card with quantity checklists ----------
+  const productDlg = document.getElementById('product-dialog');
+  let productList = null, previewTimer = null;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function openProductDialog(listId) {
+    if (!productDlg) return;
+    productList = listId;
+    const f = productDlg.querySelector('form');
+    f.text.value = '';
+    productDlg.querySelector('[data-product-preview]').innerHTML = '<p class="muted small">A preview appears here as you type.</p>';
+    productDlg.showModal(); f.text.focus();
+  }
+  window.LanesNewProduct = openProductDialog;
+  productDlg?.querySelector('textarea').addEventListener('input', e => {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(async () => {
+      const box = productDlg.querySelector('[data-product-preview]');
+      if (!e.target.value.trim()) { box.innerHTML = ''; return; }
+      try {
+        const p = await post(`/api/lists/${productList}/product/`, { text: e.target.value, preview: true });
+        box.innerHTML = `<h4>${esc(p.title)}${p.planned ? ` <span class="muted">· ${esc(p.planned)} ${esc(p.unit)}</span>` : ''}</h4>` +
+          p.sections.map(s => `<div class="np-sec"><b>${esc(s.title)}</b>${s.items.map(i =>
+            `<div class="np-item${i.done ? ' done' : ''}"><span>${i.done ? '✓ ' : ''}${esc(i.text)}</span><span class="muted">${
+              i.target ? `${i.done ? i.target : 0} / ${esc(i.target)} ${esc(i.unit)}${i.per && !i.unit ? ` <small>(${esc(i.per)} each)</small>` : ''}` : 'tick'}</span></div>`).join('')}</div>`).join('');
+      } catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; }
+    }, 250);
+  });
+  productDlg?.querySelector('form').addEventListener('submit', async e => {
+    if (e.submitter?.value !== 'create') return;
+    e.preventDefault();
+    try {
+      const d = await post(`/api/lists/${productList}/product/`, { text: e.target.text.value });
+      productDlg.close(); forceRefresh();
+      if (d.card_id) openCard(d.card_id);
+    } catch (err) { toast(err.message || 'Could not create that.'); }
+  });
   window.addEventListener('lanes:timer-stopped', () => { if (openCardId) openCard(openCardId); });
   async function openCard(id) {
     const res = await fetch(`/cards/${id}/`, { credentials: 'same-origin' });
@@ -710,9 +750,22 @@
     }
     if (f.matches('[data-item-meta]')) {
       e.preventDefault();
-      return post(`/api/items/${f.dataset.itemMeta}/`,
-        { assignee_id: f.assignee_id.value ? +f.assignee_id.value : null, due_at: f.due_at.value,
-          reminder_minutes: +f.reminder_minutes.value }).then(d => { applyCard(d); toast(f.assignee_id.value ? 'Saved — they\'ve been notified.' : 'Saved.'); });
+      const meta = { assignee_id: f.assignee_id.value ? +f.assignee_id.value : null, due_at: f.due_at.value,
+          reminder_minutes: +f.reminder_minutes.value };
+      if (f.qty_target) {
+        Object.assign(meta, { qty_target: f.qty_target.value, qty_unit: f.qty_unit.value, per_unit: f.per_unit.value });
+        if (f.qty_done.value !== '' && (f.qty_target.value || f.per_unit.value)) meta.qty_done = f.qty_done.value;
+      }
+      return post(`/api/items/${f.dataset.itemMeta}/`, meta)
+        .then(d => { applyCard(d); toast(f.assignee_id.value ? 'Saved — they\'ve been notified.' : 'Saved.'); })
+        .catch(err => toast(err.message || 'Could not save that.'));
+    }
+    if (f.matches('[data-item-qty]')) {
+      e.preventDefault();
+      const n = f.n.value.trim();
+      if (!n) return;
+      return post(`/api/items/${f.dataset.itemQty}/`, { qty_add: n }).then(applyCard)
+        .catch(err => toast(err.message || 'Could not record that.'));
     }
     if (f.matches('[data-label-new]')) {
       e.preventDefault();

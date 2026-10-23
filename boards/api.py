@@ -163,6 +163,31 @@ def card_create(request, list_id):
     return card_response(card.pk, request)
 
 
+@api
+def product_create(request, list_id):
+    """'New product': the product and what it needs, one per line → a card with quantity checklists."""
+    from . import products
+    lst = get_object_or_404(List.objects.select_related("board"), pk=list_id, is_archived=False)
+    _edit(lst.board, request.user)
+    text = (request.data.get("text") or "")[:20000]
+    try:
+        parsed = products.parse(text)
+    except ValueError as e:
+        raise ApiError(str(e))
+    if request.data.get("preview"):
+        f = lambda v: None if v is None else ChecklistItem.fmt_qty(v)  # noqa: E731
+        return {"title": parsed["title"], "planned": f(parsed["planned"]), "unit": parsed["unit"],
+                "sections": [{"title": s["title"], "items": [
+                    {"text": i["text"], "target": f(i["target"]), "unit": i["unit"], "per": f(i["per_unit"]),
+                     "done": i["done"]} for i in s["items"]]} for s in parsed["sections"]]}
+    if not parsed["sections"]:
+        raise ApiError("Add what it needs on the lines under the product name.")
+    card = products.create(lst, text, request.user)
+    log(lst.board, request.user, "card_created", card=card, list=lst.title)
+    automation.fire(card, Rule.ADDED, list_=lst, actor=request.user)
+    return card_response(card.pk, request)
+
+
 def _slot(card, lst, position):
     """1-based position in a list → (before, after) neighbour tokens, ignoring the card itself."""
     entries = [t for t, _ in sorted(positions._entry_positions(lst, exclude=f"c{card.pk}"), key=lambda e: (e[1], e[0]))]
@@ -497,11 +522,23 @@ def item_update(request, item_id):
         except (TypeError, ValueError):
             r = 1440
         item.reminder_minutes = r if r in dict(Card.REMINDERS) else 1440
+    qty_changed = _item_qty(item, request.data, card)
+    if qty_changed:
+        log(card.list.board, request.user, "item_qty", card=card, text=item.text,
+            done=item.qty_done_txt, target=item.qty_target_txt, unit=item.qty_unit)
     if "is_done" in request.data and bool(request.data["is_done"]) != item.is_done:
         item.is_done = bool(request.data["is_done"])
+        if item.is_done and item.has_qty and item.qty_done < item.qty_target:
+            item.qty_done = item.qty_target          # ticking a quantity line means all of it is done
         item.done_by = request.user if item.is_done else None
         item.done_at = timezone.now() if item.is_done else None
         log(card.list.board, request.user, "item_done" if item.is_done else "item_undone", card=card, text=item.text)
+    elif qty_changed and item.has_qty:
+        done = item.qty_done >= item.qty_target
+        if done != item.is_done:
+            item.is_done = done
+            item.done_by = request.user if done else None
+            item.done_at = timezone.now() if done else None
     item.save()
     job = None
     if "is_done" in request.data:
@@ -788,6 +825,8 @@ def card_field_set(request, card_id):
             from . import geo
             geo.place(cfv)
         automation.fire(card, Rule.FIELD_SET, actor=request.user, field=field)
+        if field.kind == CustomField.NUMBER and field.name.strip().lower() in ("planned", "quantity", "target"):
+            rescale_items(card)
     return card_response(card.pk, request)
 
 
@@ -1221,6 +1260,78 @@ def editable_boards(request):
                     "can_edit": permissions.can_edit(b, request.user), "bg": b.background})
     out.sort(key=lambda b: (not b["starred"], b["dept"].lower(), b["title"].lower()))
     return J({"boards": out})
+
+
+def _dec(v, what):
+    from decimal import Decimal, InvalidOperation
+    try:
+        d = Decimal(str(v).replace(",", "").strip())
+    except (InvalidOperation, ValueError):
+        raise ApiError(f"{what} should be a number.")
+    if abs(d) > Decimal("999999999"):
+        raise ApiError(f"{what} is too big.")
+    return d
+
+
+def _planned(card):
+    """The card's Planned (or Quantity) number field, if it has one."""
+    from decimal import Decimal
+    for v in card.field_values.select_related("field"):
+        if v.field.kind == CustomField.NUMBER and v.field.name.strip().lower() in ("planned", "quantity", "target"):
+            try:
+                return Decimal(str(v.value))
+            except Exception:
+                return None
+    return None
+
+
+def _item_qty(item, d, card):
+    """Quantity changes on a checklist item. Returns True if anything changed."""
+    from decimal import Decimal
+    changed = False
+    if "qty_unit" in d:
+        item.qty_unit = (d.get("qty_unit") or "").strip()[:20]
+    if "per_unit" in d:
+        raw = str(d.get("per_unit") or "").strip()
+        item.per_unit = _dec(raw, "Per product") if raw else None
+        if item.per_unit is not None:
+            planned = _planned(card)
+            if planned:
+                item.qty_target = (planned * item.per_unit).quantize(Decimal("0.001"))
+                changed = True
+    if "qty_target" in d and not (item.per_unit is not None and "per_unit" in d):
+        raw = str(d.get("qty_target") or "").strip()
+        new = _dec(raw, "Quantity needed") if raw else None
+        if new is not None and new < 0:
+            raise ApiError("Quantity needed can't be negative.")
+        if new != item.qty_target:
+            item.qty_target, changed = new, True
+    if "qty_add" in d or "qty_done" in d:
+        if not item.has_qty:
+            raise ApiError("Set how many are needed first.")
+        if "qty_done" in d:
+            new = _dec(d["qty_done"], "Done")
+        else:
+            new = item.qty_done + _dec(d["qty_add"], "That amount")
+        new = max(Decimal("0"), new)
+        if new != item.qty_done:
+            item.qty_done, changed = new, True
+    return changed
+
+
+def rescale_items(card):
+    """Planned changed: items with a per-product amount get a new target."""
+    from decimal import Decimal
+    planned = _planned(card)
+    if not planned:
+        return 0
+    n = 0
+    for item in ChecklistItem.objects.filter(checklist__card=card, per_unit__isnull=False):
+        item.qty_target = (planned * item.per_unit).quantize(Decimal("0.001"))
+        item.is_done = item.qty_done >= item.qty_target
+        item.save(update_fields=["qty_target", "is_done"])
+        n += 1
+    return n
 
 
 @api

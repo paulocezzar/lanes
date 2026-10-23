@@ -109,6 +109,7 @@ urlpatterns = [
     path("api/boards/mine/", api.editable_boards),
     path("api/boards/recent/", api.recent_boards),
     path("api/lists/<int:list_id>/cards/", api.card_create),
+    path("api/lists/<int:list_id>/product/", api.product_create),
     path("api/cards/<int:card_id>/move/", api.card_move),
     path("api/cards/<int:card_id>/update/", api.card_update),
     path("api/cards/<int:card_id>/labels/", api.card_toggle_label),

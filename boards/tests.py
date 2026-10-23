@@ -3769,3 +3769,61 @@ class TimeWorkloadCostTests(TestCase):
         r = self.client.get(f"/b/{self.b.pk}/costs/")
         self.assertContains(r, "Over budget")
         self.assertContains(r, "Flour")
+
+
+class ProductQuantityTests(TestCase):
+    def setUp(self):
+        self.u = User.objects.create_user("pq@x.com", "pw")
+        ws = Workspace.objects.create(name="P"); WorkspaceMember.objects.create(workspace=ws, user=self.u)
+        self.b = Board.objects.create(workspace=ws, title="Xmas")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.l = List.objects.create(board=self.b, title="To prepare")
+        self.client.force_login(self.u)
+
+    def j(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    TEXT = """AF Christmas Cake — 430 cakes
+Packaging:
+Printed Product Label artwork
+1 x Cake/Biscuit Tin
+Make:
+[x] 217.417 kg Fruit Soak
+Finish:
+1 x Decorate"""
+
+    def test_parse(self):
+        from .products import parse
+        p = parse(self.TEXT)
+        self.assertEqual((p["title"], int(p["planned"]), p["unit"]), ("AF Christmas Cake", 430, "cakes"))
+        self.assertEqual([s["title"] for s in p["sections"]], ["Packaging", "Make", "Finish"])
+        tin = p["sections"][0]["items"][1]
+        self.assertEqual((tin["text"], int(tin["target"]), tin["unit"]), ("Cake/Biscuit Tin", 430, "each"))
+        self.assertIsNone(p["sections"][0]["items"][0]["target"])
+        self.assertTrue(p["sections"][1]["items"][0]["done"])
+        self.assertIsNone(parse("TN Stollen 600g")["planned"])          # a weight in the name isn't a quantity
+
+    def test_create_record_and_rescale(self):
+        from .models import ChecklistItem, CustomField
+        r = self.j(f"/api/lists/{self.l.pk}/product/", {"text": self.TEXT})
+        self.assertEqual(r.status_code, 200)
+        card = Card.objects.get(title="AF Christmas Cake")
+        dec = ChecklistItem.objects.get(checklist__card=card, text="Decorate")
+        self.assertEqual(int(dec.qty_target), 430)
+        soak = ChecklistItem.objects.get(checklist__card=card, text="Fruit Soak")
+        self.assertTrue(soak.is_done)
+        r = self.j(f"/api/items/{dec.pk}/", {"qty_add": "400"}); self.assertEqual(r.status_code, 200)
+        r = self.j(f"/api/items/{dec.pk}/", {"qty_add": "30"})
+        dec.refresh_from_db()
+        self.assertTrue(dec.is_done)                                     # 430 / 430 ticks itself
+        self.assertEqual(self.j(f"/api/items/{dec.pk}/", {"qty_add": "abc"}).status_code, 400)
+        planned = CustomField.objects.get(board=self.b, name="Planned")
+        self.j(f"/api/cards/{card.pk}/fields/", {"field_id": planned.pk, "value": "500"})
+        dec.refresh_from_db(); soak.refresh_from_db()
+        self.assertEqual((int(dec.qty_target), dec.is_done), (500, False))
+        self.assertAlmostEqual(float(soak.qty_target), 252.8, places=1)    # kg scales too
+        self.assertEqual(card.qty_progress() is not None, True)
+        # preview doesn't create anything
+        n = Card.objects.count()
+        p = self.j(f"/api/lists/{self.l.pk}/product/", {"text": self.TEXT, "preview": True}).json()
+        self.assertEqual((Card.objects.count(), p["planned"]), (n, "430"))

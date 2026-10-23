@@ -33,7 +33,8 @@ def copy_card(card, target_list, *, user, title=None, keep_labels=True, keep_mem
             ncl = Checklist.objects.create(card=new, title=cl.title, position=cl.position)
             ChecklistItem.objects.bulk_create([
                 ChecklistItem(checklist=ncl, text=i.text, position=i.position,
-                              assignee_id=i.assignee_id if same_board else None)
+                              assignee_id=i.assignee_id if same_board else None,
+                              qty_target=i.qty_target, qty_unit=i.qty_unit, per_unit=i.per_unit)
                 for i in cl.items.all()])
     for v in card.field_values.all():
         fid = v.field_id if same_board else (field_map or {}).get(v.field_id)

@@ -256,6 +256,13 @@ class Card(models.Model):
         days = (timezone.now() - self.updated_at).days
         return "aged-3" if days >= 28 else "aged-2" if days >= 14 else "aged-1" if days >= 7 else ""
 
+    def qty_progress(self):
+        """Overall % across checklist items when any of them count quantities (for the card tile)."""
+        items = [i for cl in self.checklists.all() for i in cl.items.all()]
+        if not any(i.has_qty for i in items):
+            return None
+        return round(100 * sum(i.fraction for i in items) / len(items))
+
     def checklist_counts(self):
         items = [i for cl in self.checklists.all() for i in cl.items.all()]
         return sum(1 for i in items if i.is_done), len(items)
@@ -274,7 +281,7 @@ class Checklist(models.Model):
         items = list(self.items.all())
         if not items:
             return 0
-        return round(100 * sum(1 for i in items if i.is_done) / len(items))
+        return round(100 * sum(i.fraction for i in items) / len(items))
 
 
 class ChecklistItem(models.Model):
@@ -289,6 +296,43 @@ class ChecklistItem(models.Model):
                                  related_name="assigned_items")
     due_at = models.DateTimeField(null=True, blank=True)
     reminder_minutes = models.SmallIntegerField(default=1440)   # same choices as Card.REMINDERS; -1 = none
+    # Quantity items: "Decorate — 120 / 430 cakes". per_unit ties the target to the card's Planned field.
+    qty_target = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    qty_done = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    qty_unit = models.CharField(max_length=20, blank=True)
+    per_unit = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
+
+    @property
+    def has_qty(self):
+        return self.qty_target is not None and self.qty_target > 0
+
+    @property
+    def fraction(self):
+        """How far along this item is, 0–1."""
+        if self.has_qty:
+            return min(1.0, float(self.qty_done) / float(self.qty_target))
+        return 1.0 if self.is_done else 0.0
+
+    @property
+    def qty_pct(self):
+        return round(100 * self.fraction)
+
+    @staticmethod
+    def fmt_qty(v):
+        v = float(v or 0)
+        return f"{v:,.0f}" if v.is_integer() else f"{v:,.3f}".rstrip("0").rstrip(".")
+
+    @property
+    def qty_done_txt(self):
+        return self.fmt_qty(self.qty_done)
+
+    @property
+    def qty_target_txt(self):
+        return self.fmt_qty(self.qty_target)
+
+    @property
+    def per_unit_txt(self):
+        return self.fmt_qty(self.per_unit) if self.per_unit is not None else ""
 
     @property
     def due_state(self):
@@ -456,6 +500,7 @@ class Activity(models.Model):
             "dependency_added": f"made this card wait for {d.get('name', 'another card')}",
             "dependency_removed": "removed a dependency from this card",
             "report_sent": f"sent the weekly status report to {d.get('to', 0)} people",
+            "item_qty": f"recorded {d.get('done', '')} / {d.get('target', '')} {d.get('unit', '')} on “{d.get('text', '')}”",
             "time_logged": f"logged {d.get('time', 'time')} on this card",
             "cost_added": f"added a cost: {d.get('name', '')} ({d.get('amount', '')})",
             "status_updated": f"updated the project status: {d.get('rag', '')}{(' — ' + d['note']) if d.get('note') else ''}",

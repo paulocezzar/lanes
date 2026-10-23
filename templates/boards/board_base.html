@@ -130,6 +130,28 @@
   {% include "boards/_inbox_panel.html" with inbox_html='<p class="muted small inbox-empty">Loading…</p>' %}
   <p class="muted small inbox-hint">Drag an item onto a list to turn it into a card.</p>
 </aside>
+<dialog id="product-dialog" class="dialog wide" aria-label="New product">
+  <form method="dialog" data-product-form>
+    <div class="dialog-head"><h3>New product</h3><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+    <p class="muted small">Product and planned quantity on the first line, then what it needs — one per line. <b>1 x</b> = per product · <b>217 kg</b> = a total · a line ending in <b>:</b> starts a section · <b>[x]</b> = already done · no number = a plain tick.</p>
+    <div class="np-grid">
+      <textarea name="text" rows="14" spellcheck="false" placeholder="AF Christmas Cake — 430 cakes
+Packaging:
+Printed Product Label artwork
+1 x Printed Product Label
+1 x 5mm Black Round Matt Masonite Board (8&quot;)
+1 x Cake/Biscuit Tin
+Make:
+217.417 kg Fruit Soak revised (Christmas Cake) 2026
+1 x AF Christmas Cake (Baked)
+Finish:
+1 x Decorate
+1 x Pack"></textarea>
+      <div class="np-preview" data-product-preview><p class="muted small">A preview appears here as you type.</p></div>
+    </div>
+    <div class="dialog-actions"><button class="btn primary" value="create">Create card</button></div>
+  </form>
+</dialog>
 <dialog id="ai-dialog" class="dialog wide">
   <form data-ai-form>
     <h3>✨ Capture to-dos from a message</h3>
