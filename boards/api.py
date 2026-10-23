@@ -1269,3 +1269,150 @@ def board_status(request, board_id):
     board.save(update_fields=["rag", "status_note", "status_updated_at"])
     log(board, request.user, "status_updated", rag=board.get_rag_display(), note=board.status_note)
     return {"ok": True}
+
+
+@api
+def card_time(request, card_id):
+    """Time on a card: start / stop the timer, add an entry, or delete one."""
+    from datetime import date as _date
+    from . import timetrack
+    from .models import TimeEntry
+    card = _card(request, card_id)
+    d = request.data
+    action = d.get("action")
+    if action == "start":
+        _, stopped = timetrack.start(card, request.user)
+        extra = {"stopped": stopped.card.title} if stopped else {}
+        return {**card_response(card.pk, request), **extra, "timer": True}
+    if action == "stop":
+        e = timetrack.running(request.user)
+        if e:
+            timetrack.stop(e)
+    elif action == "add":
+        mins = timetrack.parse_minutes(d.get("time"))
+        if not mins or mins <= 0 or mins > 24 * 60:
+            raise ApiError("Type the time like 1h 30m, 1:30 or 1.5.")
+        try:
+            day = _date.fromisoformat(d.get("day")) if d.get("day") else timezone.localdate()
+        except ValueError:
+            raise ApiError("That date doesn't look right.")
+        if day > timezone.localdate():
+            raise ApiError("You can't log time in the future.")
+        TimeEntry.objects.create(card=card, user=request.user, day=day, minutes=mins,
+                                 note=(d.get("note") or "").strip()[:200])
+        log(card.list.board, request.user, "time_logged", card=card, time=timetrack.fmt(mins))
+    elif action == "delete":
+        e = get_object_or_404(TimeEntry, pk=d.get("id") or 0, card=card)
+        if e.user_id != request.user.pk and not permissions.can_manage(card.list.board, request.user):
+            raise ApiError("You can only remove your own time.", 403)
+        e.delete()
+    else:
+        raise ApiError("Unknown action.")
+    return card_response(card.pk, request)
+
+
+@api
+def time_stop(request):
+    """Stop my running timer (from the top bar)."""
+    from . import timetrack
+    e = timetrack.running(request.user)
+    if not e:
+        return {"ok": True, "minutes": 0}
+    timetrack.stop(e)
+    return {"ok": True, "minutes": e.minutes, "card": e.card.title}
+
+
+def can_set_people(viewer, person):
+    """Superusers, and admins of a department the person belongs to."""
+    from .workload import _can_set
+    return _can_set(viewer, person)
+
+
+@api
+def user_capacity(request, user_id):
+    """Working hours a week (the person themselves or a manager) and hourly rate (managers only)."""
+    from decimal import Decimal, InvalidOperation
+    person = get_object_or_404(User, pk=user_id, is_active=True)
+    manager = can_set_people(request.user, person)
+    if person.pk != request.user.pk and not manager:
+        raise ApiError("Only a department admin can change someone else's hours.", 403)
+    d = request.data
+    fields = []
+    try:
+        if "capacity_hours" in d:
+            v = Decimal(str(d["capacity_hours"]).strip() or "0")
+            if not 0 <= v <= 80:
+                raise ApiError("Hours a week should be between 0 and 80.")
+            person.capacity_hours = v
+            fields.append("capacity_hours")
+        if "hourly_rate" in d:
+            if not manager:
+                raise ApiError("Only a department admin can set pay rates.", 403)
+            raw = str(d["hourly_rate"] or "").strip().lstrip("£")
+            v = Decimal(raw) if raw else None
+            if v is not None and not 0 <= v <= 1000:
+                raise ApiError("That rate doesn't look right.")
+            person.hourly_rate = v
+            fields.append("hourly_rate")
+    except InvalidOperation:
+        raise ApiError("Type a number.")
+    if fields:
+        person.save(update_fields=fields)
+    return {"ok": True, "capacity_hours": str(person.capacity_hours),
+            "hourly_rate": str(person.hourly_rate) if person.hourly_rate is not None and manager else None}
+
+
+@api
+def board_costs(request, board_id):
+    """Add or remove a cost on a project board. Warns the owner and admins when spending passes 90%."""
+    from datetime import date as _date
+    from decimal import Decimal, InvalidOperation
+    from .models import CostItem
+    from .portfolio import spend
+    board = get_object_or_404(Board, pk=board_id, is_archived=False)
+    _edit(board, request.user)
+    d = request.data
+    before = spend(board)[2]
+    if d.get("remove"):
+        get_object_or_404(CostItem, pk=d["remove"], board=board).delete()
+        return {"ok": True}
+    desc = (d.get("description") or "").strip()[:200]
+    if not desc:
+        raise ApiError("Say what the cost is for.")
+    try:
+        amount = Decimal(str(d.get("amount") or "").replace(",", "").strip().lstrip("£"))
+    except InvalidOperation:
+        raise ApiError("Type the amount as a number, like 120.50.")
+    if amount <= 0 or amount > Decimal("10000000"):
+        raise ApiError("Type the amount as a number, like 120.50.")
+    try:
+        day = _date.fromisoformat(d["day"]) if d.get("day") else timezone.localdate()
+    except ValueError:
+        raise ApiError("That date doesn't look right.")
+    cat = d.get("category") if d.get("category") in dict(CostItem.CATEGORIES) else "other"
+    card = Card.objects.filter(pk=d.get("card") or 0, list__board=board).first()
+    item = CostItem.objects.create(board=board, card=card, description=desc, category=cat, amount=amount,
+                                   day=day, created_by=request.user)
+    log(board, request.user, "cost_added", card=card, name=desc, amount=f"£{amount:,.2f}")
+    _budget_warning(board, before, request.user)
+    return {"ok": True, "id": item.pk}
+
+
+def _budget_warning(board, before, actor):
+    """Tell the owner and board admins once spending crosses 90% and again at 100%."""
+    from . import notify
+    from .portfolio import spend
+    if not board.budget:
+        return
+    after = spend(board)[2]
+    for pct, word in ((100, "is over budget"), (90, "has used 90% of its budget")):
+        line = board.budget * pct / 100
+        if before < line <= after:
+            people = {m.user for m in board.memberships.filter(role="admin").select_related("user")}
+            if board.project_owner:
+                people.add(board.project_owner)
+            for u in people:
+                notify.send(u, "budget", actor=actor, board=board,
+                            text=f"{board.title} {word}: £{after:,.0f} of £{board.budget:,.0f}",
+                            dedupe_key=f"budget:{board.pk}:{pct}:{board.budget}")
+            break

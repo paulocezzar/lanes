@@ -456,6 +456,8 @@ class Activity(models.Model):
             "dependency_added": f"made this card wait for {d.get('name', 'another card')}",
             "dependency_removed": "removed a dependency from this card",
             "report_sent": f"sent the weekly status report to {d.get('to', 0)} people",
+            "time_logged": f"logged {d.get('time', 'time')} on this card",
+            "cost_added": f"added a cost: {d.get('name', '')} ({d.get('amount', '')})",
             "status_updated": f"updated the project status: {d.get('rag', '')}{(' — ' + d['note']) if d.get('note') else ''}",
             "card_moved_board": f"moved this card here from {d.get('frm', '')} ({d.get('to', '')})",
             "card_moved_out": f"moved “{d.get('title', '')}” to {d.get('to', '')}",
@@ -659,7 +661,8 @@ class Notification(models.Model):
     KINDS = [(ASSIGNED, "Assigned to a card"), (ITEM_ASSIGNED, "Assigned a checklist item"),
              (MENTIONED, "Mentioned"), (COMMENTED, "Comment on your card"), (DUE_SOON, "Card due soon"),
              (ITEM_DUE_SOON, "Checklist item due soon"), (ADDED_TO_BOARD, "Added to a board"),
-             (WATCHED, "Something you watch changed"), (AUTOMATION, "From a board rule")]
+             (WATCHED, "Something you watch changed"), (AUTOMATION, "From a board rule"),
+             ("budget", "Project budget warning")]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")

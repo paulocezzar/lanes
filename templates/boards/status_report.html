@@ -2,7 +2,7 @@
 {% block title %}{{ board.title }} — status report · Lanes{% endblock %}
 {% block content %}
 <main class="home sr">
-  <div class="sr-tools"><a class="btn light sm" href="{% url 'board' board.pk %}">← Back to the board</a><a class="btn light sm" href="{% url 'portfolio' %}">Portfolio</a><button type="button" class="btn primary sm" onclick="window.print()">Print / PDF</button></div>
+  <div class="sr-tools"><a class="btn light sm" href="{% url 'board' board.pk %}">← Back to the board</a><a class="btn light sm" href="{% url 'portfolio' %}">Portfolio</a><a class="btn light sm" href="{% url 'board_costs' board.pk %}">Costs</a><button type="button" class="btn primary sm" onclick="window.print()">Print / PDF</button></div>
   <article class="sr-page">
     <header class="sr-head">
       <div>

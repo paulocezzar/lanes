@@ -128,3 +128,28 @@ def ago(value):
     if (timezone.now() - value).total_seconds() < 60:
         return "just now"
     return f"{timesince(value)} ago"
+
+
+@register.filter
+def hm(minutes):
+    """Minutes as '1h 30m'; blank for 0."""
+    from boards.timetrack import fmt
+    return fmt(minutes) if minutes else ""
+
+
+@register.filter
+def hrs(value):
+    """Hours with at most one decimal: 7.5 → '7.5', 8.0 → '8'."""
+    try:
+        v = round(float(value), 1)
+    except (TypeError, ValueError):
+        return ""
+    return f"{v:g}"
+
+
+@register.filter
+def at(seq, i):
+    try:
+        return seq[i]
+    except (IndexError, KeyError, TypeError):
+        return None

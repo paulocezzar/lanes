@@ -20,6 +20,7 @@
       <a href="{% url 'planner' %}" class="{% if request.resolver_match.url_name == 'planner' %}on{% endif %}">Planner</a>
       <a href="{% url 'my_cards' %}" class="{% if request.resolver_match.url_name == 'my_cards' %}on{% endif %}">My cards</a>
       <a href="{% url 'portfolio' %}" class="{% if request.resolver_match.url_name == 'portfolio' %}on{% endif %}">Portfolio</a>
+      <a href="{% url 'workload' %}" class="{% if request.resolver_match.url_name == 'workload' or request.resolver_match.url_name == 'timesheets' %}on{% endif %}">Workload</a>
     </nav>
     <form class="top-search" method="get" action="{% url 'search' %}" role="search">
       <input type="search" name="q" placeholder="Search cards" value="{% if request.resolver_match.url_name == 'search' %}{{ request.GET.q }}{% endif %}" aria-label="Search cards" autocomplete="off" data-top-search>
@@ -27,6 +28,9 @@
     </form>
     <a class="icon-btn top-search-mobile" href="{% url 'search' %}" title="Search cards" aria-label="Search cards"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></a>
     <div class="topbar-right">
+      {% if running_timer %}<span class="timer-pill" data-timer-pill title="Timer running on {{ running_timer.card.title }}">
+        <a href="{% url 'board' running_timer.card.list.board_id %}?card={{ running_timer.card_id }}"><i class="rec"></i><span data-since="{{ running_timer.started_at|date:'c' }}" data-base="{{ running_timer.minutes }}">0:00</span><small>{{ running_timer.card.title|truncatechars:24 }}</small></a>
+        <button type="button" data-timer-stop-top title="Stop and log the time" aria-label="Stop timer">■</button></span>{% endif %}
       <div class="bell-wrap" id="bell">
         <button class="icon-btn bell" data-bell title="Notifications" aria-label="Notifications">
           {% include "boards/_icon.html" with i="bell" %}<span class="bell-count" data-bell-count {% if not unread_count %}hidden{% endif %}>{{ unread_count }}</span>
@@ -53,6 +57,7 @@
           <div class="menu-label">Lanes</div>
           <a class="menu-item" href="{% url 'my_cards' %}">{% include "boards/_icon.html" with i="card" %}My cards</a>
           <a class="menu-item" href="{% url 'notifications' %}">{% include "boards/_icon.html" with i="bell" %}Notifications</a>
+          <a class="menu-item" href="{% url 'timesheets' %}">{% include "boards/_icon.html" with i="clock" %}My timesheet</a>
           <a class="menu-item" href="{% url 'email_prefs' %}">{% include "boards/_icon.html" with i="mail" %}Email notifications</a>
           <div class="sub-wrap">
             <button type="button" class="menu-item has-sub" data-sub-toggle aria-expanded="false">{% include "boards/_icon.html" with i="theme" %}Theme<span class="sub-chev">{% include "boards/_icon.html" with i="chev" %}</span></button>
@@ -102,6 +107,7 @@
   </script>
   <script src="{% static 'lanes/ui.js' %}"></script>
   {% if user.is_authenticated %}<script src="{% static 'lanes/notify.js' %}"></script>
+  <script src="{% static 'lanes/timer.js' %}"></script>
   <dialog id="shortcuts-dialog" class="dialog wide" aria-label="Keyboard shortcuts">
     <div class="dialog-head"><h3>Keyboard shortcuts</h3><button class="icon-btn" data-close aria-label="Close">×</button></div>
     <div class="keys-grid">

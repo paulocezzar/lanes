@@ -302,6 +302,8 @@
     <div class="mlist">
       <a class="mitem" href="{% url 'board_gantt' board.pk %}">📈<span>Gantt chart<small>Dependencies, milestones, critical path</small></span></a>
       <a class="mitem" href="{% url 'status_report' board.pk %}">📝<span>Status report<small>One page, ready to print or send</small></span></a>
+      <a class="mitem" href="{% url 'board_costs' board.pk %}">💷<span>Costs and budget<small>Spending, labour and what's left</small></span></a>
+      <a class="mitem" href="{% url 'workload' %}?dept={{ board.workspace_id }}">⚖️<span>Workload<small>Who has how many hours, week by week</small></span></a>
       <a class="mitem" href="{% url 'portfolio' %}">🗂<span>Portfolio<small>All projects at a glance</small></span></a>
     </div>
   </div>

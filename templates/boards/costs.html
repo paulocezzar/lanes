@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load lanes_extras %}
+{% block title %}Costs · {{ board.title }} · Lanes{% endblock %}
+{% block content %}
+<main class="home pf costs" data-costs="{{ board.pk }}">
+  <div class="sr-tools"><a class="btn light sm" href="{% url 'board' board.pk %}">← Back to the board</a> <a class="btn light sm" href="{% url 'status_report' board.pk %}">Status report</a> <a class="btn light sm" href="{% url 'portfolio' %}">Portfolio</a></div>
+  <header class="pf-head"><div><h1>Costs · {{ board.title }}</h1><p class="muted">Money spent on this project. Labour is worked out from time logged on its cards × each person's hourly rate.</p></div></header>
+  <div class="sr-kpis">
+    <div class="{% if pct and pct >= 100 %}bad{% elif pct and pct >= 90 %}warn{% endif %}"><b>£{{ total|floatformat:"2g" }}</b><span>spent{% if board.budget %} of £{{ board.budget|floatformat:"0g" }} ({{ pct }}%){% endif %}</span></div>
+    <div><b>£{{ costs|floatformat:"2g" }}</b><span>costs</span></div>
+    <div><b>£{{ labour|floatformat:"2g" }}</b><span>labour ({{ hours|hrs }}h logged)</span></div>
+    <div class="{% if left is not None and left < 0 %}bad{% endif %}"><b>{% if board.budget %}£{{ left|floatformat:"2g" }}{% else %}—{% endif %}</b><span>{% if board.budget %}left{% else %}no budget set (⋯ Menu → Project){% endif %}</span></div>
+  </div>
+  {% if board.budget %}<div class="pf-bar money big{% if pct >= 100 %} over{% elif pct >= 90 %} warn{% endif %}"><i style="width: {% if pct > 100 %}100{% else %}{{ pct }}{% endif %}%"></i></div>
+  {% if pct >= 90 %}<p class="cost-warn">{% if pct >= 100 %}⚠ Over budget by £{{ left|floatformat:"2g"|cut:"-" }}.{% else %}⚠ {{ pct }}% of the budget is spent.{% endif %}</p>{% endif %}{% endif %}
+
+  {% if can_edit %}
+  <form class="cost-add" data-cost-add>
+    <input name="description" placeholder="What was it? e.g. Agency staff week 1" required maxlength="200">
+    <select name="category" aria-label="Category">{% for k, v in categories %}<option value="{{ k }}"{% if k == "materials" %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+    <input name="amount" inputmode="decimal" placeholder="£ amount" required aria-label="Amount">
+    <input type="date" name="day" value="{{ today|date:'Y-m-d' }}" aria-label="Date">
+    <select name="card" aria-label="Card (optional)"><option value="">No card</option>{% for c in cards %}<option value="{{ c.pk }}">{{ c.title|truncatechars:50 }}</option>{% endfor %}</select>
+    <button class="btn primary sm">Add cost</button>
+  </form>
+  {% endif %}
+
+  <div class="sr-cols cost-cols">
+    <section>
+      <h2>Costs</h2>
+      {% for c in items %}<div class="wl-item"><span><b>{{ c.description }}</b>{% if c.card %} · <a href="{% url 'board' board.pk %}?card={{ c.card.pk }}">{{ c.card.title }}</a>{% endif %}</span><span class="muted">{{ c.get_category_display }} · {{ c.day|date:"j M" }}</span><b>£{{ c.amount|floatformat:"2g" }}</b>{% if can_edit %}<button class="icon-btn x" data-cost-remove="{{ c.pk }}" title="Remove" aria-label="Remove">×</button>{% endif %}</div>
+      {% empty %}<p class="muted">No costs added yet.</p>{% endfor %}
+    </section>
+    <section>
+      <h2>By category</h2>
+      {% for k, v in by_cat %}<p class="sr-line">{{ k }} <b>£{{ v|floatformat:"2g" }}</b></p>{% empty %}<p class="muted">—</p>{% endfor %}
+      <h2>Time logged</h2>
+      {% for r in time_rows %}<p class="sr-line">{{ r.user.display_name }} <b>{{ r.minutes|hm }}</b></p>{% empty %}<p class="muted">No time logged on this board yet.</p>{% endfor %}
+    </section>
+  </div>
+</main>
+{% endblock %}
+{% block scripts %}{% load static %}<script src="{% static 'lanes/projects.js' %}"></script>{% endblock %}

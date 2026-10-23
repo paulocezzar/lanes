@@ -231,6 +231,26 @@
       </section>
       {% endif %}
 
+      {% if can_edit or time_entries %}
+      <section class="cm-section time" data-time-section>
+        <h4 class="cm-h">{% include "boards/_icon.html" with i="clock" %}Time</h4>
+        <div class="tt-sum">
+          <span><b>{{ time_total|hm|default:"0m" }}</b> logged{% if card.estimate_hours %} of {{ card.estimate_hours|hrs }}h estimate{% endif %}</span>
+          {% if time_pct is not None %}<div class="pf-bar{% if time_pct > 100 %} money over{% endif %}"><i style="width: {% if time_pct > 100 %}100{% else %}{{ time_pct }}{% endif %}%"></i></div>{% endif %}
+          {% if can_edit %}{% if my_timer %}<button type="button" class="btn sm tt-stop" data-time-act="stop">■ Stop <span data-since="{{ my_timer.started_at|date:'c' }}" data-base="{{ my_timer.minutes }}">0:00</span></button>
+          {% else %}<button type="button" class="btn sm light" data-time-act="start">▶ Start timer</button>{% endif %}{% endif %}
+        </div>
+        {% if can_edit %}<form class="tt-add" data-time-add>
+          <input name="time" placeholder="1h 30m" required aria-label="Time spent" size="7">
+          <input type="date" name="day" value="{{ time_today|date:'Y-m-d' }}" max="{{ time_today|date:'Y-m-d' }}" aria-label="Day">
+          <input name="note" placeholder="Note (optional)" maxlength="200" aria-label="Note">
+          <button class="btn sm">Log time</button>
+        </form>{% endif %}
+        {% if time_entries %}<div class="tt-list">{% for e in time_entries %}<div class="tt-row">{% include "boards/_avatar.html" with u=e.user %}<span>{{ e.user.display_name }}</span><span class="muted">{{ e.day|date:"D j M" }}{% if e.note %} · {{ e.note }}{% endif %}</span><b>{{ e.minutes|hm }}</b>{% if e.user_id == user.pk %}<button type="button" class="x" data-time-del="{{ e.pk }}" title="Remove" aria-label="Remove">×</button>{% endif %}</div>{% endfor %}
+          {% if time_more %}<p class="muted small">…and {{ time_more }} more on the <a href="{% url 'timesheets' %}">timesheets</a>.</p>{% endif %}</div>{% endif %}
+      </section>
+      {% endif %}
+
       {% if card.attachments.all %}
       <section class="cm-section">
         <h4 class="cm-h">{% include "boards/_icon.html" with i="clip" %}Attachments</h4>

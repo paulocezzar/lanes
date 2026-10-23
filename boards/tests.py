@@ -3655,3 +3655,117 @@ class PortfolioTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Christmas", mail.outbox[0].subject)
         self.assertIn("/b/%d/report/" % self.b.pk, mail.outbox[0].body)
+
+
+class TimeWorkloadCostTests(TestCase):
+    def setUp(self):
+        from datetime import date
+        from decimal import Decimal
+        self.D, self.Dec = date, Decimal
+        self.boss = User.objects.create_user("boss-tw@x.com", "pw", first_name="Boss")
+        self.u = User.objects.create_user("w@x.com", "pw", first_name="Wendy", hourly_rate=Decimal("12"))
+        self.ws = Workspace.objects.create(name="Production")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.boss, role="admin")
+        self.b = Board.objects.create(workspace=self.ws, title="Xmas", is_project=True, budget=Decimal("100"))
+        BoardMember.objects.create(board=self.b, user=self.u)
+        BoardMember.objects.create(board=self.b, user=self.boss, role="admin")
+        self.l = List.objects.create(board=self.b, title="Plan")
+        self.c = Card.objects.create(list=self.l, title="Dough")
+        self.client.force_login(self.u)
+
+    def j(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_parse_and_format(self):
+        from .timetrack import fmt, parse_minutes
+        for s, m in (("1h 30m", 90), ("1:30", 90), ("1.5", 90), ("90m", 90), ("2h", 120), ("45 mins", 45), ("x", None)):
+            self.assertEqual(parse_minutes(s), m, s)
+        self.assertEqual((fmt(90), fmt(60), fmt(5)), ("1h 30m", "1h", "5m"))
+
+    def test_timer_and_manual_entries(self):
+        from datetime import timedelta
+        from .models import TimeEntry
+        other = Card.objects.create(list=self.l, title="Stamp")
+        url = f"/api/cards/{self.c.pk}/time/"
+        self.assertEqual(self.j(url, {"action": "start"}).status_code, 200)
+        TimeEntry.objects.filter(started_at__isnull=False).update(started_at=timezone.now() - timedelta(minutes=25))
+        r = self.j(f"/api/cards/{other.pk}/time/", {"action": "start"})   # starting another stops the first
+        self.assertEqual(r.json()["stopped"], "Dough")
+        self.assertEqual(TimeEntry.objects.get(card=self.c).minutes, 25)
+        self.assertContains(self.client.get(f"/b/{self.b.pk}/"), "data-timer-pill")
+        self.assertEqual(self.j("/api/time/stop/", {}).json()["card"], "Stamp")
+        self.assertFalse(TimeEntry.objects.filter(started_at__isnull=False).exists())
+        self.assertEqual(self.j(url, {"action": "add", "time": "1h 15m", "note": "mixing"}).status_code, 200)
+        self.assertEqual(self.j(url, {"action": "add", "time": "lots"}).status_code, 400)
+        future = (timezone.localdate() + timedelta(days=2)).isoformat()
+        self.assertEqual(self.j(url, {"action": "add", "time": "1", "day": future}).status_code, 400)
+        e = TimeEntry.objects.get(note="mixing")
+        self.assertEqual(e.minutes, 75)
+        self.client.force_login(self.boss)   # someone else's entry: only admins may delete
+        self.assertEqual(self.j(url, {"action": "delete", "id": e.pk}).status_code, 200)
+
+    def test_workload_spreads_remaining_hours(self):
+        from datetime import datetime, time, timedelta
+        from .models import TimeEntry
+        from .workload import build
+        today = timezone.localdate()
+        monday = today - timedelta(days=today.weekday())
+        nxt = monday + timedelta(weeks=1)
+        due = timezone.make_aware(datetime.combine(nxt + timedelta(days=4), time(17)))
+        self.c.start_date, self.c.due_at, self.c.estimate_hours = nxt, due, self.Dec("20")
+        self.c.save(); self.c.members.add(self.u, self.boss)
+        TimeEntry.objects.create(card=self.c, user=self.u, day=today, minutes=120)   # 18h left, 9h each
+        data = build(self.boss)
+        row = next(r for r in data["rows"] if r["user"] == self.u)
+        self.assertAlmostEqual(row["cells"][1]["hours"], 9.0)
+        self.assertEqual(row["cells"][0]["hours"], 0)
+        self.assertEqual(row["cells"][1]["level"], "low")        # 9 of 37.5
+        self.assertEqual(row["logged_week"], 120)
+        # overdue, unassigned work lands on this week
+        Card.objects.create(list=self.l, title="Late one", estimate_hours=self.Dec("4"),
+                            due_at=timezone.now() - timedelta(days=3))
+        data = build(self.boss)
+        self.assertAlmostEqual(data["nobody"]["cells"][0]["hours"], 4.0)
+        r = self.client.get("/workload/?p=%d&i=1" % self.u.pk)
+        self.assertContains(r, "Dough")
+        self.assertContains(self.client.get("/workload/?by=day"), "Wendy")
+
+    def test_capacity_permissions(self):
+        url = f"/api/users/{self.u.pk}/capacity/"
+        self.assertEqual(self.j(url, {"capacity_hours": "30"}).status_code, 200)       # own hours
+        self.assertEqual(self.j(url, {"hourly_rate": "20"}).status_code, 403)          # not own pay
+        self.assertEqual(self.j(f"/api/users/{self.boss.pk}/capacity/", {"capacity_hours": "1"}).status_code, 403)
+        self.client.force_login(self.boss)
+        self.assertEqual(self.j(url, {"hourly_rate": "14.50", "capacity_hours": "22.5"}).status_code, 200)
+        self.u.refresh_from_db()
+        self.assertEqual((self.u.hourly_rate, self.u.capacity_hours), (self.Dec("14.50"), self.Dec("22.5")))
+
+    def test_timesheets_visibility_and_csv(self):
+        from .models import TimeEntry
+        TimeEntry.objects.create(card=self.c, user=self.u, day=timezone.localdate(), minutes=90, note="dough")
+        TimeEntry.objects.create(card=self.c, user=self.boss, day=timezone.localdate(), minutes=30, note="boss time")
+        r = self.client.get("/timesheets/")
+        self.assertContains(r, "1h 30m")
+        self.assertNotContains(r, "boss time")
+        self.client.force_login(self.boss)
+        r = self.client.get("/timesheets/")
+        self.assertContains(r, "boss time"); self.assertContains(r, "Wendy")
+        csv = self.client.get("/timesheets/?csv=1").content.decode()
+        self.assertIn("Wendy", csv); self.assertIn("18.0", csv)   # 1.5h × £12
+
+    def test_costs_and_budget_warning(self):
+        from .models import Notification
+        url = f"/api/boards/{self.b.pk}/costs/"
+        self.assertEqual(self.j(url, {"description": "Flour", "amount": "£80", "category": "materials"}).status_code, 200)
+        self.assertFalse(Notification.objects.filter(kind="budget").exists())
+        self.assertEqual(self.j(url, {"description": "Butter", "amount": "15"}).status_code, 200)   # 95%
+        n = Notification.objects.get(kind="budget", recipient=self.boss)
+        self.assertIn("90%", n.text)
+        self.j(url, {"description": "Eggs", "amount": "10"})                                        # 105%
+        self.assertTrue(Notification.objects.filter(kind="budget", text__contains="over budget").exists())
+        self.assertEqual(self.j(url, {"description": "", "amount": "1"}).status_code, 400)
+        self.assertEqual(self.j(url, {"description": "x", "amount": "abc"}).status_code, 400)
+        r = self.client.get(f"/b/{self.b.pk}/costs/")
+        self.assertContains(r, "Over budget")
+        self.assertContains(r, "Flour")

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load lanes_extras %}
+{% block title %}Timesheets · Lanes{% endblock %}
+{% block content %}
+<main class="home pf ts">
+  <header class="pf-head">
+    <div>
+      <h1>Timesheets</h1>
+      <p class="muted">Week of {{ start|date:"j M" }} – {{ end|date:"j M Y" }}. {% if manager %}Your departments' time.{% else %}Your time.{% endif %} Log time from any card (⏱ Time).</p>
+    </div>
+    <div class="pf-actions">
+      {% if manager %}<form method="get" class="pf-filter">
+        <input type="hidden" name="week" value="{{ start|date:'Y-m-d' }}">
+        <select name="dept" onchange="this.form.submit()" aria-label="Department"><option value="">All my departments</option>{% for d in depts %}<option value="{{ d.pk }}" {% if dept == d.pk %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select>
+      </form>{% endif %}
+      <div class="seg"><a href="?week={{ prev }}{% if dept %}&dept={{ dept }}{% endif %}" aria-label="Previous week">‹</a><a href="?{% if dept %}dept={{ dept }}{% endif %}" class="{% if start <= today and today <= end %}on{% endif %}">This week</a><a href="?week={{ next }}{% if dept %}&dept={{ dept }}{% endif %}" aria-label="Next week">›</a></div>
+      <a class="btn light sm" href="?week={{ start|date:'Y-m-d' }}{% if dept %}&dept={{ dept }}{% endif %}{% if only %}&person={{ only }}{% endif %}&csv=1">Download CSV</a>
+      <a class="btn light sm" href="{% url 'workload' %}">Workload</a>
+    </div>
+  </header>
+  <div class="pf-table-wrap">
+  <table class="pf-table ts-table">
+    <thead><tr><th>Person</th>{% for d in days %}<th class="num{% if d == today %} now{% endif %}{% if d.weekday >= 5 %} wkend{% endif %}">{{ d|date:"D" }}<small>{{ d|date:"j M" }}</small></th>{% endfor %}<th class="num">Total</th><th class="num">of capacity</th></tr></thead>
+    <tbody>
+    {% for r in rows %}<tr>
+      <td class="wl-who">{% include "boards/_avatar.html" with u=r.user %}<a href="?week={{ start|date:'Y-m-d' }}&person={{ r.user.pk }}">{{ r.user.display_name }}</a></td>
+      {% for m in r.days %}<td class="num{% if not m %} muted{% endif %}{% if forloop.counter0 >= 5 %} wkend{% endif %}">{{ m|hm|default:"·" }}</td>{% endfor %}
+      <td class="num"><b>{{ r.total|hm|default:"0" }}</b></td>
+      <td class="num">{% if r.total %}{{ r.pct }}%{% endif %}</td>
+    </tr>{% endfor %}
+    {% if rows|length > 1 %}<tr class="ts-total"><td>Everyone</td>{% for m in day_totals %}<td class="num">{{ m|hm|default:"·" }}</td>{% endfor %}<td class="num"><b>{{ grand|hm|default:"0" }}</b></td><td></td></tr>{% endif %}
+    </tbody>
+  </table>
+  </div>
+  {% if hidden %}<p class="muted small ts-more">{{ hidden }} other{{ hidden|pluralize }} logged no time this week · <a href="?week={{ start|date:'Y-m-d' }}{% if dept %}&dept={{ dept }}{% endif %}&all=1">show everyone</a></p>{% endif %}
+  <h3 class="ts-h">Entries{% if only %} · <a href="?week={{ start|date:'Y-m-d' }}{% if dept %}&dept={{ dept }}{% endif %}">show everyone</a>{% endif %}</h3>
+  {% if entries %}
+  <div class="pf-table-wrap">
+  <table class="pf-table">
+    <thead><tr><th>Day</th>{% if manager %}<th>Person</th>{% endif %}<th>Card</th><th>Board</th><th>Note</th><th class="num">Time</th></tr></thead>
+    <tbody>{% for e in entries %}<tr>
+      <td>{{ e.day|date:"D j M" }}</td>{% if manager %}<td>{{ e.user.display_name }}</td>{% endif %}
+      <td><a href="{% url 'board' e.card.list.board.pk %}?card={{ e.card.pk }}">{{ e.card.title }}</a></td>
+      <td class="muted">{{ e.card.list.board.title }}</td><td class="muted">{{ e.note }}</td><td class="num">{{ e.minutes|hm }}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  </div>
+  {% else %}<p class="muted">No time logged this week.</p>{% endif %}
+</main>
+{% endblock %}

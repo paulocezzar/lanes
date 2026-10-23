@@ -332,6 +332,7 @@
   let openPop = null;
 
   window.LanesOpenCard = id => openCard(id);
+  window.addEventListener('lanes:timer-stopped', () => { if (openCardId) openCard(openCardId); });
   async function openCard(id) {
     const res = await fetch(`/cards/${id}/`, { credentials: 'same-origin' });
     if (!res.ok) { toast('That card could not be opened.'); return; }
@@ -576,6 +577,18 @@
     if (tplBtn) return cardPost('update', { is_template: tplBtn.dataset.templateToggle === '1' });
     const cover = t.closest('[data-cover]');
     if (cover) return post(`/api/attachments/${cover.dataset.cover}/`, { cover: cover.dataset.on === '1' }).then(applyCard);
+    const tAct = t.closest('[data-time-act]');
+    if (tAct) {
+      const act = tAct.dataset.timeAct, title = dialogBody.querySelector('.cm-title, [data-title]')?.textContent?.trim() || 'this card';
+      return cardPost('time', { action: act }).then(() => {
+        const clock = dialogBody.querySelector('.tt-stop [data-since]');
+        if (act === 'start' && clock) window.LanesTimerPill?.({ since: clock.dataset.since, base: clock.dataset.base, title,
+          href: `${location.pathname}?card=${openCardId}` });
+        if (act === 'stop') window.LanesTimerPill?.(null);
+      }).catch(err => toast(err.message || 'Could not do that.'));
+    }
+    const tDel = t.closest('[data-time-del]');
+    if (tDel) return cardPost('time', { action: 'delete', id: +tDel.dataset.timeDel }).catch(err => toast(err.message));
     const depX = t.closest('[data-dep-remove]');
     if (depX) return cardPost('dependencies', { remove: +depX.dataset.depRemove });
     const attC = t.closest('[data-att-comment]');
@@ -625,6 +638,11 @@
 
   dialogBody.addEventListener('submit', e => {
     const f = e.target;
+    if (f.matches('[data-time-add]')) {
+      e.preventDefault();
+      return cardPost('time', { action: 'add', time: f.time.value, day: f.day.value, note: f.note.value })
+        .catch(err => toast(err.message || 'Could not log that.'));
+    }
     if (f.matches('[data-dep-add]')) {
       e.preventDefault();
       if (!f.depends_on.value) return;

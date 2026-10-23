@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load lanes_extras %}
+{% block title %}Workload · Lanes{% endblock %}
+{% block content %}
+<main class="home pf wl">
+  <header class="pf-head">
+    <div>
+      <h1>Workload</h1>
+      <p class="muted">Hours of planned work against each person's capacity. Cards count when they have an estimate, dates and someone on them; time already logged comes off.</p>
+    </div>
+    <div class="pf-actions">
+      <form method="get" class="pf-filter">
+        <select name="dept" onchange="this.form.submit()" aria-label="Department"><option value="">Everyone with work</option>{% for d in depts %}<option value="{{ d.pk }}" {% if dept == d.pk %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select>
+        <input type="hidden" name="by" value="{{ by }}">
+      </form>
+      <div class="seg"><a href="?{% if dept %}dept={{ dept }}&{% endif %}by=week" class="{% if by == 'week' %}on{% endif %}">Weeks</a><a href="?{% if dept %}dept={{ dept }}&{% endif %}by=day" class="{% if by == 'day' %}on{% endif %}">Days</a></div>
+      <a class="btn light sm" href="{% url 'timesheets' %}">Timesheets</a>
+    </div>
+  </header>
+  <div class="wl-legend"><span class="wl-key low"></span>under 60% <span class="wl-key ok"></span>60–90% <span class="wl-key full"></span>90–100% <span class="wl-key over"></span>over capacity</div>
+  {% if rows or nobody %}
+  <div class="pf-table-wrap">
+  <table class="pf-table wl-table">
+    <thead><tr><th>Person</th><th class="num" title="Capacity">{% if by == 'day' %}Hours a day{% else %}Hours a week{% endif %}</th>
+      {% for p in periods %}<th class="wl-col{% if p.now %} now{% endif %}">{{ p.label }}{% if p.sub %}<small>{{ p.sub }}</small>{% endif %}</th>{% endfor %}
+      <th class="num" title="Planned work with no dates">No dates</th><th class="num" title="Time logged this week">Logged this wk</th></tr></thead>
+    <tbody>
+    {% for r in rows %}<tr>
+      <td class="wl-who">{% include "boards/_avatar.html" with u=r.user %}<span>{{ r.user.display_name }}</span></td>
+      <td class="num">{% if r.can_set %}<button type="button" class="link-btn wl-cap" data-cap-edit="{{ r.user.pk }}" data-cap="{{ r.weekly|hrs }}" {% if r.can_rate %}data-rate="{{ r.user.hourly_rate|default_if_none:'' }}"{% endif %} data-name="{{ r.user.display_name }}" title="Change hours{% if is_manager %} and rate{% endif %}">{{ r.cap|hrs }}h</button>{% else %}{{ r.cap|hrs }}h{% endif %}</td>
+      {% for c in r.cells %}<td class="wl-cell {{ c.level }}{% if c.past %} past{% endif %}{% if sel and sel.uid == r.user.pk and sel.i == c.i %} sel{% endif %}">{% if c.hours %}<a href="?{% if dept %}dept={{ dept }}&{% endif %}by={{ by }}&p={{ r.user.pk }}&i={{ c.i }}#detail" title="{{ c.hours|hrs }}h of {{ r.cap|hrs }}h"><b>{{ c.hours|hrs }}h</b><small>{{ c.pct }}%</small></a>{% endif %}</td>{% endfor %}
+      <td class="num muted">{% if r.undated %}{{ r.undated|hrs }}h{% endif %}</td>
+      <td class="num">{{ r.logged_week|hm }}</td>
+    </tr>{% endfor %}
+    {% if nobody %}<tr class="wl-nobody">
+      <td class="wl-who"><span class="avatar" style="--h:0">?</span><span>Not assigned</span></td><td></td>
+      {% for c in nobody.cells %}<td class="wl-cell{% if c.hours %} nobody{% endif %}{% if sel and sel.uid == 0 and sel.i == c.i %} sel{% endif %}">{% if c.hours %}<a href="?{% if dept %}dept={{ dept }}&{% endif %}by={{ by }}&p=0&i={{ c.i }}#detail"><b>{{ c.hours|hrs }}h</b></a>{% endif %}</td>{% endfor %}
+      <td class="num muted">{% if nobody.undated %}{{ nobody.undated|hrs }}h{% endif %}</td><td></td>
+    </tr>{% endif %}
+    </tbody>
+  </table>
+  </div>
+  {% if sel %}
+  <section class="wl-detail" id="detail">
+    <h3>{% if sel.who %}{{ sel.who.display_name }}{% else %}Not assigned{% endif %} · {% if by == 'day' %}{{ sel.period.start|date:"l j M" }}{% else %}week of {{ sel.period.start|date:"j M" }}{% endif %}</h3>
+    {% for card, h in sel.items %}<div class="wl-item"><a href="{% url 'board' card.list.board.pk %}?card={{ card.pk }}">{{ card.title }}</a><span class="muted">{{ card.list.board.title }} · due {{ card.due_at|date:"D j M"|default:"—" }}</span><b>{{ h|hrs }}h</b></div>
+    {% empty %}<p class="muted">Nothing planned.</p>{% endfor %}
+  </section>
+  {% endif %}
+  {% else %}
+  <div class="empty-state"><h3>No planned hours yet</h3><p class="muted">Open a card → Dates → <b>Estimate (hours of work)</b>, give it a start and due date and add people. Their hours then show here, week by week.</p></div>
+  {% endif %}
+  <dialog class="dialog" data-cap-dialog aria-label="Capacity">
+    <form method="dialog" data-cap-form>
+      <div class="dialog-head"><h3 data-cap-title>Hours</h3><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <label>Working hours a week<input type="number" name="capacity_hours" min="0" max="80" step="0.5" required></label>
+      <label data-rate-wrap hidden>Hourly rate (£) — for labour cost; only department admins see it<input type="number" name="hourly_rate" min="0" max="1000" step="0.01" placeholder="e.g. 13.50"></label>
+      <div class="dialog-actions"><button class="btn primary" value="save">Save</button></div>
+    </form>
+  </dialog>
+</main>
+{% endblock %}
+{% block scripts %}{% load static %}<script src="{% static 'lanes/projects.js' %}"></script>{% endblock %}

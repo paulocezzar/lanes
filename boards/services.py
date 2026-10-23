@@ -1,5 +1,6 @@
 """Shared helpers for views: activity logging, query shapes, rendering."""
 from django.conf import settings
+from django.utils import timezone
 from django.db.models import Prefetch
 from django.template.loader import render_to_string
 
@@ -109,6 +110,7 @@ def render_modal(card, request):
         "move_tree": _move_tree(card, board, user) if permissions.can_edit(board, user) else None,
         "recent_board_links": [{"url": f"{settings.SITE_URL}/b/{b.pk}/", "title": b.title} for b in
                                permissions.visible_boards(user).filter(pk__in=(user.recent_boards or [])[:6])],
+        **_time_ctx(card, user),
         "waits_for": card.dependencies.select_related("depends_on").filter(depends_on__is_archived=False),
         "needed_by": card.dependants.select_related("card").filter(card__is_archived=False),
         "dep_choices": (Card.objects.filter(list__board=board, is_archived=False, is_template=False, list__is_archived=False)
@@ -119,6 +121,17 @@ def render_modal(card, request):
                                 if can_edit else []),
     }
     return render_to_string("boards/_card_modal.html", ctx, request=request)
+
+
+def _time_ctx(card, user):
+    from .models import TimeEntry
+    entries = list(TimeEntry.objects.filter(card=card).select_related("user")[:200])
+    total = sum(e.minutes for e in entries)
+    mine = next((e for e in entries if e.user_id == user.pk and e.started_at), None)
+    est = float(card.estimate_hours or 0) * 60
+    return {"time_entries": [e for e in entries if e.minutes][:20], "time_total": total, "my_timer": mine,
+            "time_more": max(0, len([e for e in entries if e.minutes]) - 20),
+            "time_pct": round(100 * total / est) if est else None, "time_today": timezone.localdate()}
 
 
 def _field_rows(card, board):
