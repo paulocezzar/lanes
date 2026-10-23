@@ -38,6 +38,7 @@ def board_context(request, board_id, view):
         "roles": BoardMember.ROLES,
         "label_colours": Label.COLOURS,
         "field_kinds": CustomField.KINDS,
+        "field_names": {f.name.strip().lower() for f in board.custom_fields.all()},
         "archived_cards": cards_qs().filter(list__board=board, is_archived=True)[:50],
         "archived_lists": board.lists.filter(is_archived=True),
         "activity": board.activity.select_related("actor", "card")[:40],

@@ -304,7 +304,7 @@ body.board-page { overflow: hidden; }
 .drawer-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 14px 0; }
 .drawer-tabs button { border: 0; background: none; padding: 6px 9px; font-size: 13px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-weight: 600; }
 .drawer-tabs button.on { background: var(--surface-3); color: var(--text); }
-.drawer-pane { padding: 14px; overflow-y: auto; display: grid; gap: 12px; align-content: start; }
+.drawer-pane { padding: 14px; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; }
 .drawer-pane .section-label { margin-top: 8px; }
 .archived-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; }
 

@@ -296,13 +296,15 @@ Setup:
       <button class="icon-btn xs" data-field-delete title="Delete field">{% include "boards/_icon.html" with i="close" %}</button>
     </div>
     {% empty %}<p class="muted small">No custom fields yet.</p>{% endfor %}
+    {% if "priority" not in field_names or "status" not in field_names or "risk" not in field_names or "effort" not in field_names %}
     <h4 class="section-label">Suggested fields</h4>
     <div class="field-suggest">
-      <button class="btn sm ghost" data-field-suggest='{"name":"Priority","kind":"dropdown","options":"Highest,High,Medium,Low,Lowest"}'>⌃ Priority <b>Add</b></button>
-      <button class="btn sm ghost" data-field-suggest='{"name":"Status","kind":"dropdown","options":"Not started,In progress,Blocked,Done"}'>⚑ Status <b>Add</b></button>
-      <button class="btn sm ghost" data-field-suggest='{"name":"Risk","kind":"dropdown","options":"High,Medium,Low"}'>⚑ Risk <b>Add</b></button>
-      <button class="btn sm ghost" data-field-suggest='{"name":"Effort","kind":"number"}'>⌃ Effort <b>Add</b></button>
+      {% if "priority" not in field_names %}<button class="btn sm ghost" data-field-suggest='{"name":"Priority","kind":"dropdown","options":"Highest,High,Medium,Low,Lowest"}'>⌃ Priority <b>Add</b></button>{% endif %}
+      {% if "status" not in field_names %}<button class="btn sm ghost" data-field-suggest='{"name":"Status","kind":"dropdown","options":"Not started,In progress,Blocked,Done"}'>⚑ Status <b>Add</b></button>{% endif %}
+      {% if "risk" not in field_names %}<button class="btn sm ghost" data-field-suggest='{"name":"Risk","kind":"dropdown","options":"High,Medium,Low"}'>⚑ Risk <b>Add</b></button>{% endif %}
+      {% if "effort" not in field_names %}<button class="btn sm ghost" data-field-suggest='{"name":"Effort","kind":"number"}'>⌃ Effort <b>Add</b></button>{% endif %}
     </div>
+    {% endif %}
     <form class="field-new" data-field-new>
       <h4 class="section-label">New field</h4>
       <input name="name" placeholder="Field name, e.g. Quantity (kg)" maxlength="60" required>
