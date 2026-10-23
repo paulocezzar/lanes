@@ -3326,3 +3326,30 @@ class AutomationParityTests(TestCase):
         rules = self.c.get(f"/b/{self.b.pk}/automation/?s=rules")
         self.assertContains(rules, "data-edit=")
         self.assertContains(rules, "auto-data")
+
+
+class AttachmentMenuTests(TestCase):
+    def test_rename_edit_link_and_download(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .models import Attachment
+        u = User.objects.create_user("am@x.com", "pw")
+        ws = Workspace.objects.create(name="AM"); WorkspaceMember.objects.create(workspace=ws, user=u)
+        b = Board.objects.create(workspace=ws, title="AM"); BoardMember.objects.create(board=b, user=u, role="admin")
+        card = Card.objects.create(list=List.objects.create(board=b, title="L"), title="c")
+        self.client.force_login(u)
+        j = lambda url, d: self.client.post(url, json.dumps(d), content_type="application/json")
+        j(f"/api/cards/{card.pk}/links/", {"url": "https://example.com/a"})
+        link = Attachment.objects.get(card=card)
+        self.assertEqual(j(f"/api/attachments/{link.pk}/", {"name": "Spec", "url": "https://example.com/b"}).status_code, 200)
+        link.refresh_from_db()
+        self.assertEqual((link.name, link.url), ("Spec", "https://example.com/b"))
+        self.assertEqual(j(f"/api/attachments/{link.pk}/", {"url": "javascript:alert(1)"}).status_code, 400)
+        self.client.post(f"/api/cards/{card.pk}/attachments/", {"file": SimpleUploadedFile("a.png", b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82", "image/png")})
+        f = Attachment.objects.get(card=card, url="")
+        j(f"/api/attachments/{f.pk}/", {"name": "loaf.png"})
+        f.refresh_from_db(); self.assertEqual(f.name, "loaf.png")
+        self.assertNotIn("attachment", self.client.get(f"/files/{f.pk}/").get("Content-Disposition", ""))
+        self.assertIn("attachment", self.client.get(f"/files/{f.pk}/?download=1")["Content-Disposition"])
+        modal = self.client.get(f"/cards/{card.pk}/")
+        self.assertContains(modal, f'data-pop="att{f.pk}"')
+        self.assertContains(modal, "?download=1")

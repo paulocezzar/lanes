@@ -496,6 +496,10 @@
     if (popBtn) {
       const name = popBtn.dataset.pop;
       if (openPop === name) return hidePops();
+      // Open the panel next to whichever button asked for it (e.g. the date block in the card body).
+      const wrap = popBtn.closest('.pop-wrap');
+      const panel = $(`[data-pop-panel="${name}"]`, dialogBody);
+      if (wrap && panel && !wrap.contains(panel)) wrap.appendChild(panel);
       showPop(name);
       if (popBtn.hasAttribute('data-suggest-steps')) loadSuggestions();
       return;
@@ -571,6 +575,17 @@
     if (tplBtn) return cardPost('update', { is_template: tplBtn.dataset.templateToggle === '1' });
     const cover = t.closest('[data-cover]');
     if (cover) return post(`/api/attachments/${cover.dataset.cover}/`, { cover: cover.dataset.on === '1' }).then(applyCard);
+    const attC = t.closest('[data-att-comment]');
+    if (attC) {
+      hidePops();
+      const ta = $('textarea[name=body]', dialogBody);
+      if (ta) {
+        ta.value = `${ta.value ? ta.value.trimEnd() + ' ' : ''}[${attC.dataset.attName}](${location.origin}${attC.dataset.attComment}) `;
+        ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+        ta.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+      return;
+    }
     const delAtt = t.closest('[data-delete-attachment]');
     if (delAtt) {
       if (!await LanesUI.confirm('Delete this attachment?', { ok: 'Delete', danger: true })) return;
@@ -607,6 +622,12 @@
 
   dialogBody.addEventListener('submit', e => {
     const f = e.target;
+    if (f.matches('[data-att-edit]')) {
+      e.preventDefault();
+      const data = { name: f.name.value };
+      if (f.url) data.url = f.url.value;
+      return post(`/api/attachments/${f.dataset.attEdit}/`, data).then(applyCard).catch(err => toast(err.message || 'Could not save that.'));
+    }
     if (f.matches('[data-attach-link]')) {
       e.preventDefault();
       hidePops();

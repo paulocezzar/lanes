@@ -433,6 +433,7 @@ class Activity(models.Model):
             "unmirrored": f"removed the mirror from {d.get('frm', '')}",
             "mirror_added": f"mirrored a card here from {d.get('source', '')} ({d.get('list', '')})",
             "attachment_added": f"attached {d.get('name', 'a file')}",
+            "attachment_renamed": f"renamed an attachment to {d.get('name', '?')}",
             "card_moved_board": f"moved this card here from {d.get('frm', '')} ({d.get('to', '')})",
             "card_moved_out": f"moved “{d.get('title', '')}” to {d.get('to', '')}",
             "card_deleted": f"deleted the card “{d.get('title', '')}”",

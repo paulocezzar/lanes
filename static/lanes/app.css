@@ -1465,3 +1465,14 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .ab-opts { display: flex; gap: 18px; flex-wrap: wrap; margin: 4px 0 8px; font-size: .92rem; }
 .ab-opts label { display: inline-flex; gap: 6px; align-items: center; }
 .ab-hint { color: var(--text-2); font-size: .85rem; margin: -2px 0 10px; }
+.date-btn { border: 0; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.date-btn:hover { background: var(--surface-3); }
+.date-chev { font-size: .8rem; opacity: .7; margin-left: 2px; }
+.att { position: relative; }
+.att-meta { flex: 1; }
+.att-tools { display: flex; gap: 4px; align-items: center; margin-left: auto; }
+.att-tools .icon-btn { text-decoration: none; }
+.att-tools .pop { left: auto; right: 0; }
+.att-menu { width: 230px; padding: 6px; }
+.att-menu a.mitem { text-decoration: none; color: var(--text); }
+.mitem.danger { color: var(--danger); }

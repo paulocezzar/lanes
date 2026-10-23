@@ -157,9 +157,9 @@
       <div class="cm-meta">
         {% if card.members.all %}<div><h4 class="section-label">Members</h4><div class="avatar-row">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="lg" %}{% endfor %}</div></div>{% endif %}
         {% if card.labels.all %}<div><h4 class="section-label">Labels</h4><div class="label-row">{% for l in card.labels.all %}<span class="label-swatch lc-{{ l.colour }}">{{ l.name }}</span>{% endfor %}</div></div>{% endif %}
-        {% if card.start_date or card.due_at %}<div><h4 class="section-label">Dates</h4>
-          <span class="date-pill due-{{ card.due_state|default:'none' }}">{% if card.start_date %}{{ card.start_date|date:"j M" }}{% if card.due_at %} – {% endif %}{% endif %}{% if card.due_at %}{{ card.due_at|date:"j M, H:i" }}{% endif %}
-          {% if card.due_state == 'overdue' %}<em>Overdue</em>{% elif card.due_state == 'soon' %}<em>Due soon</em>{% elif card.due_state == 'complete' %}<em>Complete</em>{% endif %}</span></div>{% endif %}
+        {% if card.start_date or card.due_at %}<div><h4 class="section-label">{% if card.start_date and card.due_at %}Dates{% elif card.due_at %}Due date{% else %}Start date{% endif %}</h4>
+          {% if can_edit %}<div class="pop-wrap"><button type="button" class="date-pill date-btn due-{{ card.due_state|default:'none' }}" data-pop="dates" title="Change the dates">{% else %}<span class="date-pill due-{{ card.due_state|default:'none' }}">{% endif %}{% if card.start_date %}{{ card.start_date|date:"j M" }}{% if card.due_at %} – {% endif %}{% endif %}{% if card.due_at %}{{ card.due_at|date:"j M, H:i" }}{% endif %}
+          {% if card.due_state == 'overdue' %}<em>Overdue</em>{% elif card.due_state == 'soon' %}<em>Due soon</em>{% elif card.due_state == 'complete' %}<em>Complete</em>{% endif %}{% if can_edit %}<span class="date-chev" aria-hidden="true">▾</span></button></div>{% else %}</span>{% endif %}</div>{% endif %}
       </div>
       {% endif %}
 
@@ -226,10 +226,26 @@
             <div class="att-meta">
               <a href="{% url 'attachment' a.pk %}" target="_blank" rel="noopener"><b>{{ a.name }}</b></a>
               <small>{% if a.url %}{{ a.link_host }}{% else %}{{ a.size_label }}{% endif %} · {{ a.created_at|ago }}{% if card.cover_id == a.pk %} · Cover{% endif %}</small>
-              {% if can_edit %}<div class="att-actions">
-                {% if a.is_image %}<button class="link-btn" data-cover="{{ a.pk }}" data-on="{% if card.cover_id == a.pk %}0{% else %}1{% endif %}">{% if card.cover_id == a.pk %}Remove cover{% else %}Make cover{% endif %}</button>{% endif %}
-                <button class="link-btn" data-delete-attachment="{{ a.pk }}">Delete</button>
-              </div>{% endif %}
+            </div>
+            <div class="att-tools">
+              <a class="icon-btn xs" href="{% url 'attachment' a.pk %}" target="_blank" rel="noopener" title="Open in a new tab" aria-label="Open in a new tab">↗</a>
+              <div class="pop-wrap"><button type="button" class="icon-btn xs" data-pop="att{{ a.pk }}" title="More" aria-label="Attachment actions">{% include "boards/_icon.html" with i="dots" %}</button>
+                <div class="pop att-menu" data-pop-panel="att{{ a.pk }}" hidden>
+                  {% if can_edit %}<button type="button" class="mitem" data-pop="atte{{ a.pk }}">Edit</button>{% endif %}
+                  {% if can_comment %}<button type="button" class="mitem" data-att-comment="{% url 'attachment' a.pk %}" data-att-name="{{ a.name }}">Comment</button>{% endif %}
+                  {% if not a.url %}<a class="mitem" href="{% url 'attachment' a.pk %}?download=1">Download</a>{% endif %}
+                  {% if can_edit and a.is_image %}<button type="button" class="mitem" data-cover="{{ a.pk }}" data-on="{% if card.cover_id == a.pk %}0{% else %}1{% endif %}">{% if card.cover_id == a.pk %}Remove cover{% else %}Make cover{% endif %}</button>{% endif %}
+                  {% if can_edit %}<button type="button" class="mitem danger" data-delete-attachment="{{ a.pk }}">Remove</button>{% endif %}
+                </div>
+                {% if can_edit %}<div class="pop att-menu" data-pop-panel="atte{{ a.pk }}" hidden>
+                  <div class="pop-head">Edit attachment</div>
+                  <form data-att-edit="{{ a.pk }}">
+                    {% if a.url %}<label>Link<input name="url" type="url" value="{{ a.url }}" required maxlength="1000"></label>{% endif %}
+                    <label>{% if a.url %}Text to display{% else %}File name{% endif %}<input name="name" value="{{ a.name }}" maxlength="255" required></label>
+                    <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-pop="att{{ a.pk }}">Back</button></div>
+                  </form>
+                </div>{% endif %}
+              </div>
             </div>
           </div>
           {% endfor %}

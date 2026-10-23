@@ -63,7 +63,7 @@ def attachment_download(request, attachment_id):
         raise Http404
     if att.url:                                           # a link attachment
         return HttpResponseRedirect(att.url)
-    inline = att.is_image or att.content_type == "application/pdf"
+    inline = (att.is_image or att.content_type == "application/pdf") and request.GET.get("download") != "1"
     if settings.ATTACHMENTS_PERSISTENT and "s3" in settings.STORAGES["default"]["BACKEND"]:
         if not att.file.storage.exists(att.file.name):
             raise Http404("This file is no longer stored.")

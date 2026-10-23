@@ -2,6 +2,7 @@
 server and returns fresh server-rendered HTML, so the browser never has to
 rebuild a card itself."""
 import json
+import re
 from functools import wraps
 
 from django.conf import settings
@@ -803,6 +804,16 @@ def attachment_update(request, attachment_id):
     elif "cover" in request.data:
         card.cover = att if request.data["cover"] and att.is_image else None
         card.save(update_fields=["cover", "updated_at"])
+    else:
+        if "url" in request.data and att.url:
+            url = (request.data.get("url") or "").strip()[:1000]
+            if not re.match(r"^https?://[^\s]+$", url, re.I):
+                raise ApiError("Links need to start with http:// or https://")
+            att.url = url
+        if "name" in request.data:
+            att.name = (request.data.get("name") or "").strip()[:255] or (att.link_host if att.url else att.name)
+        att.save()
+        log(card.list.board, request.user, "attachment_renamed", card=card, name=att.name)
     return card_response(card.pk, request)
 
 
