@@ -3827,3 +3827,20 @@ Finish:
         n = Card.objects.count()
         p = self.j(f"/api/lists/{self.l.pk}/product/", {"text": self.TEXT, "preview": True}).json()
         self.assertEqual((Card.objects.count(), p["planned"]), (n, "430"))
+
+
+class ProductFieldsTests(TestCase):
+    def test_typed_fields_and_variance(self):
+        from .products import create, parse
+        u = User.objects.create_user("pf2@x.com", "pw")
+        ws = Workspace.objects.create(name="P2")
+        b = Board.objects.create(workspace=ws, title="X")
+        lst = List.objects.create(board=b, title="L")
+        text = "Cake — 430 cakes\nLaunch: 6/10/2026\nForecast: 407\nNotes: buffer\nPackaging:\n1 x Tin\nRecipe: check"
+        p = parse(text)
+        self.assertEqual(p["fields"], [("Launch", "6/10/2026"), ("Forecast", "407")])
+        self.assertEqual(p["sections"][0]["items"][1]["text"], "Recipe: check")   # after a section it's an item
+        c = create(lst, text, u)
+        vals = {v.field.name: v.value for v in c.field_values.select_related("field")}
+        self.assertEqual((vals["Launch"], vals["Forecast"], vals["Variance"]), ("2026-10-06", 407, "+23 (+5.7%)"))
+        self.assertEqual(c.description, "buffer")

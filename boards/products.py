@@ -26,6 +26,7 @@ HEAD = re.compile(r"^(.*?)\s*(?:[—–:]|\s-\s|\s+)\s*" + NUM + r"(?:\s+([^\d\s
 PER = re.compile(r"^" + NUM + r"\s*[x×]\s+(.+)$", re.I)
 TOTAL = re.compile(r"^" + NUM + r"\s*([a-z]+)\s+(.+)$", re.I)
 TRAIL = re.compile(r"^(.+?)\s+(?:[—–-]|[x×])\s*" + NUM + r"\s*([a-z]+)?$", re.I)
+FIELD = re.compile(r"^([A-Za-z][\w ]{0,40}):\s+(\S.*)$")
 DONE = re.compile(r"^\[(x|✓)\]\s*|^✓\s*", re.I)
 
 
@@ -46,10 +47,19 @@ def parse(text):
     m = HEAD.match(first)
     if m and m.group(1).strip():
         title, planned, unit = m.group(1).strip(" —–-:"), _d(m.group(2)), (m.group(3) or "").strip()
-    sections, current = [], None
+    sections, current, fields, notes = [], None, [], []
     for raw in lines[1:]:
         line = re.sub(r"^[-•*]\s+", "", raw).strip()
         if not line:
+            continue
+        # before the first section: "Launch: 6 Oct 2026", "Forecast: 407", "Notes: …" fill the card's fields
+        fm = FIELD.match(line) if current is None else None
+        if fm:
+            key, val = fm.group(1).strip(), fm.group(2).strip()
+            if key.lower() in ("notes", "note", "description"):
+                notes.append(val)
+            else:
+                fields.append((key, val))
             continue
         if line.endswith(":") and len(line) <= 80:
             current = {"title": line[:-1].strip() or "Checklist", "items": []}
@@ -79,7 +89,8 @@ def parse(text):
         elif item["target"] is not None and planned:
             item["per_unit"] = (item["target"] / planned).quantize(Decimal("0.0001"))
         current["items"].append(item)
-    return {"title": title[:250], "planned": planned, "unit": unit[:20], "sections": sections}
+    return {"title": title[:250], "planned": planned, "unit": unit[:20], "sections": sections,
+            "fields": fields, "notes": "\n".join(notes)}
 
 
 def _field(board, name, kind, show, aliases=()):
@@ -114,9 +125,62 @@ def create(lst, text, user, *, position=None, extra_fields=None):
                     qty_target=tgt, qty_unit=it["unit"][:20], per_unit=it["per_unit"],
                     qty_done=tgt if (done and tgt) else 0, is_done=done,
                     done_by=user if done else None, done_at=timezone.now() if done else None)
+        _typed_fields(card, board, p)
+        if p["notes"]:
+            card.description = p["notes"]
+            card.save(update_fields=["description"])
         for name, (kind, show, value) in (extra_fields or {}).items():
             CardFieldValue.objects.create(card=card, field=_field(board, name, kind, show), value=value)
     return card
+
+
+def _parse_date(v):
+    from datetime import datetime
+    from django.utils.dateparse import parse_date
+    d = parse_date(v)
+    if d:
+        return d
+    today = timezone.localdate()
+    for fmt in ("%d/%m/%Y", "%d/%m/%y", "%d %b %Y", "%d %B %Y", "%d %b", "%d %B"):
+        try:
+            d = datetime.strptime(v.strip(), fmt).date()
+            return d.replace(year=today.year) if "%Y" not in fmt and "%y" not in fmt else d
+        except ValueError:
+            continue
+    return None
+
+
+def _typed_fields(card, board, p):
+    """'Key: value' lines → the board's fields of that name (made if missing). Forecast + Planned → Variance."""
+    existing = {f.name.strip().lower(): f for f in board.custom_fields.all()}
+    vals = {}
+    for key, val in p["fields"]:
+        f = existing.get(key.lower())
+        if not f:
+            kind = (CustomField.DATE if _parse_date(val) and key.lower() in ("launch", "start", "deadline", "date")
+                    else CustomField.NUMBER if _d(val) is not None else CustomField.TEXT)
+            f = _field(board, key[:60], kind, kind == CustomField.DATE)
+            existing[key.lower()] = f
+        if f.kind == CustomField.DATE:
+            d = _parse_date(val)
+            if not d:
+                continue
+            value = d.isoformat()
+        elif f.kind == CustomField.NUMBER:
+            n = _d(val)
+            if n is None:
+                continue
+            value = int(n) if n == n.to_integral() else float(n)
+        else:
+            value = val[:250]
+        CardFieldValue.objects.update_or_create(card=card, field=f, defaults={"value": value})
+        vals[f.name.strip().lower()] = value
+    fc, plan = vals.get("forecast"), p["planned"]
+    if fc and plan and "variance" not in vals:
+        var = float(plan) - float(fc)
+        f = existing.get("variance") or _field(board, "Variance", CustomField.TEXT, False)
+        CardFieldValue.objects.update_or_create(card=card, field=f, defaults={
+            "value": f"{var:+,.0f} ({var / float(fc) * 100:+.1f}%)" if var else "—"})
 
 
 EXAMPLE = """AF Christmas Cake — 430 cakes

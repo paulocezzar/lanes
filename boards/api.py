@@ -177,6 +177,7 @@ def product_create(request, list_id):
     if request.data.get("preview"):
         f = lambda v: None if v is None else ChecklistItem.fmt_qty(v)  # noqa: E731
         return {"title": parsed["title"], "planned": f(parsed["planned"]), "unit": parsed["unit"],
+                "fields": [{"name": k, "value": v} for k, v in parsed["fields"]], "notes": parsed["notes"],
                 "sections": [{"title": s["title"], "items": [
                     {"text": i["text"], "target": f(i["target"]), "unit": i["unit"], "per": f(i["per_unit"]),
                      "done": i["done"]} for i in s["items"]]} for s in parsed["sections"]]}

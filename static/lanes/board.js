@@ -357,6 +357,8 @@
       try {
         const p = await post(`/api/lists/${productList}/product/`, { text: e.target.value, preview: true });
         box.innerHTML = `<h4>${esc(p.title)}${p.planned ? ` <span class="muted">· ${esc(p.planned)} ${esc(p.unit)}</span>` : ''}</h4>` +
+          (p.fields.length ? `<div class="np-fields">${p.fields.map(f => `<span><b>${esc(f.name)}</b> ${esc(f.value)}</span>`).join('')}</div>` : '') +
+          (p.notes ? `<p class="muted small">${esc(p.notes)}</p>` : '') +
           p.sections.map(s => `<div class="np-sec"><b>${esc(s.title)}</b>${s.items.map(i =>
             `<div class="np-item${i.done ? ' done' : ''}"><span>${i.done ? '✓ ' : ''}${esc(i.text)}</span><span class="muted">${
               i.target ? `${i.done ? i.target : 0} / ${esc(i.target)} ${esc(i.unit)}${i.per && !i.unit ? ` <small>(${esc(i.per)} each)</small>` : ''}` : 'tick'}</span></div>`).join('')}</div>`).join('');
