@@ -7,3 +7,4 @@ python manage.py migrate --no-input
 python manage.py reset_lanes
 python manage.py seed_sim
 python manage.py setup_my_work
+python manage.py add_example_cards

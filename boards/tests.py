@@ -3076,3 +3076,26 @@ class SetupMyWorkTests(TestCase):
         automation.run_due_schedules()
         self.assertTrue(Card.objects.filter(list__board=b, title="Plan the week").exists())
         self.assertTrue(Card.objects.filter(list__board=b, title__startswith="EOW review", checklists__items__text="Send").exists())
+
+
+class ExampleCardsTests(TestCase):
+    def test_example_cards_added_once(self):
+        from io import StringIO
+        from django.core.management import call_command
+        u = User.objects.create_user("me2@x.com", "pw", is_superuser=True)
+        ws = Workspace.objects.create(name="Dept2")
+        WorkspaceMember.objects.create(workspace=ws, user=u, role="admin")
+        self.client.force_login(u)
+        self.client.post(reverse("board_create"), {"workspace": ws.pk, "title": "Mine", "visibility": "private"})
+        b = Board.objects.get(title="Mine")
+        call_command("setup_my_work", board=str(b.pk), stdout=StringIO())
+        call_command("add_example_cards", board=str(b.pk), stdout=StringIO())
+        call_command("add_example_cards", board=str(b.pk), stdout=StringIO())
+        self.assertEqual(Card.objects.filter(list__board=b).count(), 6)
+        c = Card.objects.get(title="Organise paperwork for agency staff induction")
+        self.assertEqual(c.list.title, "Today")
+        self.assertEqual(c.checklist_counts(), (1, 7))
+        self.assertEqual(set(c.labels.values_list("name", flat=True)), {"People"})
+        self.assertIn(u, c.members.all())
+        self.assertContains(self.client.get(f"/b/{b.pk}/"), "Finish Bakery Managers Guide")
+        self.assertEqual(self.client.get(f"/cards/{c.pk}/").status_code, 200)
