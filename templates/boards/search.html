@@ -15,7 +15,7 @@
   </aside>
   <section class="search-main">
     <form method="get" class="search-form">
-      <input type="search" name="q" value="{{ q }}" placeholder="Search cards… try @me is:overdue label:urgent board:christmas" autofocus>
+      <input type="search" name="q" value="{{ q }}" placeholder="Search cards… try @me is:overdue label:urgent board:planning" autofocus>
       <button class="btn primary">Search</button>
     </form>
     {% if searched %}
@@ -41,9 +41,9 @@
       <ul>
         <li>Plain words search titles, descriptions, checklist items and comments.</li>
         <li><code>@me</code> or <code>@charlie</code>: cards assigned to someone.</li>
-        <li><code>label:urgent</code>, <code>board:christmas</code>, <code>list:doing</code>.</li>
+        <li><code>label:urgent</code>, <code>board:planning</code>, <code>list:doing</code>.</li>
         <li><code>is:overdue</code>, <code>is:due-week</code>, <code>is:no-date</code>, <code>is:open</code>, <code>is:complete</code>.</li>
-        <li>Use quotes for an exact phrase: <code>"cake boards"</code>.</li>
+        <li>Use quotes for an exact phrase: <code>"weekly report"</code>.</li>
       </ul>
     </div>
     {% endif %}

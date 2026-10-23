@@ -11,7 +11,7 @@ from .models import SavedSearch
 EXAMPLES = [
     ("@me is:open", "My open cards"),
     ("is:overdue", "Everything overdue"),
-    ("is:due-week board:christmas", "Christmas cards due this week"),
+    ("is:due-week board:planning", "Planning cards due this week"),
     ("label:urgent", "Cards labelled Urgent"),
 ]
 

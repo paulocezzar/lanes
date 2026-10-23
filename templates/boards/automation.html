@@ -68,9 +68,9 @@
           <select name="kind" data-sched-kind aria-label="What to do"><option value="card">create a card</option><option value="actions">run board actions</option></select>
         </div>
         <div data-kind-panel="card" class="auto-form-inner">
-          <label>Card title<input name="title" maxlength="250" placeholder="e.g. Weekly deep clean"></label>
+          <label>Card title<input name="title" maxlength="250" placeholder="e.g. Weekly check"></label>
           <label>Put it in list<select name="target_list" data-list>{% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</select></label>
-          <label>Checklist (one item per line, optional)<textarea name="checklist" rows="3" placeholder="Ovens&#10;Proving cabinets&#10;Floor drains"></textarea></label>
+          <label>Checklist (one item per line, optional)<textarea name="checklist" rows="3" placeholder="First step&#10;Second step&#10;Third step"></textarea></label>
           <div class="auto-line">
             <label>Assign to<select name="member"><option value="">Nobody</option>{% for u in people %}<option value="{{ u.pk }}">{{ u.display_name }}</option>{% endfor %}</select></label>
             <label>Label<select name="label"><option value="">None</option>{% for l in labels %}<option value="{{ l.pk }}">{{ l }}</option>{% endfor %}</select></label>

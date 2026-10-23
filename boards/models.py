@@ -21,7 +21,7 @@ COLOURS = ["green", "yellow", "orange", "red", "purple", "blue", "sky", "pink", 
 
 
 class Workspace(models.Model):
-    """One per department (Bakery, Butchery, Kitchen…)."""
+    """One per department."""
 
     name = models.CharField(max_length=80, unique=True)
     description = models.TextField(blank=True)
@@ -51,7 +51,7 @@ class WorkspaceMember(models.Model):
 
 
 class Collection(models.Model):
-    """A named group of boards inside a department, e.g. "Christmas 2026"."""
+    """A named group of boards inside a department, e.g. "2026 projects"."""
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="collections")
     name = models.CharField(max_length=60)
@@ -611,7 +611,7 @@ class Notification(models.Model):
     kind = models.CharField(max_length=20, choices=KINDS)
     board = models.ForeignKey(Board, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
     card = models.ForeignKey(Card, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
-    text = models.CharField(max_length=300)          # e.g. "assigned you to Order cake tins"
+    text = models.CharField(max_length=300)          # e.g. "assigned you to Send the report"
     excerpt = models.CharField(max_length=300, blank=True)
     dedupe_key = models.CharField(max_length=120, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)

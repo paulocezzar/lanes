@@ -234,8 +234,8 @@ def settings_page(request):
     })
 
 
-TEMPLATE_CSV = "First name,Last name,Email,Department,Role\nJo,Baker,jo.baker@example.com,Bakery,Member\n" \
-               "Sam,Smith,sam.smith@example.com,Bakery,Admin\n"
+TEMPLATE_CSV = "First name,Last name,Email,Department,Role\nJo,Bloggs,jo.bloggs@example.com,Department name,Member\n" \
+               "Sam,Smith,sam.smith@example.com,Department name,Admin\n"
 
 
 @login_required

@@ -283,7 +283,7 @@
       {% for c in board.workspace.collections.all %}<option value="{{ c.pk }}" {% if c.pk == board.collection_id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
       <option value="__new">+ New collection…</option>
     </select>
-    <p class="muted small">Group boards on the Boards page, e.g. “Christmas 2026” or “Wholesale”.</p>
+    <p class="muted small">Group boards on the Boards page, e.g. “2026 projects” or “Ongoing”.</p>
     <h4 class="section-label">Power-ups</h4>
     <label class="check-inline dark"><input type="checkbox" data-board-flag="voting" {% if board.voting %}checked{% endif %}> 👍 Voting — people can vote on cards</label>
     <label class="check-inline dark"><input type="checkbox" data-board-flag="card_aging" {% if board.card_aging %}checked{% endif %}> 🍂 Card ageing — cards fade after 1, 2 and 4 weeks untouched</label>

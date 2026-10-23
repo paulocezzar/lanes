@@ -62,11 +62,11 @@ def _json(text):
         raise AIUnavailable("The AI reply couldn't be read. Try again.")
 
 
-CAPTURE_SYSTEM = """You turn pasted messages (emails, Teams or WhatsApp messages, meeting notes) into a short to-do list for the person who pasted them. They work in a bakery and food business in the UK.
+CAPTURE_SYSTEM = """You turn pasted messages (emails, Teams or WhatsApp messages, meeting notes) into a short to-do list for the person who pasted them. They work for a UK organisation.
 
 Rules:
 - Only include actions the reader needs to do or follow up. Skip greetings, sign-offs, FYIs and things already done.
-- Each task starts with a verb and is under 80 characters, e.g. "Order 20 cake boards from Kingsmill".
+- Each task starts with a verb and is under 80 characters, e.g. "Send the signed contract to Alex".
 - Resolve dates relative to today's date given below (UK format, week starts Monday). "Friday" means the next Friday on or after today; "end of month" means the last day of this month. If no date is stated or clearly implied, use null.
 - Put useful detail (quantities, names, who asked) in "notes", or "" if none.
 - At most 15 tasks.
@@ -93,7 +93,7 @@ def capture_todos(text, today=None):
     return items
 
 
-STEPS_SYSTEM = """You draft a practical checklist for a task card on a team board in a UK bakery and food business.
+STEPS_SYSTEM = """You draft a practical checklist for a task card on a team board in a UK organisation.
 
 Rules:
 - 3 to 10 steps, in the order they'd be done.
@@ -119,7 +119,7 @@ def suggest_steps(title, description="", existing=()):
 
 # ---------- ✨ summarise a card ----------
 
-SUMMARY_SYSTEM = """You summarise a task card from a team board in a UK bakery and food business, for a manager catching up.
+SUMMARY_SYSTEM = """You summarise a task card from a team board in a UK organisation, for a manager catching up.
 
 Write in plain British English. Be concrete: names, numbers and dates from the card. Don't invent anything that isn't in the card.
 
@@ -182,7 +182,7 @@ def summarise_card(card):
 
 # ---------- ✨ what should I do first? ----------
 
-PRIORITY_SYSTEM = """You help someone in a UK bakery and food business decide what to work on first today.
+PRIORITY_SYSTEM = """You help someone in a UK organisation decide what to work on first today.
 You get their open cards and checklist items with due dates, lists, labels and progress.
 
 Pick the 5 (or fewer) most important to tackle first. Weigh: overdue and due-soon dates, labels like Urgent,
@@ -211,7 +211,7 @@ def priorities(entries, today):
 
 # ---------- ✨ write up a description ----------
 
-WRITE_SYSTEM = """You turn rough notes into a clear card description for a team board in a UK bakery and food business.
+WRITE_SYSTEM = """You turn rough notes into a clear card description for a team board in a UK organisation.
 
 Rules:
 - Keep every fact from the notes (names, quantities, dates, suppliers). Never invent facts.

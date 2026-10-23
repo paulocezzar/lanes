@@ -53,7 +53,7 @@
   <section class="empty-state">
     {% if user.is_superuser %}
     <h2>Create your first department</h2>
-    <p class="muted">Departments hold boards and people — Bakery, Butchery, Kitchen and so on.</p>
+    <p class="muted">Departments hold boards and the people who work on them.</p>
     {% elif user.is_guest %}
     <h2>Welcome to Lanes</h2>
     <p class="muted">You're a guest, so you'll see the boards people share with you below.</p>
@@ -68,7 +68,7 @@
   <section class="home-section">
     <form method="post" action="{% url 'workspace_create' %}" class="new-dept">
       {% csrf_token %}
-      <input name="name" placeholder="New department name, e.g. Bakery" maxlength="80" required>
+      <input name="name" placeholder="New department name" maxlength="80" required>
       <button class="btn primary">{% include "boards/_icon.html" with i="plus" %}New department</button>
     </form>
   </section>
@@ -118,7 +118,7 @@
       <label class="bg-swatch bg-{{ key }}" title="{{ name }}"><input type="radio" name="background" value="{{ key }}" {% if forloop.first %}checked{% endif %}></label>
       {% endfor %}
     </div>
-    <label>Board title<input name="title" required maxlength="120" placeholder="e.g. Christmas production"></label>
+    <label>Board title<input name="title" required maxlength="120" placeholder="e.g. Weekly planning"></label>
     <label>Department
       <select name="workspace">{% for ws in create_workspaces %}<option value="{{ ws.pk }}">{{ ws.name }}</option>{% endfor %}</select>
     </label>

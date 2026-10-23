@@ -23,7 +23,7 @@
     <h2>Add someone</h2>
     <form method="post" action="{% url 'workspace_member_add' workspace.pk %}" class="add-person">
       {% csrf_token %}
-      <label>Email<input type="email" name="email" required autocomplete="off" placeholder="name@thenewt.com"></label>
+      <label>Email<input type="email" name="email" required autocomplete="off" placeholder="name@company.com"></label>
       <label>First name<input name="first_name" autocomplete="off" placeholder="If new to Lanes"></label>
       <label>Last name<input name="last_name" autocomplete="off"></label>
       <label>Role

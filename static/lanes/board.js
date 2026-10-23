@@ -885,7 +885,7 @@
   $('[data-board-collection]', drawer)?.addEventListener('change', async e => {
     let value = e.target.value;
     if (value === '__new') {
-      const name = await LanesUI.ask('New collection', { placeholder: 'e.g. Christmas 2026', ok: 'Create' });
+      const name = await LanesUI.ask('New collection', { placeholder: 'e.g. 2026 projects', ok: 'Create' });
       if (!name || !name.trim()) { location.reload(); return; }
       value = `new:${name.trim()}`;
     }
