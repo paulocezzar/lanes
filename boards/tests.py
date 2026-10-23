@@ -3430,3 +3430,61 @@ class AgencyBoardRedoTests(TestCase):
         job.refresh_from_db()
         self.assertEqual(job.list.title, "Done")
         self.assertEqual(self.client.get(f"/b/{b.pk}/").status_code, 200)
+
+
+class ProductionPlanTests(TestCase):
+    def setUp(self):
+        from io import StringIO
+        from django.core.management import call_command
+        self.u = User.objects.create_user("pp@x.com", "pw", is_superuser=True)
+        ws = Workspace.objects.create(name="Bakery"); WorkspaceMember.objects.create(workspace=ws, user=self.u, role="admin")
+        self.client.force_login(self.u)
+        self.client.post(reverse("board_create"), {"workspace": ws.pk, "title": "Agency staff"})
+        self.b = Board.objects.get(title="Agency staff")
+        first = self.b.lists.order_by("position").first(); first.title = "Prep before they arrive"; first.save()
+        for cmd in ("setup_agency_board", "redo_agency_board", "setup_production_plan", "setup_production_plan"):
+            call_command(cmd, board=str(self.b.pk), stdout=StringIO())
+        self.days = self.b.lists.get(title="Shifts")
+        self.jobs = self.b.lists.get(title="Jobs")
+
+    def plan_cards(self):
+        return self.days.cards.filter(labels__name="Day plan", is_archived=False).order_by("start_date")
+
+    def test_plan_covers_targets_in_order(self):
+        from .models import ChecklistItem
+        cards = list(self.plan_cards())
+        self.assertGreater(len(cards), 10)
+        self.assertTrue(all(c.start_date.weekday() < 5 for c in cards))
+        self.assertLessEqual(max(c.checklists.get().items.count() for c in cards), 3)
+        first = [i.text for i in cards[0].checklists.get().items.order_by("position")]
+        self.assertEqual(first[0], "Mince pie dough — 2,000 cases' worth")
+        total = sum(int(i.text.split(" — ")[1].split()[0].replace(",", "")) for i in
+                    ChecklistItem.objects.filter(checklist__card__in=cards, text__startswith="Mince pie case stamping"))
+        self.assertEqual(total, 15000)
+        page = self.client.get(f"/b/{self.b.pk}/")
+        self.assertContains(page, "tile-progress")
+        self.assertContains(page, "0 / 15,000 cases")
+
+    def test_ticking_moves_made_so_far_and_replan_keeps_started_days(self):
+        from .models import CardFieldValue, CustomField
+        made = CustomField.objects.get(board=self.b, name="Made so far")
+        stamping = self.jobs.cards.get(title="Mince pie case stamping")
+        day1 = self.plan_cards().first()
+        line = day1.checklists.get().items.get(text__startswith="Mince pie case stamping")
+        j = lambda url, d: self.client.post(url, json.dumps(d), content_type="application/json")
+        j(f"/api/items/{line.pk}/", {"is_done": True})
+        self.assertEqual(CardFieldValue.objects.get(card=stamping, field=made).value, 2000)
+        j(f"/api/items/{line.pk}/", {"is_done": False})
+        self.assertEqual(CardFieldValue.objects.get(card=stamping, field=made).value, 0)
+        j(f"/api/items/{line.pk}/", {"is_done": True})
+        # someone made 3,000 more on another day; target drops: re-plan
+        CardFieldValue.objects.filter(card=stamping, field=made).update(value=5000)
+        from .models import Button
+        btn = Button.objects.get(board=self.b, name="Re-plan days")
+        r = j(f"/api/boards/{self.b.pk}/buttons/{btn.pk}/", {})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertTrue(type(day1).objects.filter(pk=day1.pk).exists())          # started day kept
+        from .models import ChecklistItem
+        planned = sum(int(i.text.split(" — ")[1].split()[0].replace(",", "")) for i in ChecklistItem.objects.filter(
+            checklist__card__in=self.plan_cards(), text__startswith="Mince pie case stamping", is_done=False))
+        self.assertEqual(planned, 15000 - 5000 - 0)   # day 1's ticked 2,000 is already inside Made so far

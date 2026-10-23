@@ -224,6 +224,15 @@ class Card(models.Model):
     def token(self):
         return f"c{self.pk}"
 
+    def progress(self):
+        """(made, target, percent, unit) from the Target / Made so far fields, for a progress bar."""
+        from .production import progress
+        p = progress(self)
+        if not p:
+            return None
+        unit = next((str(v.value) for v in self.field_values.all() if v.field.name.strip().lower() == "unit"), "")
+        return {"made": f"{p[0]:,}", "target": f"{p[1]:,}", "pct": p[2], "unit": unit, "done": p[0] >= p[1]}
+
     def tile_fields(self):
         """Custom field values to show as badges on the card tile."""
         vals = [v for v in self.field_values.all() if v.field.show_on_card and v.display()]
@@ -744,6 +753,7 @@ class Button(models.Model):
         ("move_random", "move … random cards from list… to list…"),
         ("create_list", "create a list called…"),
         ("copy_named", "find card … and copy it to list…"),
+        ("plan_days", "re-plan production days from list… into list…"),
     ]
 
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="buttons")

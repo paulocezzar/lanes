@@ -487,9 +487,16 @@ def item_update(request, item_id):
         item.done_at = timezone.now() if item.is_done else None
         log(card.list.board, request.user, "item_done" if item.is_done else "item_undone", card=card, text=item.text)
     item.save()
+    job = None
+    if "is_done" in request.data:
+        from . import production
+        job = production.on_item_toggle(item, item.is_done)
     if request.data.get("is_done") and automation.checklists_all_done(card):
         automation.fire(card, Rule.CHECKLIST_DONE, actor=request.user)
-    return card_response(card.pk, request)
+    data = card_response(card.pk, request)
+    if job:
+        data["refresh_board"] = True
+    return data
 
 
 # ---------- comments ----------

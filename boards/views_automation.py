@@ -424,6 +424,16 @@ def parse_actions(p, board, prefix="", extra=(), allow_new_list=False):
                 return [], "Pick the list to move cards from."
             a["from_list"] = src.pk
             need = "list"
+        if t == "plan_days":
+            src = List.objects.filter(pk=p.get(f"{prefix}from_list_{i}") or 0, board=board).first()
+            if not src:
+                return [], "Pick the list the jobs are in."
+            a["from_list"] = src.pk
+            try:
+                a["count"] = max(1, min(int(p.get(f"{prefix}count_{i}") or 3), 10))
+            except ValueError:
+                a["count"] = 3
+            need = "list"
         if t == "move_random":
             src = List.objects.filter(pk=p.get(f"{prefix}from_list_{i}") or 0, board=board).first()
             if not src:

@@ -601,7 +601,7 @@
   dialogBody.addEventListener('change', async e => {
     const t = e.target;
     if (t.matches('[data-label]')) return cardPost('labels', { label_id: +t.dataset.label });
-    if (t.matches('[data-item]')) return post(`/api/items/${t.dataset.item}/`, { is_done: t.checked }).then(applyCard);
+    if (t.matches('[data-item]')) return post(`/api/items/${t.dataset.item}/`, { is_done: t.checked }).then(d => { applyCard(d); if (d.refresh_board && typeof forceRefresh === 'function') forceRefresh(); });
     if (t.matches('[data-move-list]')) return cardPost('move', { list_id: +t.value });
     if (t.matches('[data-move-board]')) {
       const opt = t.selectedOptions[0];

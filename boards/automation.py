@@ -816,6 +816,13 @@ def run_board_actions(board, actions, user):
                 if new.is_template:
                     Card.objects.filter(pk=new.pk).update(is_template=False)
                 done.append(f"copied “{src.title}” to {lst.title}")
+        elif t == "plan_days":
+            src = List.objects.filter(pk=a.get("from_list"), board=board, is_archived=False).first()
+            dst = List.objects.filter(pk=a.get("list"), board=board, is_archived=False).first()
+            if src and dst and src.pk != dst.pk:
+                from .production import plan_days
+                n = plan_days(board, src, dst, jobs_per_day=int(a.get("count") or 3), user=user)
+                done.append(f"planned {n} production day{'s' if n != 1 else ''} in {dst.title}")
         elif t == "create_list":
             name = (a.get("text") or "").strip()
             if name:
@@ -878,6 +885,9 @@ def describe_board_actions(board, actions):
                     f"{lists.get(a.get('list'), '?')}").replace("create  “", "create “")
         if t == "copy_named":
             text = f"find card “{a.get('text')}” and copy it to {lists.get(a.get('list'), '?')}"
+        if t == "plan_days":
+            text = (f"plan production days from {lists.get(a.get('from_list'), '?')} into "
+                    f"{lists.get(a.get('list'), '?')}, {a.get('count', 3)} jobs a day")
         if t in dict(Rule.ACTIONS) and t not in ("add_label", "remove_label", "set_due", "set_due_workdays",
                                                   "add_checklist", "comment", "add_sticker", "move", "sort_due"):
             text = describe_action(board, a)

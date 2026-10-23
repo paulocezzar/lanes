@@ -130,6 +130,7 @@
     { tab: 'Sort', fixed: { type: 'sort_due' }, tokens: [T('sort list'), S('list', 'list'), T('by due date')] },
     { tab: 'Sort', fixed: { type: 'sort_field' }, tokens: [T('sort list'), S('list', 'list'), T('by'), S('field', 'field'), S('order', 'order')] },
     { tab: 'Other', fixed: { type: 'archive_done' }, tokens: [T('archive every complete card')] },
+    { tab: 'Other', fixed: { type: 'plan_days' }, tokens: [T('plan production days: jobs in list'), S('from_list', 'list'), T('→ day cards in list'), S('list', 'list'), T(','), N('count', 1, 10, 3), T('jobs a day')], hint: 'Uses each job card’s Target, Made so far and Per day fields. Replaces future day cards nobody has started.' },
   ];
   // "When a list is created" runs board actions; their lists can be "the new list".
   const NEW_LIST_ACTIONS = BOARD_ACTIONS.filter(r => r.fixed.type !== 'move_random')
