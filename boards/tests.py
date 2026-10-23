@@ -3020,3 +3020,20 @@ class MicrosoftGeoSimMockedTests(TestCase):
         call_command("seed_sim", "--remove", stdout=StringIO())
         self.assertFalse(User.objects.filter(email__startswith="sim.").exists())
         self.assertEqual(Card.objects.count(), 0)
+
+
+class ErrorPageTests(TestCase):
+    def test_missing_board_shows_friendly_page(self):
+        from django.test import override_settings
+        u = User.objects.create_user("e404@x.com", "pw")
+        self.client.force_login(u)
+        with override_settings(DEBUG=False):
+            r = self.client.get("/b/99999/")
+        self.assertEqual(r.status_code, 404)
+        self.assertContains(r, "This page isn't here", status_code=404)
+        self.assertContains(r, "Go to your boards", status_code=404)
+
+    def test_500_page_renders_without_context(self):
+        from django.template.loader import render_to_string
+        html = render_to_string("500.html")
+        self.assertIn("Something went wrong", html)
