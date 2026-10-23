@@ -240,7 +240,7 @@ track — a spreadsheet, a list, an email, a screenshot of another system, or a 
 in Lanes' plain-text format so they can check it before anything is created.
 
 The format (follow it exactly; plain text only, no markdown, no commentary):
-- Cards are separated by ONE blank line. Never put blank lines inside a card.
+- Cards are separated by a line containing only "---". Never put blank lines inside a card.
 - Optional: a line "# List name" puts the cards after it into that list.
 - First line of a card: what it is, then " — ", then how many and a unit, e.g. "AF Christmas Cake — 430 cakes" or
   "Summer fair — 200 guests". If there is no meaningful quantity, just the name.

@@ -27,6 +27,11 @@ PER = re.compile(r"^" + NUM + r"\s*[x×]\s+(.+)$", re.I)
 TOTAL = re.compile(r"^" + NUM + r"\s*([a-z]+)\s+(.+)$", re.I)
 TRAIL = re.compile(r"^(.+?)\s+(?:[—–-]|[x×])\s*" + NUM + r"\s*([a-z]+)?$", re.I)
 FIELD = re.compile(r"^([A-Za-z][\w ]{0,40}):\s+(\S.*)$")
+# common fields also read without the colon: "Deadline 15 November", "Forecast 407"
+KNOWN_FIELD = re.compile(r"^(deadline|due|due date|launch|start|start date|date|forecast|budget|owner|notes?|description)"
+                         r"\s+(\S.*)$", re.I)
+# "Bake 500 Christmas Cakes" → Bake, 0 / 500 Christmas Cakes
+MID = re.compile(r"^([A-Za-z][^\d]*?)\s+" + NUM + r"\s*([A-Za-z][\w &'/-]{0,30})$")
 DONE = re.compile(r"^\[(x|✓)\]\s*|^✓\s*", re.I)
 
 
@@ -55,6 +60,10 @@ def parse_item(line, planned=None):
             m = TRAIL.match(line)
             if m:
                 item.update(text=m.group(1).strip(" —–-"), target=_d(m.group(2)), unit=(m.group(3) or ""))
+            else:
+                m = MID.match(line)
+                if m:
+                    item.update(text=m.group(1).strip(), target=_d(m.group(2)), unit=m.group(3).strip()[:20])
     if item["per_unit"] is not None:
         item["unit"] = item["unit"] or "each"
         if planned:
@@ -107,7 +116,7 @@ def parse(text):
         if not line:
             continue
         # before the first section: "Launch: 6 Oct 2026", "Forecast: 407", "Notes: …" fill the card's fields
-        fm = FIELD.match(line) if current is None else None
+        fm = (FIELD.match(line) if current is None else None) or _known_field(line)
         if fm:
             key, val = fm.group(1).strip(), fm.group(2).strip()
             if key.lower() in ("notes", "note", "description"):
@@ -211,27 +220,63 @@ def _typed_fields(card, board, p):
             "value": f"{var:+,.0f} ({var / float(fc) * 100:+.1f}%)" if var else "—"})
 
 
-def split_cards(text):
-    """Several cards in one box: a blank line (or '---') starts the next card; a line '# Name'
-    puts the cards after it into that list. Returns [(list name or None, card text)]."""
-    out, cur, lst = [], [], None
+def _known_field(line):
+    """'Deadline 15 November' / 'Forecast 407' without a colon — only when the value fits the word,
+    so 'Start the oven' stays a line to tick."""
+    m = KNOWN_FIELD.match(line)
+    if not m:
+        return None
+    key, val = m.group(1).lower(), m.group(2).strip()
+    if key in ("deadline", "due", "due date", "launch", "start", "start date", "date"):
+        return m if _parse_date(val) else None
+    if key in ("forecast", "budget"):
+        return m if _d(val.lstrip("£$€")) is not None else None
+    return m
 
-    def flush():
+
+def _starts_card(block):
+    """Does a block (after a blank line) look like a new card, rather than more of the one above?
+    Yes when its first line gives an amount after a dash ('Winter fair — 120 guests') or it has a
+    section ('Setup:') or a field line ('Deadline: 4 Jul')."""
+    first = block[0].strip()
+    if re.search(r"\s[—–]\s*\d|\s-\s+\d|:\s*\d[\d,.]*\s*[A-Za-z ]*$", first) and not first.endswith(":"):
+        return True
+    return any(ln.strip().endswith(":") and len(ln.strip()) <= 80 for ln in block[1:]) or \
+        any(FIELD.match(ln.strip()) or _known_field(ln.strip()) for ln in block[1:2])
+
+
+def split_cards(text):
+    """Several cards in one box. '---' always starts the next card; after a blank line a new card starts
+    only when the next lines look like one (see _starts_card) — otherwise blank lines are just spacing.
+    A line '# Name' puts the cards after it into that list. Returns [(list name or None, card text)]."""
+    out, blocks, lst = [], [], None        # blocks: [(list, [lines], hard_break)]
+    cur, hard = [], True
+
+    def push():
+        nonlocal cur, hard
         if any(ln.strip() for ln in cur):
-            out.append((lst, "\n".join(cur).strip()))
-        cur.clear()
+            blocks.append((lst, cur, hard))
+        cur, hard = [], False
 
     for raw in (text or "").splitlines():
         line = raw.rstrip()
         st = line.strip()
-        if st.startswith("#") and not st.startswith("#x") and len(st.lstrip("#").strip()) > 0 and st.lstrip("#")[:1] == " ":
-            flush()
-            lst = st.lstrip("#").strip()[:120]
-        elif not st or set(st) <= {"-", "—", "="}:
-            flush()
+        if st.startswith("# ") or (st.startswith("#") and st[1:2] == "#"):
+            push(); hard = True
+            lst = st.lstrip("#").strip()[:120] or None
+        elif st and set(st) <= {"-", "—", "=", "_"} and len(st) >= 3:
+            push(); hard = True
+        elif not st:
+            if cur:
+                push()
         else:
             cur.append(line)
-    flush()
+    push()
+    for lst_name, lines, hard_break in blocks:
+        if out and not hard_break and out[-1][0] == lst_name and not _starts_card(lines):
+            out[-1] = (lst_name, out[-1][1] + "\n" + "\n".join(lines))
+        else:
+            out.append((lst_name, "\n".join(lines).strip()))
     return out
 
 

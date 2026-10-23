@@ -3970,3 +3970,19 @@ class DepartmentSettingsTests(TestCase):
         self.assertTrue(Workspace.objects.filter(pk=ws.pk).exists())          # name not typed
         self.client.post(url, {"action": "delete", "confirm": "events"})
         self.assertFalse(Workspace.objects.filter(pk=ws.pk).exists())
+
+
+class ForgivingSetupTextTests(TestCase):
+    def test_natural_typing_is_one_card(self):
+        from .products import parse_many
+        cards = parse_many("Christmas Cakes\nDeadline 15 November\n\n300kg Christmas Soak\n\nBake 500 Christmas Cakes\nStart the oven")
+        self.assertEqual(len(cards), 1)
+        c = cards[0]
+        self.assertEqual(c["fields"], [("Deadline", "15 November")])
+        items = [(i["text"], i["target"] and int(i["target"]), i["unit"]) for s in c["sections"] for i in s["items"]]
+        self.assertEqual(items, [("Christmas Soak", 300, "kg"), ("Bake", 500, "Christmas Cakes"), ("Start the oven", None, "")])
+
+    def test_new_cards_still_split(self):
+        from .products import parse_many
+        t = "Summer fair — 200 guests\nSetup:\n1 x Chair\n\nWinter fair — 120 guests\n1 x Chair\n---\nBook venue"
+        self.assertEqual([c["title"] for c in parse_many(t)], ["Summer fair", "Winter fair", "Book venue"])
