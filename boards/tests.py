@@ -3844,3 +3844,51 @@ class ProductFieldsTests(TestCase):
         vals = {v.field.name: v.value for v in c.field_values.select_related("field")}
         self.assertEqual((vals["Launch"], vals["Forecast"], vals["Variance"]), ("2026-10-06", 407, "+23 (+5.7%)"))
         self.assertEqual(c.description, "buffer")
+
+
+class AmountsAnyCardTests(TestCase):
+    def setUp(self):
+        self.u = User.objects.create_user("am@x.com", "pw")
+        ws = Workspace.objects.create(name="Events"); WorkspaceMember.objects.create(workspace=ws, user=self.u)
+        self.b = Board.objects.create(workspace=ws, title="Fair")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.l = List.objects.create(board=self.b, title="Plan")
+        from .models import Checklist
+        self.c = Card.objects.create(list=self.l, title="Summer fair")
+        self.cl = Checklist.objects.create(card=self.c, title="Setup")
+        self.client.force_login(self.u)
+
+    def j(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_smart_add_paste_and_amount(self):
+        from .models import ChecklistItem
+        url = f"/api/checklists/{self.cl.pk}/items/"
+        self.j(url, {"text": "1 x Chair"})                       # no amount yet: remembered per one
+        chair = ChecklistItem.objects.get(text="Chair")
+        self.assertEqual((chair.per_unit, chair.qty_target), (1, None))
+        self.j(url, {"text": "30 kg Salad\n0.125 x Table\nBook the band\n[x] Send invites"})
+        self.assertEqual(ChecklistItem.objects.filter(checklist=self.cl).count(), 5)
+        self.assertTrue(ChecklistItem.objects.get(text="Send invites").is_done)
+        self.assertIsNone(ChecklistItem.objects.get(text="Book the band").qty_target)
+        r = self.j(f"/api/cards/{self.c.pk}/amount/", {"amount": "200", "unit": "guests"})
+        self.assertEqual(r.json()["rescaled"], 2)
+        chair.refresh_from_db()
+        self.assertEqual(int(chair.qty_target), 200)
+        self.assertEqual(int(ChecklistItem.objects.get(text="Table").qty_target), 25)
+        self.assertEqual(int(ChecklistItem.objects.get(text="Salad").qty_target), 30)   # a total stays put
+        self.assertEqual(self.c.amount(), {"amount": "200", "unit": "guests"})
+        self.j(url, {"text": "2 x Cup"})                           # with an amount: worked out straight away
+        self.assertEqual(int(ChecklistItem.objects.get(text="Cup").qty_target), 400)
+        self.assertContains(self.client.get(f"/cards/{self.c.pk}/"), "data-amount-form")
+
+    def test_template_asks_how_many(self):
+        from .models import ChecklistItem
+        self.j(f"/api/checklists/{self.cl.pk}/items/", {"text": "1 x Chair"})
+        self.j(f"/api/cards/{self.c.pk}/amount/", {"amount": "200"})
+        self.c.is_template = True; self.c.save()
+        self.assertTrue(self.c.per_one_lines())
+        r = self.j(f"/api/lists/{self.l.pk}/from-template/", {"template_id": self.c.pk, "amount": "50"})
+        new = Card.objects.get(pk=r.json()["card_id"])
+        self.assertEqual(int(ChecklistItem.objects.get(checklist__card=new, text="Chair").qty_target), 50)
+        self.assertEqual(new.amount()["amount"], "50")

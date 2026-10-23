@@ -1731,3 +1731,9 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .cm .iq-add input { width: 84px !important; flex: none; }
 .cm .item-qty { display: flex; }
 .np-fields { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .82rem; margin: 2px 0 4px; }
+.cm-amount { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px 40px; }
+.cm-amount-k { font-weight: 600; font-size: .9rem; }
+.cm .cm-amount input[name=amount] { width: 110px; flex: none; }
+.cm .cm-amount input[name=unit] { width: 170px; flex: none; }
+.np-help { margin: 4px 0 0; padding-left: 18px; }
+.np-help li { margin: 2px 0; }

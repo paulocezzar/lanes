@@ -335,6 +335,15 @@
   let openPop = null;
 
   window.LanesOpenCard = id => openCard(id);
+  dialogBody.addEventListener('paste', e => {
+    const input = e.target.closest('[data-item-new] input');
+    const text = e.clipboardData?.getData('text') || '';
+    if (!input || !/\n/.test(text.trim())) return;
+    e.preventDefault();
+    const clId = input.closest('[data-checklist]').dataset.checklist;
+    post(`/api/checklists/${clId}/items/`, { text }).then(d => { applyCard(d); toast(`Added ${text.trim().split(/\n+/).length} items.`); })
+      .catch(err => toast(err.message || 'Could not add those.'));
+  });
 
   // ---------- new product: name + what it needs → card with quantity checklists ----------
   const productDlg = document.getElementById('product-dialog');
@@ -619,6 +628,11 @@
     if (tplBtn) return cardPost('update', { is_template: tplBtn.dataset.templateToggle === '1' });
     const cover = t.closest('[data-cover]');
     if (cover) return post(`/api/attachments/${cover.dataset.cover}/`, { cover: cover.dataset.on === '1' }).then(applyCard);
+    if (t.closest('[data-amount-show]')) {
+      const f = $('[data-amount-form]', dialogBody);
+      if (f) { f.hidden = false; f.amount.focus(); }
+      return;
+    }
     const tAct = t.closest('[data-time-act]');
     if (tAct) {
       const act = tAct.dataset.timeAct, title = dialogBody.querySelector('.cm-title, [data-title]')?.textContent?.trim() || 'this card';
@@ -717,6 +731,12 @@
         const inputs = $$('[data-item-new] input', dialogBody);
         inputs[inputs.length - 1]?.focus();   // straight into "Add an item"
       });
+    }
+    if (f.matches('[data-amount-form]')) {
+      e.preventDefault();
+      return cardPost('amount', { amount: f.amount.value, unit: f.unit.value })
+        .then(() => toast('Amount set — lines “per one” updated.'))
+        .catch(err => toast(err.message || 'Could not set that.'));
     }
     if (f.matches('[data-item-new]')) {
       e.preventDefault();
@@ -1155,7 +1175,13 @@
     const tpl = pick === null ? null : templates[pick];
     if (!tpl) return;
     const listEl = btn.closest('.list');
-    const data = await post(`/api/lists/${listEl.dataset.listId}/from-template/`, { template_id: +tpl.dataset.cardId });
+    const body = { template_id: +tpl.dataset.cardId };
+    if (tpl.dataset.perOne) {                 // the template scales: ask how many
+      const n = await LanesUI.ask('How many?', { type: 'number', ok: 'Create', hint: 'Every “per one” line is worked out from this. Leave empty to keep the template’s amount.' });
+      if (n === null) return;
+      if (n.trim()) body.amount = n.trim();
+    }
+    const data = await post(`/api/lists/${listEl.dataset.listId}/from-template/`, body);
     $('[data-list-cards]', listEl).appendChild(fromHTML(data.tile));
     refreshCounts();
     openCard(data.card_id);

@@ -49,6 +49,7 @@ urlpatterns = [
     path("b/<int:board_id>/gantt/", views_board.board_gantt, name="board_gantt"),
     path("api/cards/<int:card_id>/dependencies/", api.card_dependencies),
     path("api/cards/<int:card_id>/time/", api.card_time),
+    path("api/cards/<int:card_id>/amount/", api.card_amount),
     path("api/time/stop/", api.time_stop),
     path("api/users/<int:user_id>/capacity/", api.user_capacity),
     path("b/<int:board_id>/dashboard/", views_board.board_dashboard, name="board_dashboard"),

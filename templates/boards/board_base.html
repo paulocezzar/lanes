@@ -130,26 +130,29 @@
   {% include "boards/_inbox_panel.html" with inbox_html='<p class="muted small inbox-empty">Loading…</p>' %}
   <p class="muted small inbox-hint">Drag an item onto a list to turn it into a card.</p>
 </aside>
-<dialog id="product-dialog" class="dialog wide" aria-label="New product">
+<dialog id="product-dialog" class="dialog wide" aria-label="New card with amounts">
   <form method="dialog" data-product-form>
-    <div class="dialog-head"><h3>New product</h3><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
-    <p class="muted small">Product and planned quantity on the first line, then what it needs — one per line. <b>1 x</b> = per product · <b>217 kg</b> = a total · a line ending in <b>:</b> starts a section · <b>[x]</b> = already done · no number = a plain tick. Before the first section, <b>Launch: 6 Oct 2026</b>, <b>Forecast: 407</b> or <b>Notes: …</b> fill in the card's fields (Variance is worked out).</p>
+    <div class="dialog-head"><h3>New card with amounts</h3><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+    <p class="muted small">Type what it's for and how many on the first line, then what it needs — one per line. Each line becomes something you can count off.</p>
+    <ul class="np-help muted small">
+      <li><b>1 x Chair</b> — this many for each one (200 guests → 200 chairs). Follows the amount if it changes.</li>
+      <li><b>30 kg Salad</b> — a total to count towards.</li>
+      <li><b>Setup:</b> — a line ending in “:” starts a section.</li>
+      <li><b>[x] …</b> — already done. A line with no number is a plain tick.</li>
+      <li>Before the first section, <b>Name: value</b> fills in a field (e.g. <b>Forecast: 180</b>, <b>Deadline: 6 Oct</b>, <b>Notes: …</b>).</li>
+    </ul>
     <div class="np-grid">
-      <textarea name="text" rows="14" spellcheck="false" placeholder="AF Christmas Cake — 430 cakes
-Launch: 6 Oct 2026
-Forecast: 407
-Notes: +5.7% buffer
-Packaging:
-Printed Product Label artwork
-1 x Printed Product Label
-1 x 5mm Black Round Matt Masonite Board (8&quot;)
-1 x Cake/Biscuit Tin
-Make:
-217.417 kg Fruit Soak revised (Christmas Cake) 2026
-1 x AF Christmas Cake (Baked)
-Finish:
-1 x Decorate
-1 x Pack"></textarea>
+      <textarea name="text" rows="14" spellcheck="false" placeholder="Summer fair — 200 guests
+Forecast: 180
+Notes: numbers from last year plus 10%
+Setup:
+1 x Chair
+0.125 x Table
+Food:
+30 kg Salad
+1 x Plate
+Before the day:
+Book the band"></textarea>
       <div class="np-preview" data-product-preview><p class="muted small">A preview appears here as you type.</p></div>
     </div>
     <div class="dialog-actions"><button class="btn primary" value="create">Create card</button></div>

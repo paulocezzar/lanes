@@ -1,4 +1,4 @@
-"""Type a product and what it needs; get a card that tracks how much is done.
+"""Type something and what it needs; get a card that tracks how much is done.
 
     AF Christmas Cake — 430 cakes          ← product, planned quantity, unit
     Packaging:                             ← a line ending in ':' starts a checklist
@@ -37,11 +37,65 @@ def _d(s):
         return None
 
 
+def parse_item(line, planned=None):
+    """One line → {text, per_unit, target, unit, done}.
+    '1 x Chair' (per one of the card's amount), '20 kg Salad' (a total), '[x] …' (done), else a plain tick."""
+    line = re.sub(r"^[-•*]\s+", "", (line or "").strip()).strip()
+    done = bool(DONE.match(line))
+    line = DONE.sub("", line).strip()
+    item = {"text": line, "per_unit": None, "target": None, "unit": "", "done": done}
+    m = PER.match(line)
+    if m:
+        item.update(text=m.group(2).strip(), per_unit=_d(m.group(1)))
+    else:
+        m = TOTAL.match(line)
+        if m and m.group(2).lower() in UNITS:
+            item.update(text=m.group(3).strip(), target=_d(m.group(1)), unit=m.group(2))
+        else:
+            m = TRAIL.match(line)
+            if m:
+                item.update(text=m.group(1).strip(" —–-"), target=_d(m.group(2)), unit=(m.group(3) or ""))
+    if item["per_unit"] is not None:
+        item["unit"] = item["unit"] or "each"
+        if planned:
+            item["target"] = planned * item["per_unit"]
+    elif item["target"] is not None and planned:
+        item["per_unit"] = (item["target"] / planned).quantize(Decimal("0.0001"))
+    return item
+
+
+def make_item(cl, it, user, position):
+    tgt = it["target"].quantize(Decimal("0.001")) if it["target"] is not None else None
+    done = bool(it["done"])
+    return ChecklistItem.objects.create(
+        checklist=cl, text=it["text"][:250] or "Item", position=position,
+        qty_target=tgt, qty_unit=it["unit"][:20], per_unit=it["per_unit"],
+        qty_done=tgt if (done and tgt) else 0, is_done=done,
+        done_by=user if done else None, done_at=timezone.now() if done else None)
+
+
+def set_amount(card, amount, unit=None):
+    """Give a card an amount ('430 cakes', '120 guests') — stored in its board's Planned/Unit fields."""
+    board = card.list.board
+    f = _field(board, "Planned", CustomField.NUMBER, True, aliases=("quantity", "target"))
+    if amount is None:
+        CardFieldValue.objects.filter(card=card, field=f).delete()
+    else:
+        CardFieldValue.objects.update_or_create(card=card, field=f, defaults={
+            "value": int(amount) if amount == amount.to_integral() else float(amount)})
+    if unit is not None:
+        fu = _field(board, "Unit", CustomField.TEXT, True)
+        if unit:
+            CardFieldValue.objects.update_or_create(card=card, field=fu, defaults={"value": unit[:20]})
+        else:
+            CardFieldValue.objects.filter(card=card, field=fu).delete()
+
+
 def parse(text):
     lines = [ln.strip() for ln in (text or "").splitlines()]
     lines = [ln for ln in lines if ln]
     if not lines:
-        raise ValueError("Type the product name on the first line.")
+        raise ValueError("Type what it's for on the first line — e.g. “Summer fair — 200 guests”.")
     first = lines[0]
     title, planned, unit = first, None, ""
     m = HEAD.match(first)
@@ -68,27 +122,7 @@ def parse(text):
         if current is None:
             current = {"title": "What it needs", "items": []}
             sections.append(current)
-        done = bool(DONE.match(line))
-        line = DONE.sub("", line).strip()
-        item = {"text": line, "per_unit": None, "target": None, "unit": "", "done": done}
-        m = PER.match(line)
-        if m:
-            item.update(text=m.group(2).strip(), per_unit=_d(m.group(1)))
-        else:
-            m = TOTAL.match(line)
-            if m and m.group(2).lower() in UNITS:
-                item.update(text=m.group(3).strip(), target=_d(m.group(1)), unit=m.group(2))
-            else:
-                m = TRAIL.match(line)
-                if m:
-                    item.update(text=m.group(1).strip(" —–-"), target=_d(m.group(2)), unit=(m.group(3) or ""))
-        if item["per_unit"] is not None:
-            item["unit"] = item["unit"] or "each"
-            if planned:
-                item["target"] = planned * item["per_unit"]
-        elif item["target"] is not None and planned:
-            item["per_unit"] = (item["target"] / planned).quantize(Decimal("0.0001"))
-        current["items"].append(item)
+        current["items"].append(parse_item(line, planned))
     return {"title": title[:250], "planned": planned, "unit": unit[:20], "sections": sections,
             "fields": fields, "notes": "\n".join(notes)}
 
@@ -118,13 +152,7 @@ def create(lst, text, user, *, position=None, extra_fields=None):
         for i, sec in enumerate(p["sections"], start=1):
             cl = Checklist.objects.create(card=card, title=sec["title"][:120], position=i * positions.GAP)
             for k, it in enumerate(sec["items"], start=1):
-                tgt = it["target"].quantize(Decimal("0.001")) if it["target"] is not None else None
-                done = bool(it["done"])
-                ChecklistItem.objects.create(
-                    checklist=cl, text=it["text"][:250], position=k * positions.GAP,
-                    qty_target=tgt, qty_unit=it["unit"][:20], per_unit=it["per_unit"],
-                    qty_done=tgt if (done and tgt) else 0, is_done=done,
-                    done_by=user if done else None, done_at=timezone.now() if done else None)
+                make_item(cl, it, user, k * positions.GAP)
         _typed_fields(card, board, p)
         if p["notes"]:
             card.description = p["notes"]
@@ -157,7 +185,7 @@ def _typed_fields(card, board, p):
     for key, val in p["fields"]:
         f = existing.get(key.lower())
         if not f:
-            kind = (CustomField.DATE if _parse_date(val) and key.lower() in ("launch", "start", "deadline", "date")
+            kind = (CustomField.DATE if _parse_date(val) and not _d(val)
                     else CustomField.NUMBER if _d(val) is not None else CustomField.TEXT)
             f = _field(board, key[:60], kind, kind == CustomField.DATE)
             existing[key.lower()] = f
@@ -183,15 +211,14 @@ def _typed_fields(card, board, p):
             "value": f"{var:+,.0f} ({var / float(fc) * 100:+.1f}%)" if var else "—"})
 
 
-EXAMPLE = """AF Christmas Cake — 430 cakes
-Packaging:
-Printed Product Label artwork
-1 x Printed Product Label
-1 x 5mm Black Round Matt Masonite Board (8")
-1 x Cake/Biscuit Tin
-Make:
-217.417 kg Fruit Soak revised (Christmas Cake) 2026
-1 x AF Christmas Cake (Baked)
-Finish:
-1 x Decorate
-1 x Pack"""
+EXAMPLE = """Summer fair — 200 guests
+Forecast: 180
+Notes: numbers from last year plus 10%
+Setup:
+1 x Chair
+0.125 x Table
+Food:
+30 kg Salad
+1 x Plate
+Before the day:
+Book the band"""

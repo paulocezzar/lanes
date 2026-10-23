@@ -256,6 +256,21 @@ class Card(models.Model):
         days = (timezone.now() - self.updated_at).days
         return "aged-3" if days >= 28 else "aged-2" if days >= 14 else "aged-1" if days >= 7 else ""
 
+    def per_one_lines(self):
+        """True if any checklist line is 'per one' of the card's amount (templates then ask how many)."""
+        return any(i.per_unit is not None for cl in self.checklists.all() for i in cl.items.all())
+
+    def amount(self):
+        """(amount text, unit) from the card's Planned / Unit fields."""
+        num, unit = None, ""
+        for v in self.field_values.all():
+            n = v.field.name.strip().lower()
+            if v.field.kind == "number" and n in ("planned", "quantity", "target") and num is None:
+                num = ChecklistItem.fmt_qty(v.value)
+            elif n == "unit":
+                unit = str(v.value)
+        return {"amount": num, "unit": unit} if num is not None else None
+
     def qty_progress(self):
         """Overall % across checklist items when any of them count quantities (for the card tile)."""
         items = [i for cl in self.checklists.all() for i in cl.items.all()]
@@ -500,6 +515,8 @@ class Activity(models.Model):
             "dependency_added": f"made this card wait for {d.get('name', 'another card')}",
             "dependency_removed": "removed a dependency from this card",
             "report_sent": f"sent the weekly status report to {d.get('to', 0)} people",
+            "amount_set": (f"set the amount to {d.get('amount')} {d.get('unit', '')}".rstrip() if d.get("amount")
+                           else "removed the amount"),
             "item_qty": f"recorded {d.get('done', '')} / {d.get('target', '')} {d.get('unit', '')} on “{d.get('text', '')}”",
             "time_logged": f"logged {d.get('time', 'time')} on this card",
             "cost_added": f"added a cost: {d.get('name', '')} ({d.get('amount', '')})",

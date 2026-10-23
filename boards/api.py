@@ -165,7 +165,7 @@ def card_create(request, list_id):
 
 @api
 def product_create(request, list_id):
-    """'New product': the product and what it needs, one per line → a card with quantity checklists."""
+    """'New card with amounts': what it's for and how many, then what it needs, one per line."""
     from . import products
     lst = get_object_or_404(List.objects.select_related("board"), pk=list_id, is_archived=False)
     _edit(lst.board, request.user)
@@ -471,11 +471,39 @@ def checklist_update(request, checklist_id):
 
 @api
 def item_create(request, checklist_id):
+    """Add one item — or one per line when several are pasted. '1 x Chair' = per one of the card's
+    amount, '20 kg Salad' = a total to count towards, '[x] …' = already done, anything else = a tick."""
+    from . import products
     cl = _checklist(request, checklist_id)
-    it = ChecklistItem.objects.create(checklist=cl, text=_text(request.data.get("text"), 250),
-                                      position=positions.end_position(cl.items.all()))
-    log(cl.card.list.board, request.user, "item_added", card=cl.card, text=it.text, checklist=cl.title)
+    raw = str(request.data.get("text") or "")
+    lines = [ln for ln in raw.splitlines() if ln.strip()][:100] or [""]
+    planned = _planned(cl.card)
+    pos = positions.end_position(cl.items.all())
+    for ln in lines:
+        _text(ln, 250)                      # same empty / length checks as before
+        it = products.make_item(cl, products.parse_item(ln[:250], planned), request.user, pos)
+        pos += positions.GAP
+        log(cl.card.list.board, request.user, "item_added", card=cl.card, text=it.text, checklist=cl.title)
     return card_response(cl.card_id, request)
+
+
+@api
+def card_amount(request, card_id):
+    """How many this card is for ('430 cakes', '120 guests'). Lines with a per-one amount follow it."""
+    from . import products
+    card = _card(request, card_id)
+    raw = str(request.data.get("amount") or "").strip()
+    amount = _dec(raw, "Amount") if raw else None
+    if amount is not None and amount < 0:
+        raise ApiError("The amount can't be negative.")
+    unit = request.data.get("unit")
+    products.set_amount(card, amount, None if unit is None else str(unit).strip())
+    n = rescale_items(card)
+    log(card.list.board, request.user, "amount_set", card=card,
+        amount=ChecklistItem.fmt_qty(amount) if amount is not None else "", unit=str(unit or "").strip())
+    data = card_response(card.pk, request)
+    data["rescaled"] = n
+    return data
 
 
 @api
@@ -859,6 +887,11 @@ def card_from_template(request, list_id):
     tpl = get_object_or_404(Card, pk=request.data.get("template_id"), list__board=lst.board, is_template=True)
     from .copying import copy_card
     new = copy_card(tpl, lst, user=request.user, keep_members=True, keep_dates=False)
+    raw = str(request.data.get("amount") or "").strip()
+    if raw:                                  # "How many?" — every per-one line scales to it
+        from . import products
+        products.set_amount(new, _dec(raw, "Amount"))
+        rescale_items(new)
     automation.fire(new, Rule.ADDED, list_=lst, actor=request.user)
     return card_response(new.pk, request)
 
