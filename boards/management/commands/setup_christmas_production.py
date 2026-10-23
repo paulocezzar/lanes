@@ -1,10 +1,12 @@
-"""One-off: fill the 'Christmas Production' board from the StockUp Christmas 2026 plan
-(locked 16 Aug: 11 products, 26 components, 3,458 kg).
+"""Fill the 'Christmas Production' board from the StockUp Christmas 2026 plan
+(locked 16 Aug, forecast v2: 11 products, 26 components, 3,458 kg).
 
-Lists follow the order the work has to happen; labels are the product families.
-Quantities, codes and StockUp warnings come from the plan; the dates are a first draft
-for the Gantt (StockUp has most windows as 'unknown') and are meant to be dragged.
-Runs only when LANES_XMAS_BOARD holds the board id; skips if the board already has cards.
+One card per product, like StockUp's Overview: inside each card a 'Components to make'
+checklist, a 'Packaging' checklist and a 'Production' step, every item with its quantity,
+code, StockUp warning and a draft due date. Shared packaging is listed on each product
+with its share, and once more — as one combined order — on the 'Packaging orders' card.
+Artwork is left out (handled outside production). Dates are a first draft for the Gantt.
+Runs only when LANES_XMAS_BOARD holds the board id and the board has no cards.
 """
 import os
 from datetime import date, datetime, time
@@ -14,185 +16,270 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from boards.models import Board, CardFieldValue, Card, Checklist, ChecklistItem, CustomField, Dependency, Label, List
+from boards.models import Board, Card, CardFieldValue, Checklist, ChecklistItem, CustomField, Label, List
 
 D = lambda m, d: date(2026, m, d)  # noqa: E731
 
-LISTS = [
-    ("packaging", "Packaging to order", "blue"),
-    ("components", "Components to make", "orange"),
-    ("products", "Bake, pack & freeze", "green"),
-    ("done", "Done", ""),
-]
+LISTS = [("prep", "To prepare", "orange"), ("making", "In production", "blue"), ("done", "Done", "green")]
 
 LABELS = {
-    "cake": ("Christmas cake", "green"),
-    "mince": ("Mince pies", "orange"),
-    "yule": ("Yule log", "purple"),
-    "tarts": ("Sweet tarts", "pink"),
-    "savoury": ("Savoury tartlets", "sky"),
-    "stollen": ("Stollen", "yellow"),
-    "puff": ("Rough puff", "grey"),
-    "pack": ("Packaging", "blue"),
-    "attention": ("Needs attention", "red"),
+    "cake": ("Christmas cake", "green"), "mince": ("Mince pies", "orange"), "yule": ("Yule log", "purple"),
+    "tarts": ("Sweet tarts", "pink"), "savoury": ("Savoury tartlets", "sky"), "stollen": ("Stollen", "yellow"),
+    "puff": ("Rough puff", "grey"), "pack": ("Packaging", "blue"), "attention": ("Needs attention", "red"),
 }
 
-# key, list, title, labels, qty, unit, code, start, due, waits-for, note, extra
-CARDS = [
-    # ---------- packaging (shared orders counted once) ----------
-    ("p_label", "packaging", "Printed Product Label", ["pack", "attention"], 3460, "labels", "",
-     D(10, 26), D(10, 27), [], "No lead time in StockUp. Shared ×6 — one order covers all.",
-     {"split": ["AF Christmas Cake — 430", "Crumble Topped Mince Pies — 2,000", "FRZN Goat's Cheese tartlets — 200",
-                "FRZN Ham Hock tartlets — 340", "Miniature Iced Christmas Cake — 280", "Stollen Wreath (Tinned) — 210"]}),
-    ("p_label_cran", "packaging", "Printed Product Label (NPD-P2) — Cranberry & Orange", ["pack", "mince", "attention"], None, "labels", "NPD-P2",
-     D(10, 26), D(10, 27), [], "No quantity or usage basis captured in StockUp — needed by 6 Oct. Artwork is handled outside production.", {}),
-    ("p_thermal", "packaging", "Thermal Label", ["pack", "attention"], 3350, "labels", "",
-     D(10, 26), D(10, 27), [], "No lead time in StockUp. Shared ×5 — one order covers all.",
-     {"split": ["Crumble Topped Mince Pies — 2,000", "FRZN Goat's Cheese tartlets — 200", "FRZN Ham Hock tartlets — 340",
-                "Stollen Wreath (Tinned) — 210", "TN Stollen 600g — 600"]}),
-    ("p_thermal_cran", "packaging", "Thermal Label (NPD-P32) — Cranberry & Orange", ["pack", "mince", "attention"], None, "labels", "NPD-P32",
-     D(10, 26), D(10, 27), [], "No quantity or usage basis captured in StockUp — needed by 6 Oct. Artwork is handled outside production.", {}),
-    ("p_box", "packaging", "0427 die-cut self-locking box c/w 6 cell", ["pack", "mince"], 2000, "boxes", "NPD-P91",
-     D(10, 26), D(10, 27), [], "Ordered for Crumble Topped Mince Pies (2,000). Cranberry & Orange quantity not captured yet.", {}),
-    ("p_grease", "packaging", "Greaseproof paper 230×450 40gsm", ["pack", "mince", "attention"], 2000, "sheets", "NPD-P94",
-     D(10, 26), D(10, 27), [], "No lead time in StockUp. 2,000 for Crumble Topped; Cranberry & Orange quantity not captured.", {}),
-    ("p_board", "packaging", "5mm Black Round Matt Masonite Board (8\")", ["pack"], 910, "boards", "",
-     D(10, 26), D(10, 27), [], "No lead time in StockUp. Shared ×3 — one order covers all.",
-     {"split": ["AF Christmas Cake — 430", "Black Forest Yule Log — 270", "Stollen Wreath (Tinned) — 210"]}),
-    ("p_band", "packaging", "Belly Band", ["pack"], 1030, "bands", "",
-     D(10, 26), D(10, 27), [], "No lead time in StockUp. Shared with TN Stollen — one order covers both.",
-     {"split": ["AF Christmas Cake — 430", "TN Stollen 600g — 600"]}),
-    ("p_tin", "packaging", "Cake/Biscuit Tin", ["pack"], 640, "tins", "",
-     D(10, 26), D(10, 27), [], "No lead time in StockUp. Shared with Stollen Wreath — one order covers both.",
-     {"split": ["AF Christmas Cake — 430", "Stollen Wreath (Tinned) — 210"]}),
-    ("p_film", "packaging", "700/350mm 20mic centre fold film", ["pack"], 1090, "", "",
-     D(10, 26), D(10, 27), [], "No lead time in StockUp. Shared ×3 — one order covers all.",
-     {"split": ["Miniature Iced Christmas Cake — 280", "Stollen Wreath (Tinned) — 210", "TN Stollen 600g — 600"]}),
-    ("p_pouch", "packaging", "Vacuum Pouch 400×500mm", ["pack"], 12270, "pouches", "",
-     D(10, 26), D(10, 27), [], "No lead time in StockUp. Shared with Black Forest Yule Log — one order covers both.",
-     {"split": ["Crumble Topped Mince Pies — 12,000", "Black Forest Yule Log — 270"]}),
-    ("p_foil", "packaging", "Custard Foil 78mm", ["pack"], 6840, "foils", "",
-     D(10, 26), D(10, 27), [], "No lead time in StockUp. Shared ×3 — one order covers all.",
-     {"split": ["Cranberry & Orange Mince Pie — 3,600", "FRZN Goat's Cheese tartlets — 1,200", "FRZN Ham Hock tartlets — 2,040"]}),
-    ("p_basket", "packaging", "Panibois Duc baking basket (175×110)", ["pack", "stollen"], 600, "baskets", "NPD-P15",
-     D(10, 26), D(10, 27), [], "No lead time in StockUp.", {}),
-    ("ms_packaging", "packaging", "All packaging delivered", [], None, "", "",
-     None, D(10, 30), ["p_label", "p_label_cran", "p_thermal", "p_thermal_cran", "p_box", "p_grease", "p_board", "p_band",
-                       "p_tin", "p_film", "p_pouch", "p_foil", "p_basket"],
-     "Yule Log and the savoury tartlets launch on 3 Nov — their boards, pouches, foil and labels must be in before then.",
-     {"milestone": True}),
+ORDER = D(10, 27)   # draft: all packaging ordered by Tue 27 Oct
+WARN = "⚠ "         # items StockUp flags red or amber
 
-    # ---------- components ----------
-    ("c_mincemeat", "components", "Mincemeat (Mince Pie)", ["mince", "attention"], 600.168, "kg", "NPD-R412",
-     D(10, 26), D(10, 30), [], "Short — window passed (was 24 May – 6 Oct).", {}),
-    ("c_crumble", "components", "Crumble Topping", ["mince", "attention"], 180.05, "kg", "NPD-R567",
-     D(10, 26), D(10, 27), [], "Short — window passed (was 7 Aug – 6 Oct).", {}),
-    ("c_praline", "components", "Hazelnut Praline", ["mince", "tarts", "attention"], 34.007, "kg", "",
-     D(10, 26), D(10, 26), [], "Past last safe start (window 23 Jul – 6 Oct). 24.007 kg Crumble Topped + 10 kg Dark Choc tarts.", {}),
-    ("c_cran_mincemeat", "components", "Cranberry and Orange Mincemeat", ["mince", "attention"], 180.011, "kg", "NPD-R2840",
-     D(10, 28), D(10, 29), [], "No window set in StockUp.", {}),
-    ("c_cases", "components", "Mince Pie Case", ["mince", "attention"], 15600, "each", "",
-     D(10, 26), D(11, 6), [], "Short — window passed (scheduled 6 Oct). 12,000 Crumble Topped + 3,600 Cranberry & Orange.", {}),
-    ("c_sweet_case", "components", "Sweet Pastry Tart Case", ["tarts", "attention"], 65, "kg", "NPD-R174",
-     D(10, 26), D(10, 27), [], "No window set in StockUp.", {}),
-    ("c_choc_icing", "components", "Chocolate Icing", ["tarts", "attention"], 85, "kg", "NPD-R1441",
-     D(10, 28), D(10, 28), [], "No window set in StockUp.", {}),
-    ("c_caramel", "components", "Salt Caramel", ["tarts", "attention"], 35, "kg", "NPD-R2544",
-     D(10, 28), D(10, 28), [], "No window set in StockUp.", {}),
-    ("c_mini_cake", "components", "Mini Xmas Cake 2026 (Single)", ["cake", "attention"], 280, "each", "NPD-R2810",
-     D(10, 26), D(10, 27), [], "No window set in StockUp. Batter and fruit soak already made.", {}),
-    ("c_onions", "components", "Caramelised Onions w Thyme", ["savoury", "attention"], 18, "kg", "NPD-R2174",
-     D(10, 26), D(10, 26), [], "No window set in StockUp.", {}),
-    ("c_savoury_case", "components", "Mini Savoury Shortcrust Tart Case", ["savoury", "attention"], 540, "each", "",
-     D(10, 26), D(10, 27), [], "No window set in StockUp. 200 Goat's Cheese + 340 Ham Hock.", {}),
-    ("c_custard", "components", "Savoury Custard", ["savoury", "attention"], 540, "each", "",
-     D(10, 28), D(10, 28), [], "No window set in StockUp. 200 Goat's Cheese + 340 Ham Hock.", {}),
-    ("c_hamhock", "components", "Ham Hock, Mustard & Parsley Filling", ["savoury", "attention"], 2040, "each", "NPD-R2360",
-     D(10, 28), D(10, 28), [], "No window set in StockUp.", {}),
-    ("c_fruit_soak", "components", "Fruit Soak (Stollen)", ["stollen", "attention"], 212.413, "kg", "",
-     D(10, 26), D(10, 27), [], "No window set in StockUp. 72.531 kg Wreath + 139.882 kg TN Stollen.", {}),
-    ("c_poolish", "components", "Stollen Poolish", ["stollen", "attention"], 79.397, "kg", "",
-     D(10, 28), D(10, 28), [], "No window set in StockUp. 27.111 kg Wreath + 52.286 kg TN Stollen.", {}),
-    ("c_stollen_dough", "components", "Stollen Dough", ["stollen", "attention"], 455.554, "kg", "",
-     D(10, 29), D(10, 30), ["c_fruit_soak", "c_poolish"], "No window set in StockUp. 155.554 kg Wreath + 300 kg TN Stollen.", {}),
-    ("c_glaze", "components", "Stollen Butter Glaze", ["stollen", "attention"], 31.35, "kg", "",
-     D(10, 30), D(10, 30), [], "No window set in StockUp. 7.35 kg Wreath + 24 kg TN Stollen.", {}),
-    ("c_puff", "components", "New Rough Puff Pastry Dough 2025", ["puff", "attention"], 450, "kg", "NPD-R1868",
-     D(10, 26), D(10, 28), [], "No window set in StockUp.", {}),
-    ("c_yule_batter", "components", "Yule Log Batter", ["yule", "attention"], 92.571, "kg", "NPD-R2836",
-     D(10, 27), D(10, 27), [], "No window set in StockUp.", {}),
-    ("c_yule_sheet", "components", "Yule Log Baked Sheet", ["yule", "attention"], 81, "kg", "NPD-R2839",
-     D(10, 28), D(10, 28), ["c_yule_batter"], "No window set in StockUp.", {}),
-    ("c_buttercream", "components", "Chocolate Buttercream", ["yule", "attention"], 148.5, "kg", "NPD-R2837",
-     D(10, 29), D(10, 29), [], "No window set in StockUp.", {}),
+# item: (text, due, done, warning)
+PRODUCTS = [
+    dict(key="crumble", title="Crumble Topped Mince Pies Retail (Pack/6)", label="mince", qty=2000, unit="packs",
+         forecast=1504, launch=D(10, 6), why="account for wholesale demands and internal orders", end=D(12, 4),
+         components=[
+             ("Mincemeat (Mince Pie) — 600.168 kg · NPD-R412", D(10, 30), False, "Short — window passed (24 May – 6 Oct)"),
+             ("Crumble Topping — 180.05 kg · NPD-R567", D(10, 27), False, "Short — window passed (7 Aug – 6 Oct)"),
+             ("Hazelnut Praline — 24.007 kg (also 10 kg for the Dark Choc tarts)", D(10, 26), False, "Past last safe start (23 Jul – 6 Oct)"),
+             ("Mince Pie Case — 12,000 (also 3,600 for Cranberry & Orange)", D(11, 6), False, "Short — window passed (scheduled 6 Oct)"),
+         ],
+         packaging=[
+             ("0427 die-cut self-locking box c/w 6 cell — 2,000 · NPD-P91 (ordered)", ORDER, True, ""),
+             ("Greaseproof paper 230×450 40gsm — 2,000 · NPD-P94", ORDER, False, "No lead time"),
+             ("Thermal Label — 2,000 (on the shared order of 3,350)", ORDER, False, "No lead time"),
+             ("Printed Product Label — 2,000 (on the shared order of 3,460)", ORDER, False, "No lead time"),
+             ("Vacuum Pouch 400×500mm — 12,000 (on the shared order of 12,270)", ORDER, False, ""),
+         ],
+         production=[("Bake & pack — 2,000 packs of 6", D(12, 4))]),
+    dict(key="cran", title="Cranberry and Orange Mince Pie (Pack/6)", label="mince", qty=600, unit="packs",
+         forecast=477, launch=D(10, 6), why="buffer", end=D(11, 13),
+         components=[
+             ("Cranberry and Orange Mincemeat — 180.011 kg · NPD-R2840", D(10, 29), False, "No window"),
+             ("Mince Pie Case — 3,600 (made with the Crumble Topped cases)", D(11, 6), False, "Short — window passed (scheduled 6 Oct)"),
+         ],
+         packaging=[
+             ("0427 die-cut self-locking box c/w 6 cell — quantity not captured", ORDER, False, "No quantity in StockUp"),
+             ("Greaseproof paper 230×450 40gsm — quantity not captured", ORDER, False, "No quantity in StockUp"),
+             ("Printed Product Label (NPD-P2) — quantity not captured", ORDER, False, "No quantity in StockUp"),
+             ("Thermal Label (NPD-P32) — quantity not captured", ORDER, False, "No quantity in StockUp"),
+             ("Custard Foil 78mm — 3,600 (on the shared order of 6,840)", ORDER, False, "No lead time"),
+         ],
+         production=[("Bake & pack — 600 packs of 6", D(11, 13))]),
+    dict(key="af", title="AF Christmas Cake", label="cake", qty=430, unit="cakes",
+         forecast=407, launch=D(10, 6), why="buffer", end=D(11, 13),
+         components=[
+             ("Christmas Cake Batter revised (2026) — 387 kg (493,000 g made)", None, True, ""),
+             ("Fruit Soak revised (Christmas Cake) 2026 — 217.417 kg (267,500 g made)", None, True, ""),
+             ("AF Christmas Cake (Baked) — 430 · NPD-R2822 (374,640 g made)", None, True, ""),
+         ],
+         packaging=[
+             ("Printed Product Label — 430 (on the shared order of 3,460)", ORDER, False, "No lead time"),
+             ("5mm Black Round Matt Masonite Board (8\") — 430 (on the shared order of 910)", ORDER, False, "No lead time"),
+             ("Belly Band — 430 (on the shared order of 1,030)", ORDER, False, "No lead time"),
+             ("Cake/Biscuit Tin — 430 (on the shared order of 640)", ORDER, False, "No lead time"),
+         ],
+         production=[("Decorate & pack — 430 cakes", D(11, 13))]),
+    dict(key="mini", title="Miniature Iced Christmas Cake 150g (Pack/1)", label="cake", qty=280, unit="cakes",
+         forecast=266, launch=D(10, 6), why="account for possible wastage", end=D(11, 6),
+         components=[
+             ("Christmas Cake Batter revised (2026) — 39.2 kg (made)", None, True, ""),
+             ("Fruit Soak revised (Christmas Cake) 2026 — 22.023 kg (made)", None, True, ""),
+             ("Mini Xmas Cake 2026 (Single) — 280 · NPD-R2810", D(10, 27), False, "No window"),
+         ],
+         packaging=[
+             ("700/350mm 20mic centre fold film — 280 (on the shared order of 1,090)", ORDER, False, "No lead time"),
+             ("Printed Product Label — 280 (on the shared order of 3,460)", ORDER, False, "No lead time"),
+         ],
+         production=[("Ice & pack — 280 cakes", D(11, 6))]),
+    dict(key="tarts", title="Dark Chocolate and Salted Caramel Tarts (Pack/2)", label="tarts", qty=250, unit="packs",
+         forecast=208, launch=D(10, 6), why="account for wholesale and internal orders", end=D(10, 30),
+         components=[
+             ("Sweet Pastry Tart Case — 65 kg · NPD-R174", D(10, 27), False, "No window"),
+             ("Hazelnut Praline — 10 kg (made with the Crumble Topped praline)", D(10, 26), False, "Past last safe start (23 Jul – 6 Oct)"),
+             ("Chocolate Icing — 85 kg · NPD-R1441", D(10, 28), False, "No window"),
+             ("Salt Caramel — 35 kg · NPD-R2544", D(10, 28), False, "No window"),
+         ],
+         packaging=[],
+         production=[("Assemble & pack — 250 packs of 2", D(10, 30))]),
+    dict(key="wreath", title="Stollen Wreath (Tinned)", label="stollen", qty=210, unit="wreaths",
+         forecast=190, launch=D(10, 6), why="account for possible wastage", end=D(11, 3),
+         components=[
+             ("Fruit Soak (Stollen) — 72.531 kg", D(10, 27), False, "No window"),
+             ("Stollen Poolish — 27.111 kg", D(10, 28), False, "No window"),
+             ("Stollen Dough — 155.554 kg", D(10, 30), False, "No window"),
+             ("Stollen Butter Glaze — 7.35 kg", D(10, 30), False, "No window"),
+         ],
+         packaging=[
+             ("5mm Black Round Matt Masonite Board (8\") — 210 (on the shared order of 910)", ORDER, False, "No lead time"),
+             ("700/350mm 20mic centre fold film — 210 (on the shared order of 1,090)", ORDER, False, "No lead time"),
+             ("Cake/Biscuit Tin — 210 (on the shared order of 640)", ORDER, False, "No lead time"),
+             ("Printed Product Label — 210 (on the shared order of 3,460)", ORDER, False, "No lead time"),
+             ("Thermal Label — 210 (on the shared order of 3,350)", ORDER, False, "No lead time"),
+         ],
+         production=[("Bake, glaze & tin — 210 wreaths", D(11, 3))]),
+    dict(key="tn", title="TN Stollen 600g", label="stollen", qty=600, unit="loaves",
+         forecast=510, launch=D(10, 6), why="account for possible increase in orders", end=D(11, 6),
+         components=[
+             ("Fruit Soak (Stollen) — 139.882 kg", D(10, 27), False, "No window"),
+             ("Stollen Poolish — 52.286 kg", D(10, 28), False, "No window"),
+             ("Stollen Dough — 300 kg", D(10, 30), False, "No window"),
+             ("Stollen Butter Glaze — 24 kg", D(10, 30), False, "No window"),
+         ],
+         packaging=[
+             ("700/350mm 20mic centre fold film — 600 (on the shared order of 1,090)", ORDER, False, "No lead time"),
+             ("Belly Band — 600 (on the shared order of 1,030)", ORDER, False, "No lead time"),
+             ("Panibois Duc baking basket (175×110) — 600 · NPD-P15", ORDER, False, "No lead time"),
+             ("Thermal Label — 600 (on the shared order of 3,350)", ORDER, False, "No lead time"),
+         ],
+         production=[("Bake, glaze & pack — 600 loaves", D(11, 6))]),
+    dict(key="puff", title="Rough Puff - 1.5kg", label="puff", qty=300, unit="blocks",
+         forecast=300, launch=date(2026, 8, 24), why="", end=D(10, 29),
+         components=[("New Rough Puff Pastry Dough 2025 — 450 kg · NPD-R1868", D(10, 28), False, "No window")],
+         packaging=[],
+         production=[("Portion & pack — 300 × 1.5 kg", D(10, 29))]),
+    dict(key="yule", title="Black Forest Yule Log (1000g)", label="yule", qty=270, unit="logs",
+         forecast=256, launch=D(11, 3), why="buffer", end=D(11, 2),
+         components=[
+             ("Yule Log Batter — 92.571 kg · NPD-R2836", D(10, 27), False, "No window"),
+             ("Yule Log Baked Sheet — 81 kg · NPD-R2839", D(10, 28), False, "No window"),
+             ("Chocolate Buttercream — 148.5 kg · NPD-R2837", D(10, 29), False, "No window"),
+         ],
+         packaging=[
+             ("5mm Black Round Matt Masonite Board (8\") — 270 (on the shared order of 910)", ORDER, False, ""),
+             ("Vacuum Pouch 400×500mm — 270 (on the shared order of 12,270)", ORDER, False, ""),
+         ],
+         production=[("Roll, finish & pack — 270 logs", D(11, 2))]),
+    dict(key="goat", title="FRZN Goat's Cheese, Caramelised Onion & Thyme Tartlets (Box of 6)", label="savoury", qty=200,
+         unit="boxes", forecast=184, launch=D(11, 3), why="account for possible wastage", end=D(10, 30),
+         components=[
+             ("Caramelised Onions w Thyme — 18 kg · NPD-R2174", D(10, 26), False, "No window"),
+             ("Mini Savoury Shortcrust Tart Case — 200 (made with the Ham Hock cases)", D(10, 27), False, "No window"),
+             ("Savoury Custard — 200 (made with the Ham Hock custard)", D(10, 28), False, "No window"),
+             ("Mini Onion & Waterlip Tartlet (Single) — 1,200 · NPD-R2263", D(10, 29), False, "No window"),
+         ],
+         packaging=[
+             ("Custard Foil 78mm — 1,200 (on the shared order of 6,840)", ORDER, False, ""),
+             ("Printed Product Label — 200 (on the shared order of 3,460)", ORDER, False, ""),
+             ("Thermal Label — 200 (on the shared order of 3,350)", ORDER, False, ""),
+         ],
+         production=[("Bake, box & freeze — 200 boxes of 6", D(10, 30))]),
+    dict(key="ham", title="FRZN Ham Hock, Cheddar & Mustard Tartlets (Box of 6)", label="savoury", qty=340, unit="boxes",
+         forecast=310, launch=D(11, 3), why="account for possible wastage", end=D(11, 2),
+         components=[
+             ("Ham Hock, Mustard & Parsley Filling — 2,040 · NPD-R2360", D(10, 28), False, "No window"),
+             ("Mini Savoury Shortcrust Tart Case — 340", D(10, 27), False, "No window"),
+             ("Savoury Custard — 340", D(10, 28), False, "No window"),
+             ("Mini Ham Hock, Cheddar & English Mustard tartlet (Single) — 2,040 · NPD-R2264", D(10, 30), False, "No window"),
+         ],
+         packaging=[
+             ("Custard Foil 78mm — 2,040 (on the shared order of 6,840)", ORDER, False, ""),
+             ("Printed Product Label — 340 (on the shared order of 3,460)", ORDER, False, ""),
+             ("Thermal Label — 340 (on the shared order of 3,350)", ORDER, False, ""),
+         ],
+         production=[("Bake, box & freeze — 340 boxes of 6", D(11, 2))]),
+]
 
-    # ---------- finished products ----------
-    ("f_crumble", "products", "Crumble Topped Mince Pies Retail (Pack/6)", ["mince"], 2000, "packs", "",
-     D(11, 2), D(12, 4), ["c_mincemeat", "c_crumble", "c_praline"], "2,000 planned · 4 to make · 1 to buy.", {}),
-    ("f_cran", "products", "Cranberry and Orange Mince Pie (Pack/6)", ["mince"], 600, "packs", "",
-     D(11, 2), D(11, 13), ["c_cran_mincemeat"], "600 planned · 1 to make.", {}),
-    ("f_goat", "products", "FRZN Goat's Cheese, Caramelised Onion & Thyme Tartlets (Box of 6)", ["savoury"], 200, "boxes", "",
-     D(10, 29), D(10, 30), ["c_onions", "c_savoury_case", "c_custard"], "200 boxes = 1,200 Mini Onion & Waterlip Tartlets (NPD-R2263).", {}),
-    ("f_ham", "products", "FRZN Ham Hock, Cheddar & Mustard Tartlets (Box of 6)", ["savoury"], 340, "boxes", "",
-     D(10, 29), D(11, 2), ["c_hamhock", "c_savoury_case", "c_custard"], "340 boxes = 2,040 Mini Ham Hock, Cheddar & English Mustard tartlets (NPD-R2264).", {}),
-    ("f_af_cake", "products", "AF Christmas Cake — decorate & pack", ["cake"], 430, "cakes", "",
-     D(11, 2), D(11, 13), [], "430 planned. Baked already (374,640 g made) — needs board, tin, belly band and labels.", {}),
-    ("f_mini_cake", "products", "Miniature Iced Christmas Cake 150g (Pack/1)", ["cake"], 280, "cakes", "",
-     D(11, 2), D(11, 6), ["c_mini_cake"], "280 planned · 2 to make.", {}),
-    ("f_wreath", "products", "Stollen Wreath (Tinned)", ["stollen"], 210, "wreaths", "",
-     D(11, 2), D(11, 3), ["c_stollen_dough", "c_glaze"], "210 planned.", {}),
-    ("f_tn_stollen", "products", "TN Stollen 600g", ["stollen"], 600, "loaves", "",
-     D(11, 2), D(11, 6), ["c_stollen_dough", "c_glaze"], "600 planned.", {}),
-    ("f_puff", "products", "Rough Puff 1.5kg", ["puff"], 300, "blocks", "",
-     D(10, 29), D(10, 29), ["c_puff"], "300 planned.", {}),
-    ("f_yule", "products", "Black Forest Yule Log (1000g)", ["yule"], 270, "logs", "",
-     D(10, 30), D(11, 2), ["c_yule_sheet", "c_buttercream"], "270 planned.", {}),
-    ("f_tarts", "products", "Dark Chocolate and Salted Caramel Tarts (Pack/2)", ["tarts"], 250, "packs", "",
-     D(10, 29), D(10, 30), ["c_sweet_case", "c_choc_icing", "c_caramel", "c_praline"], "250 planned · 1 to make.", {}),
-    ("ms_done", "products", "Christmas production complete", [], None, "", "",
-     None, D(12, 7), ["f_crumble", "f_cran", "f_goat", "f_ham", "f_af_cake", "f_mini_cake", "f_wreath", "f_tn_stollen",
-                       "f_puff", "f_yule", "f_tarts"], "", {"milestone": True}),
-
-    # ---------- already made ----------
-    ("d_batter", "done", "Christmas Cake Batter revised (2026)", ["cake"], 426.2, "kg", "",
-     None, None, [], "493,000 g made. 387 kg AF Christmas Cake + 39.2 kg Miniature Iced.", {"complete": True}),
-    ("d_soak", "done", "Fruit Soak revised (Christmas Cake) 2026", ["cake"], 239.44, "kg", "",
-     None, None, [], "267,500 g made. 217.417 kg AF Christmas Cake + 22.023 kg Miniature Iced.", {"complete": True}),
-    ("d_af_baked", "done", "AF Christmas Cake (Baked)", ["cake"], 430, "each", "NPD-R2822",
-     None, None, [], "374,640 g made.", {"complete": True}),
+# One order each for shared packaging — what the buyer actually places. (text, warning, done)
+COMBINED = [
+    ("Printed Product Label — 3,460 (6 products)", "No lead time", False),
+    ("Thermal Label — 3,350 (5 products)", "No lead time", False),
+    ("Vacuum Pouch 400×500mm — 12,270 (Crumble Topped 12,000 + Yule Log 270)", "No lead time", False),
+    ("Custard Foil 78mm — 6,840 (Cranberry & Orange 3,600 + Ham Hock 2,040 + Goat's Cheese 1,200)", "No lead time", False),
+    ("700/350mm 20mic centre fold film — 1,090 (Mini Cake 280 + Wreath 210 + TN Stollen 600)", "No lead time", False),
+    ("Belly Band — 1,030 (AF Cake 430 + TN Stollen 600)", "No lead time", False),
+    ("5mm Black Round Matt Masonite Board (8\") — 910 (AF Cake 430 + Yule Log 270 + Wreath 210)", "No lead time", False),
+    ("Cake/Biscuit Tin — 640 (AF Cake 430 + Wreath 210)", "No lead time", False),
+    ("0427 die-cut box c/w 6 cell — 2,000 for Crumble Topped (ordered)", "", True),
+    ("0427 die-cut box c/w 6 cell — Cranberry & Orange (qty not captured)", "No quantity", False),
+    ("Greaseproof paper 230×450 — 2,000 Crumble Topped + Cranberry & Orange (qty not captured)", "No lead time", False),
+    ("Printed Product Label NPD-P2 & Thermal Label NPD-P32 for Cranberry & Orange — qty not captured", "No quantity", False),
+    ("Panibois Duc baking basket — 600 (TN Stollen)", "No lead time", False),
 ]
 
 
-# Demand tab (forecast v2 / post-reviewed, arrived 18 Aug 2026): forecast, planned, launch, reason
-DEMAND = {
-    "f_af_cake": (407, 430, D(10, 6), "buffer"),
-    "f_yule": (256, 270, D(11, 3), "buffer"),
-    "f_cran": (477, 600, D(10, 6), "buffer"),
-    "f_crumble": (1504, 2000, D(10, 6), "account for wholesale demands and internal orders"),
-    "f_tarts": (208, 250, D(10, 6), "account for wholesale and internal orders"),
-    "f_goat": (184, 200, D(11, 3), "account for possible wastage"),
-    "f_ham": (310, 340, D(11, 3), "account for possible wastage"),
-    "f_mini_cake": (266, 280, D(10, 6), "account for possible wastage"),
-    "f_wreath": (190, 210, D(10, 6), "account for possible wastage"),
-    "f_tn_stollen": (510, 600, D(10, 6), "account for possible increase in orders"),
-    "f_puff": (300, 300, date(2026, 8, 24), ""),
-}
+def _at(d, tz):
+    return timezone.make_aware(datetime.combine(d, time(17)), tz) if d else None
 
 
-def _demand_text(key, today):
-    fc, plan, launch, why = DEMAND[key]
-    var = plan - fc
-    pct = f" ({var / fc * 100:+.1f}%)" if var else ""
-    lines = [f"**Demand** — forecast v2 (post-reviewed): {fc:,} · planned {plan:,} · "
-             + (f"variance {var:+,}{pct} — {why}" if var else "matches forecast"),
-             f"**Launch** {launch.strftime('%-d %b %Y')}" + (" — already on sale" if launch <= today else "")]
-    return "\n".join(lines)
+def _items(cl, items, tz, owner):
+    for i, (text, due, done, warn) in enumerate(items):
+        ChecklistItem.objects.create(
+            checklist=cl, text=(f"{text} — {WARN}{warn}" if warn else text)[:250], position=(i + 1) * 1000,
+            is_done=done, done_by=owner if done else None, done_at=timezone.now() if done else None,
+            due_at=None if done else _at(due, tz), reminder_minutes=-1)
 
 
-def _num(q):
-    if q is None:
-        return None
-    return int(q) if float(q).is_integer() else round(float(q), 3)
+def wipe(b):
+    with transaction.atomic():
+        Card.objects.filter(list__board=b).delete()
+        b.lists.all().delete()
+        b.labels.all().delete()
+        b.custom_fields.all().delete()
+
+
+def build(b):
+    m = b.memberships.filter(role="admin").select_related("user").first()
+    owner = m.user if m else get_user_model().objects.filter(is_superuser=True).first()
+    tz = timezone.get_current_timezone()
+    today = timezone.localdate()
+    n = 0
+    with transaction.atomic():
+        lists = {k: List.objects.create(board=b, title=t, colour=c, position=(i + 1) * 1000)
+                 for i, (k, t, c) in enumerate(LISTS)}
+        labels = {k: Label.objects.create(board=b, name=nm, colour=c) for k, (nm, c) in LABELS.items()}
+        fields = {}
+        for i, (name, kind, show) in enumerate([("Planned", "number", True), ("Unit", "text", True),
+                                                 ("Forecast", "number", False), ("Variance", "text", False),
+                                                 ("Launch", "date", True)]):
+            fields[name] = CustomField.objects.create(board=b, name=name, kind=kind, show_on_card=show, position=i + 1)
+
+        # combined packaging orders first
+        c = Card.objects.create(list=lists["prep"], title="Packaging orders — combined", position=500, created_by=owner,
+                                start_date=D(10, 26), due_at=_at(ORDER, tz), reminder_minutes=-1,
+                                description="Shared packaging as one order each — the totals of every product that "
+                                            "uses it. Each product card lists its own share.\n\n"
+                                            "Artwork is handled outside production.")
+        c.labels.set([labels["pack"], labels["attention"]])
+        cl = Checklist.objects.create(card=c, title="Orders to place", position=1000)
+        _items(cl, [(t, ORDER, done, w) for t, w, done in COMBINED], tz, owner)
+        n += 1
+
+        for i, p in enumerate(sorted(PRODUCTS, key=lambda p: (p["launch"], p["end"]))):
+            open_items = [x for x in p["components"] + p["packaging"] if not x[2]]
+            dates = [d for _, d, _, _ in open_items if d]
+            warns = sum(1 for x in open_items if x[3])
+            var = p["qty"] - p["forecast"]
+            demand = (f"**Demand** — forecast v2 (post-reviewed): {p['forecast']:,} · planned {p['qty']:,} · "
+                      + (f"variance {var:+,} ({var / p['forecast'] * 100:+.1f}%) — {p['why']}" if var else "matches forecast"))
+            launch = f"**Launch** {p['launch'].strftime('%-d %b %Y')}" + (" — already on sale" if p["launch"] <= today else "")
+            flag = f"{WARN}{warns} item{'s' if warns != 1 else ''} flagged in StockUp — see the ⚠ lines.\n\n" if warns else ""
+            c = Card.objects.create(
+                list=lists["prep"], title=p["title"], position=(i + 1) * 1000, created_by=owner,
+                start_date=min(dates) if dates else None, due_at=_at(p["end"], tz), reminder_minutes=-1,
+                description=f"{demand}\n{launch}\n\n{flag}"
+                            "Dates are a first draft — change them on the checklist items, or drag the bar on the Gantt.")
+            c.labels.set([labels[p["label"]]] + ([labels["attention"]] if warns else []))
+            for name, val in (("Planned", p["qty"]), ("Unit", p["unit"]), ("Forecast", p["forecast"]),
+                              ("Variance", f"{var:+,} ({var / p['forecast'] * 100:+.1f}%)" if var else "—"),
+                              ("Launch", p["launch"].isoformat())):
+                CardFieldValue.objects.create(card=c, field=fields[name], value=val)
+            pos = 1000
+            for title, items in (("Components to make", p["components"]),
+                                 ("Packaging", p["packaging"]),
+                                 ("Production", [(t, d, False, "") for t, d in p["production"]])):
+                if not items:
+                    continue
+                cl = Checklist.objects.create(card=c, title=title, position=pos)
+                pos += 1000
+                _items(cl, items, tz, owner)
+            n += 1
+
+        b.is_project = True
+        b.project_owner = owner
+        b.rag = "auto"
+        b.status_note = ("From the StockUp Christmas 2026 plan (locked 16 Aug, forecast v2): 11 products, 26 components, "
+                         "3,458 kg. Selling 24 Aug – 2 Jan. Dates are a first draft.")
+        b.status_updated_at = timezone.now()
+        b.save()
+    return n
 
 
 class Command(BaseCommand):
@@ -204,80 +291,8 @@ class Command(BaseCommand):
             return
         b = Board.objects.filter(pk=int(board)).first()
         if not b:
-            self.stdout.write("setup_christmas_production: board not found — skipping.")
             return
         if Card.objects.filter(list__board=b).exists():
             self.stdout.write("setup_christmas_production: board already has cards — skipping.")
             return
-        n = build(b)
-        self.stdout.write(f"setup_christmas_production: {n} cards on board {b.pk}.")
-
-
-def wipe(b):
-    """Remove everything this command created (lists, cards, labels, fields)."""
-    with transaction.atomic():
-        Card.objects.filter(list__board=b).delete()
-        b.lists.all().delete()
-        b.labels.all().delete()
-        b.custom_fields.all().delete()
-
-
-def build(b):
-    if True:
-        m = b.memberships.filter(role="admin").select_related("user").first()
-        owner = m.user if m else get_user_model().objects.filter(is_superuser=True).first()
-        tz = timezone.get_current_timezone()
-        with transaction.atomic():
-            b.lists.all().delete()          # the empty To do / Doing / Done
-            lists = {k: List.objects.create(board=b, title=t, colour=c, position=(i + 1) * 1000)
-                     for i, (k, t, c) in enumerate(LISTS)}
-            labels = {k: Label.objects.create(board=b, name=n, colour=c) for k, (n, c) in LABELS.items()}
-            top = (CustomField.objects.filter(board=b).order_by("-position").first() or CustomField(position=0)).position
-            fq = CustomField.objects.create(board=b, name="Quantity", kind="number", show_on_card=True, position=top + 1)
-            fu = CustomField.objects.create(board=b, name="Unit", kind="text", show_on_card=True, position=top + 2)
-            fc = CustomField.objects.create(board=b, name="StockUp code", kind="text", show_on_card=False, position=top + 3)
-            ff = CustomField.objects.create(board=b, name="Forecast", kind="number", show_on_card=False, position=top + 4)
-            fv = CustomField.objects.create(board=b, name="Variance", kind="text", show_on_card=False, position=top + 5)
-            fl = CustomField.objects.create(board=b, name="Launch", kind="date", show_on_card=True, position=top + 6)
-            today = timezone.localdate()
-            cards, pos = {}, {}
-            for key, lk, title, labs, qty, unit, code, start, due, _deps, note, extra in CARDS:
-                pos[lk] = pos.get(lk, 0) + 1000
-                ms = extra.get("milestone", False)
-                c = Card.objects.create(
-                    list=lists[lk], title=title, position=pos[lk], created_by=owner,
-                    description=(_demand_text(key, today) + "\n\n" if key in DEMAND else "") + note + ("\n\nDates are a first draft — drag the bar on the Gantt to the real window."
-                                        if (start or due) and not ms else ""),
-                    start_date=None if ms else start,
-                    due_at=timezone.make_aware(datetime.combine(due, time(17)), tz) if due else None,
-                    is_milestone=ms, is_complete=extra.get("complete", False), reminder_minutes=-1)
-                c.labels.set([labels[x] for x in labs])
-                if qty is not None:
-                    CardFieldValue.objects.create(card=c, field=fq, value=_num(qty))
-                if unit and qty is not None:
-                    CardFieldValue.objects.create(card=c, field=fu, value=unit)
-                if code:
-                    CardFieldValue.objects.create(card=c, field=fc, value=code)
-                if key in DEMAND:
-                    fcst, plan, launch, why = DEMAND[key]
-                    var = plan - fcst
-                    CardFieldValue.objects.create(card=c, field=ff, value=fcst)
-                    CardFieldValue.objects.create(card=c, field=fv, value=f"{var:+,} ({var / fcst * 100:+.1f}%)" if var else "—")
-                    CardFieldValue.objects.create(card=c, field=fl, value=launch.isoformat())
-                if extra.get("split"):
-                    cl = Checklist.objects.create(card=c, title="Covers")
-                    for i, line in enumerate(extra["split"]):
-                        ChecklistItem.objects.create(checklist=cl, text=line, position=(i + 1) * 1000)
-                cards[key] = c
-            for key, *_rest in CARDS:
-                deps = _rest[8]
-                for d in deps:
-                    Dependency.objects.create(card=cards[key], depends_on=cards[d])
-            b.is_project = True
-            b.project_owner = owner
-            b.rag = "auto"
-            b.status_note = ("From the StockUp Christmas 2026 plan (locked 16 Aug, forecast v2): 11 products, 26 components, "
-                             "3,458 kg. Selling 24 Aug – 2 Jan. Dates are a first draft.")
-            b.status_updated_at = timezone.now()
-            b.save()
-        return len(cards)
+        self.stdout.write(f"setup_christmas_production: {build(b)} cards on board {b.pk}.")
