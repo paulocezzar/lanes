@@ -13,3 +13,4 @@ python manage.py redo_agency_board
 python manage.py setup_production_plan
 python manage.py setup_christmas_production
 python manage.py redo_christmas_production
+python manage.py tidy_christmas_production

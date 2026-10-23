@@ -4,7 +4,7 @@
 One card per product, like StockUp's Overview: inside each card a 'Components to make'
 checklist, a 'Packaging' checklist and a 'Production' step, every item with its quantity,
 code, StockUp warning and a draft due date. Shared packaging is listed on each product
-with its share, and once more — as one combined order — on the 'Packaging orders' card.
+with its share and the size of the shared order.
 Artwork is left out (handled outside production). Dates are a first draft for the Gantt.
 Runs only when LANES_XMAS_BOARD holds the board id and the board has no cards.
 """
@@ -230,17 +230,6 @@ def build(b):
                                                  ("Forecast", "number", False), ("Variance", "text", False),
                                                  ("Launch", "date", True)]):
             fields[name] = CustomField.objects.create(board=b, name=name, kind=kind, show_on_card=show, position=i + 1)
-
-        # combined packaging orders first
-        c = Card.objects.create(list=lists["prep"], title="Packaging orders — combined", position=500, created_by=owner,
-                                start_date=D(10, 26), due_at=_at(ORDER, tz), reminder_minutes=-1,
-                                description="Shared packaging as one order each — the totals of every product that "
-                                            "uses it. Each product card lists its own share.\n\n"
-                                            "Artwork is handled outside production.")
-        c.labels.set([labels["pack"], labels["attention"]])
-        cl = Checklist.objects.create(card=c, title="Orders to place", position=1000)
-        _items(cl, [(t, ORDER, done, w) for t, w, done in COMBINED], tz, owner)
-        n += 1
 
         for i, p in enumerate(sorted(PRODUCTS, key=lambda p: (p["launch"], p["end"]))):
             open_items = [x for x in p["components"] + p["packaging"] if not x[2]]
