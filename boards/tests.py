@@ -4018,6 +4018,7 @@ class DiscoverabilityTests(TestCase):
         self.assertEqual([s["title"] for s in cards[0]["sections"]], ["Setup", "Food"])
 
     def test_empty_list_and_add_form_point_to_setup(self):
+        List.objects.create(board=self.b, title="Empty", position=99)
         r = self.client.get(f"/b/{self.b.pk}/")
         self.assertContains(r, "list-empty-hint")
         self.assertContains(r, "data-su-example")
