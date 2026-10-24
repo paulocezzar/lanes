@@ -478,6 +478,10 @@ def item_create(request, checklist_id):
     raw = str(request.data.get("text") or "")
     lines = [ln for ln in raw.splitlines() if ln.strip()][:100] or [""]
     planned = _planned(cl.card)
+    if request.data.get("preview"):            # how the line will be read — shown under the box as you type
+        it = products.parse_item(lines[0][:250], planned)
+        am = cl.card.amount()
+        return {"hint": products.explain_item(it, am), "lines": len(lines) if raw.strip() else 0}
     pos = positions.end_position(cl.items.all())
     for ln in lines:
         _text(ln, 250)                      # same empty / length checks as before
@@ -1564,12 +1568,14 @@ def _budget_warning(board, before, actor):
 
 
 def _preview_card(p):
+    from . import products
     f = lambda v: None if v is None else ChecklistItem.fmt_qty(v)  # noqa: E731
     return {"list": p.get("list"), "title": p["title"], "planned": f(p["planned"]), "unit": p["unit"],
             "fields": [{"name": k, "value": v} for k, v in p["fields"]], "notes": p["notes"],
             "sections": [{"title": s["title"], "items": [
                 {"text": i["text"], "target": f(i["target"]), "unit": i["unit"], "per": f(i["per_unit"]),
-                 "done": i["done"]} for i in s["items"]]} for s in p["sections"]]}
+                 "done": i["done"], "kind": i.get("kind", ""), "explain": products.explain_item(i, {"amount": f(p["planned"]), "unit": p["unit"]} if p["planned"] else None, "setup")}
+                for i in s["items"]]} for s in p["sections"]]}
 
 
 @api

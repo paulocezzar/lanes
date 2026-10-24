@@ -64,6 +64,7 @@ def parse_item(line, planned=None):
                 m = MID.match(line)
                 if m:
                     item.update(text=m.group(1).strip(), target=_d(m.group(2)), unit=m.group(3).strip()[:20])
+    item["kind"] = "per" if item["per_unit"] is not None else "total" if item["target"] is not None else "tick"
     if item["per_unit"] is not None:
         item["unit"] = item["unit"] or "each"
         if planned:
@@ -220,6 +221,25 @@ def _typed_fields(card, board, p):
             "value": f"{var:+,.0f} ({var / float(fc) * 100:+.1f}%)" if var else "—"})
 
 
+def explain_item(it, amount=None, where="card"):
+    """Plain words for how a line is read, e.g. 'counts to 300 kg'."""
+    from .models import ChecklistItem
+    f = ChecklistItem.fmt_qty
+    name = it["text"] or "this"
+    kind = it.get("kind") or ("per" if it["per_unit"] is not None else "total" if it["target"] is not None else "tick")
+    if kind == "per":
+        per = f"{f(it['per_unit'])} for each"
+        if it["target"] is not None and amount:
+            return f"{per} of {amount['amount']} {amount['unit']}".rstrip() + f" — counts to {f(it['target'])}"
+        if where == "setup":
+            return f"{per} (needs an amount on the first line)"
+        return f"{per} — set the card's ＃ Amount to work out the total"
+    if kind == "total":
+        done = " · already done" if it["done"] else ""
+        return f"counts to {f(it['target'])} {it['unit']}".rstrip() + done
+    return "a tick box" + (" · already done" if it["done"] else "")
+
+
 def _known_field(line):
     """'Deadline 15 November' / 'Forecast 407' without a colon — only when the value fits the word,
     so 'Start the oven' stays a line to tick."""
@@ -239,6 +259,9 @@ def _starts_card(block):
     Yes when its first line gives an amount after a dash ('Winter fair — 120 guests') or it has a
     section ('Setup:') or a field line ('Deadline: 4 Jul')."""
     first = block[0].strip()
+    if first.endswith(":") or PER.match(first) or DONE.match(first) or \
+            (TOTAL.match(first) and TOTAL.match(first).group(2).lower() in UNITS):
+        return False                     # a section or an item carries on the card above
     if re.search(r"\s[—–]\s*\d|\s-\s+\d|:\s*\d[\d,.]*\s*[A-Za-z ]*$", first) and not first.endswith(":"):
         return True
     return any(ln.strip().endswith(":") and len(ln.strip()) <= 80 for ln in block[1:]) or \

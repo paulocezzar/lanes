@@ -140,6 +140,14 @@
     <section data-su-pane="ai" {% if not ai_enabled %}hidden{% endif %}>
       {% if ai_enabled %}
       <p class="muted small">Paste a spreadsheet, a list or an email — or just describe it. You can add screenshots too. Lanes drafts the cards; you check them before anything is made.</p>
+      <div class="su-examples"><span class="muted small">Try:</span>
+        <button type="button" class="chip-btn sm" data-su-ai-example="Summer fair for 200 guests — a chair each, a table for every 8 people, 30 kg of salad, a plate each, and book a band. Deadline 4 July.">🎪 Describe an event</button>
+        <button type="button" class="chip-btn sm" data-su-ai-example="Product	Item	Qty	Unit
+Gift hamper (300)	Wicker basket	300	each
+Gift hamper (300)	Tissue paper	600	sheets
+Gift hamper (300)	Jam	300	jars
+Gift hamper (300)	Ribbon	90	m">📋 Paste spreadsheet rows</button>
+      </div>
       <textarea name="source" rows="9" placeholder="e.g. Summer fair for 200 guests — we need a chair each, a table for every 8, 30 kg of salad, plates, and to book a band.
 
 …or paste rows from Excel, a supplier email, or a screenshot of another system."></textarea>
@@ -154,6 +162,13 @@
       {% endif %}
     </section>
     <section data-su-pane="type" {% if ai_enabled %}hidden{% endif %}>
+      <div class="su-examples"><span class="muted small">Start from an example:</span>
+        <button type="button" class="chip-btn sm" data-su-example="event">🎪 Event</button>
+        <button type="button" class="chip-btn sm" data-su-example="production">🏭 Production run</button>
+        <button type="button" class="chip-btn sm" data-su-example="order">📦 Stock order</button>
+        <button type="button" class="chip-btn sm" data-su-example="many">🗂 Several cards</button>
+        <button type="button" class="chip-btn sm" data-su-example="todo">✅ Simple to-dos</button>
+      </div>
       <details class="np-help-wrap"><summary class="muted small">How to type it</summary>
       <ul class="np-help muted small">
         <li>First line: what it's for, and how many if it matters — <b>Summer fair — 200 guests</b>. Blank lines are just spacing; start another card with a line <b>---</b> (or another “Name — 120 guests” line).</li>

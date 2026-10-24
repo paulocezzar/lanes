@@ -1760,3 +1760,14 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .dept-settings .row-form label { flex: 1 1 240px; }
 .danger-zone { margin-top: 14px; }
 .danger-zone summary { cursor: pointer; color: #c9372c; font-weight: 600; }
+/* discoverability: hints, examples, empty lists */
+.item-hint { margin: 4px 2px 0; font-size: .78rem; color: var(--text-2); }
+.item-hint.live { color: var(--accent); font-weight: 600; }
+.su-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
+.chip-btn.sm { padding: 3px 9px; font-size: .8rem; }
+.su-warn { margin: 4px 0; font-size: .8rem; color: #c76a00; }
+.list-empty-hint { display: block; width: calc(100% - 16px); margin: 2px 8px 6px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 8px; background: none; color: var(--text-2); font: inherit; font-size: .8rem; text-align: left; cursor: pointer; }
+.list-empty-hint:hover { border-color: var(--accent); color: var(--text); }
+.add-many-link { display: block; margin-top: 6px; font-size: .8rem; }
+.np-item > span:first-child { flex: 1 1 50%; min-width: 0; }
+.np-item > span:last-child { flex: 0 1 50%; text-align: right; font-size: .8rem; }

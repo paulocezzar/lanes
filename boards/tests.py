@@ -3986,3 +3986,39 @@ class ForgivingSetupTextTests(TestCase):
         from .products import parse_many
         t = "Summer fair — 200 guests\nSetup:\n1 x Chair\n\nWinter fair — 120 guests\n1 x Chair\n---\nBook venue"
         self.assertEqual([c["title"] for c in parse_many(t)], ["Summer fair", "Winter fair", "Book venue"])
+
+
+class DiscoverabilityTests(TestCase):
+    def setUp(self):
+        from .models import Checklist
+        self.u = User.objects.create_user("dv@x.com", "pw")
+        ws = Workspace.objects.create(name="D"); WorkspaceMember.objects.create(workspace=ws, user=self.u)
+        self.b = Board.objects.create(workspace=ws, title="B")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.l = List.objects.create(board=self.b, title="L")
+        self.c = Card.objects.create(list=self.l, title="Fair")
+        self.cl = Checklist.objects.create(card=self.c, title="Setup")
+        self.client.force_login(self.u)
+
+    def j(self, url, data):
+        return self.client.post(url, json.dumps(data), content_type="application/json")
+
+    def test_item_hint_explains_without_adding(self):
+        from .models import ChecklistItem
+        url = f"/api/checklists/{self.cl.pk}/items/"
+        self.assertEqual(self.j(url, {"text": "300kg Flour", "preview": True}).json()["hint"], "counts to 300 kg")
+        self.assertIn("set the card's", self.j(url, {"text": "1 x Tin", "preview": True}).json()["hint"])
+        self.assertEqual(self.j(url, {"text": "Book the band", "preview": True}).json()["hint"], "a tick box")
+        self.assertFalse(ChecklistItem.objects.exists())
+
+    def test_section_after_blank_line_stays_on_card(self):
+        from .products import parse_many
+        cards = parse_many("Summer fair — 200 guests\nDeadline 4 July\n\nSetup:\n1 x Chair\nFood:\n30 kg Salad")
+        self.assertEqual(len(cards), 1)
+        self.assertEqual([s["title"] for s in cards[0]["sections"]], ["Setup", "Food"])
+
+    def test_empty_list_and_add_form_point_to_setup(self):
+        r = self.client.get(f"/b/{self.b.pk}/")
+        self.assertContains(r, "list-empty-hint")
+        self.assertContains(r, "data-su-example")
+        self.assertContains(self.client.get(f"/cards/{self.c.pk}/"), "data-item-hint")

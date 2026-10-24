@@ -335,6 +335,22 @@
   let openPop = null;
 
   window.LanesOpenCard = id => openCard(id);
+  let hintTimer = null;
+  dialogBody.addEventListener('input', e => {
+    const input = e.target.closest('[data-item-new] input');
+    if (!input) return;
+    const box = input.closest('[data-checklist]'), hint = $('[data-item-hint]', box);
+    if (!hint) return;
+    hint.dataset.tip ??= hint.innerHTML;
+    clearTimeout(hintTimer);
+    if (!input.value.trim()) { hint.innerHTML = hint.dataset.tip; hint.classList.remove('live'); return; }
+    hintTimer = setTimeout(async () => {
+      try {
+        const d = await post(`/api/checklists/${box.dataset.checklist}/items/`, { text: input.value, preview: true });
+        hint.innerHTML = `→ ${esc(d.hint)}`; hint.classList.add('live');
+      } catch { /* keep the old hint */ }
+    }, 200);
+  });
   dialogBody.addEventListener('paste', e => {
     const input = e.target.closest('[data-item-new] input');
     const text = e.clipboardData?.getData('text') || '';
@@ -422,13 +438,74 @@
       const d = await post(`/api/boards/${boardId}/setup/`, { text: f.text.value, preview: true });
       go.disabled = !d.cards.length; go.textContent = `Create ${d.cards.length} card${d.cards.length === 1 ? '' : 's'}`;
       box.innerHTML = d.cards.map(p => `<div class="su-card">${p.list ? `<div class="muted small">→ ${esc(p.list)}</div>` : ''}<h4>${esc(p.title)}${p.planned ? ` <span class="muted">· ${esc(p.planned)} ${esc(p.unit)}</span>` : ''}</h4>` +
-        (p.fields.length ? `<div class="np-fields">${p.fields.map(x => `<span><b>${esc(x.name)}</b> ${esc(x.value)}</span>`).join('')}</div>` : '') +
+        (p.fields.length ? `<div class="np-fields">${p.fields.map(x => `<span title="Saved as a field on the card">🏷 <b>${esc(x.name)}</b> ${esc(x.value)}</span>`).join('')}</div>` : '') +
         (p.notes ? `<p class="muted small">${esc(p.notes)}</p>` : '') +
+        (!p.planned && p.sections.some(s => s.items.some(i => i.kind === 'per')) ? `<p class="su-warn">Lines with “x” need an amount on the first line, e.g. “${esc(p.title)} — 200 each”.</p>` : '') +
         p.sections.map(s => `<div class="np-sec"><b>${esc(s.title)}</b>${s.items.map(i =>
-          `<div class="np-item${i.done ? ' done' : ''}"><span>${i.done ? '✓ ' : ''}${esc(i.text)}</span><span class="muted">${
-            i.target ? `${i.done ? esc(i.target) : 0} / ${esc(i.target)} ${esc(i.unit)}` : i.per ? `${esc(i.per)} per one` : 'tick'}</span></div>`).join('')}</div>`).join('') + '</div>').join('');
+          `<div class="np-item${i.done ? ' done' : ''}"><span>${i.kind === 'tick' ? '☐' : '＃'} ${esc(i.text)}</span><span class="muted">${esc(i.explain)}</span></div>`).join('')}</div>`).join('') + '</div>').join('');
     } catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; go.disabled = true; }
   }
+  const EXAMPLES = {
+    event: `Summer fair — 200 guests
+Deadline 4 July
+
+Setup:
+1 x Chair
+0.125 x Table
+Food:
+30 kg Salad
+1 x Plate
+Book the band`,
+    production: `Gift hampers — 300 hampers
+Deadline 1 December
+
+Packaging:
+1 x Wicker basket
+2 x Tissue paper sheet
+1 x Label
+Make:
+[x] 60 kg Fudge
+1 x Fill hamper
+Finish:
+1 x Wrap
+1 x Pack`,
+    order: `Weekly stock order
+Due 30 October
+
+Dry goods:
+25 kg Flour
+10 kg Sugar
+Dairy:
+40 l Milk
+Check the delivery against the invoice`,
+    many: `Mince pies — 2000 packs
+6 x Bake pies
+1 x Pack
+---
+Stollen — 600 loaves
+1 x Bake
+1 x Glaze & pack
+---
+Order more boxes`,
+    todo: `Open the new site
+Deadline 15 November
+
+Book the electrician
+Order signage
+Train the team
+Invite the press`,
+  };
+  setupDlg?.addEventListener('click', e => {
+    const ex = e.target.closest('[data-su-example]');
+    if (ex) {
+      const f = $('[data-setup-form]', setupDlg);
+      f.text.value = EXAMPLES[ex.dataset.suExample] || '';
+      f.text.focus(); preview();
+      return;
+    }
+    const ai = e.target.closest('[data-su-ai-example]');
+    if (ai) { const f = $('[data-setup-form]', setupDlg); f.source.value = ai.dataset.suAiExample; f.source.focus(); }
+  });
   $('textarea[name=text]', setupDlg)?.addEventListener('input', () => { clearTimeout(previewTimer); previewTimer = setTimeout(preview, 300); });
   $('[data-setup-form]', setupDlg)?.addEventListener('submit', async e => {
     if (e.submitter?.value !== 'create') return;

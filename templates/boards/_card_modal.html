@@ -355,7 +355,8 @@
           {% endif %}{% endfor %}
         </ul>
         {% if can_edit %}
-        <form class="item-new" data-item-new><input name="text" placeholder="Add an item — try “1 x Chair” or “20 kg Salad”" maxlength="250" autocomplete="off"><button class="btn sm">Add</button></form>
+        <form class="item-new" data-item-new><input name="text" placeholder="Add an item" maxlength="250" autocomplete="off"><button class="btn sm">Add</button></form>
+        <p class="item-hint" data-item-hint>Tip: <b>300 kg Flour</b> or <b>1 x Tin</b> counts up as it's done · paste a list to add many at once</p>
         {% endif %}
       </section>
       {% endfor %}
