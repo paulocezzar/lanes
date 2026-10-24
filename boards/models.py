@@ -169,6 +169,13 @@ class List(models.Model):
     def over_limit(self):
         return bool(self.card_limit) and len(self.entries()) > self.card_limit
 
+    def show_setup_hint(self):
+        """The 'Set up several cards' prompt — only on a board with no cards yet, in its first list."""
+        if self.entries():
+            return False
+        first = self.board.lists.filter(is_archived=False).order_by("position", "id").values_list("pk", flat=True).first()
+        return first == self.pk and not Card.objects.filter(list__board_id=self.board_id, is_archived=False).exists()
+
     def entries(self):
         """Cards and mirrored cards in this list, in order. Uses prefetched
         `cards` / `mirrors` when the caller set them up."""

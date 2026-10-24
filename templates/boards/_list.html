@@ -38,7 +38,7 @@
   </div>
   {% if can_edit %}
   <footer class="list-foot">
-    {% if not list.entries %}<button class="list-empty-hint" data-new-product>＃ Set up several cards at once — describe it, paste a list or type it</button>{% endif %}
+    {% if list.show_setup_hint %}<button class="list-empty-hint" data-new-product>＃ Set up several cards at once — describe it, paste a list or type it</button>{% endif %}
     <div class="foot-row">
       <button class="add-card-btn" data-add-card>{% include "boards/_icon.html" with i="plus" %}Add a card</button>
       <button class="icon-btn" data-from-template title="Create from template">{% include "boards/_icon.html" with i="copy" %}</button>

@@ -4020,7 +4020,12 @@ class DiscoverabilityTests(TestCase):
     def test_empty_list_and_add_form_point_to_setup(self):
         List.objects.create(board=self.b, title="Empty", position=99)
         r = self.client.get(f"/b/{self.b.pk}/")
-        self.assertContains(r, "list-empty-hint")
+        self.assertNotContains(r, "list-empty-hint")              # the board already has cards
+        self.assertContains(r, "add-many-link")
+        nb = Board.objects.create(workspace=self.b.workspace, title="New")
+        BoardMember.objects.create(board=nb, user=self.u, role="admin")
+        List.objects.create(board=nb, title="To do", position=1); List.objects.create(board=nb, title="Done", position=2)
+        self.assertContains(self.client.get(f"/b/{nb.pk}/"), "list-empty-hint", count=1)
         self.assertContains(r, "data-su-example")
         self.assertContains(self.client.get(f"/cards/{self.c.pk}/"), "data-item-hint")
 
