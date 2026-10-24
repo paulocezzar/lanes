@@ -563,3 +563,14 @@ def refresh_plan_boards(max_age_minutes=30):
         except StockUpError as e:
             logger.warning("stockup refresh of board %s failed: %s", b.pk, e)
     return n
+
+
+def refresh_card(card, user=None):
+    """Pull StockUp's figures for one linked card (run: its run; product/component: its plan board)."""
+    link = getattr(card, "stockup", None)
+    if not link:
+        return
+    if link.run_id:
+        sync(run_ids=[link.run_id], job_ids=[link.job_id] if link.job_id else [])
+    elif card.list.board.stockup_plan_id:
+        refresh_plan_board(card.list.board, user)

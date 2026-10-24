@@ -215,3 +215,15 @@ class StockUpLinkTests(TestCase):
         self.assertEqual(card.due_at, mine)
         r = self.post(f"/api/cards/{card.pk}/stockup/", {"refresh": True})
         self.assertEqual(r.status_code, 200)
+
+    def test_made_in_stockup_cant_be_typed_over(self):
+        from .stockup import build_plan_board
+        board = build_plan_board(7, self.boss, self.ws)
+        card = Card.objects.get(list__board=board, stockup__kind="component")
+        item = card.checklists.get(title="Made in StockUp").items.get()
+        self.assertEqual(item.qty_done, 1000)                     # 25% of 4000
+        self.client.force_login(self.boss)
+        r = self.post(f"/api/items/{item.pk}/", {"qty_done": "3999"})
+        self.assertEqual(r.status_code, 409)
+        item.refresh_from_db()
+        self.assertEqual(item.qty_done, 1000)

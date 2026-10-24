@@ -547,6 +547,14 @@ def item_update(request, item_id):
     item = get_object_or_404(ChecklistItem.objects.select_related("checklist__card__list__board"), pk=item_id)
     card = item.checklist.card
     _edit(card.list.board, request.user)
+    if item.checklist.title == "Made in StockUp" and hasattr(card, "stockup") and not request.data.get("delete") \
+            and any(k in request.data for k in ("qty_done", "qty_target", "qty_unit", "is_done", "done", "text")):
+        from . import stockup
+        try:
+            stockup.refresh_card(card)          # put StockUp's real figure back
+        except Exception:
+            pass
+        raise ApiError("This counts up from StockUp on its own — record batches in StockUp, not here.", 409)
     if request.data.get("delete"):
         log(card.list.board, request.user, "item_deleted", card=card, text=item.text, checklist=item.checklist.title)
         item.delete()
