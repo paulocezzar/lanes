@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% load lanes_extras %}
+{% block title %}{{ p.display_name }} · Lanes{% endblock %}
+{% block content %}
+<main class="home narrow">
+  <section class="panel profile-hero big">
+    <span class="avatar xl" style="--h:{{ p.avatar_hue }}">{{ p.initials }}</span>
+    <div><h1>{{ p.display_name }}</h1>
+      {% if p.job_title %}<b>{{ p.job_title }}</b>{% endif %}
+      <span class="muted">{{ p.email }}</span>
+      {% if depts %}<span class="muted small">{% for d in depts %}{{ d.workspace.name }}{% if not forloop.last %} · {% endif %}{% endfor %}</span>{% endif %}
+      {% if p.bio %}<p>{{ p.bio }}</p>{% endif %}
+      {% if p == user %}<a class="btn sm" href="{% url 'my_profile' %}">Edit your profile</a>{% endif %}</div>
+  </section>
+  <section class="panel">
+    <h2>On these cards <span class="count">{{ cards|length }}</span></h2>
+    {% for c in cards %}<div class="co-row"><a href="{% url 'board' c.list.board_id %}?card={{ c.pk }}">{{ c.title }} <small class="muted">· {{ c.list.board.title }} › {{ c.list.title }}</small></a>{% if c.due_at %}<span class="date-pill due-{{ c.due_state|default:'none' }}">{{ c.due_at|date:"j M" }}</span>{% endif %}</div>
+    {% empty %}<p class="muted">No open cards on boards you can see.</p>{% endfor %}
+  </section>
+  <section class="panel">
+    <h2>Recent activity</h2>
+    {% for a in acts %}<div class="act-row"><time>{{ a.created_at|ago }}</time><span>{{ a.text }}{% if a.card %} — <a href="{% url 'board' a.board_id %}?card={{ a.card_id }}">{{ a.card.title }}</a>{% endif %} <span class="muted small">on {{ a.board.title }}</span></span></div>
+    {% empty %}<p class="muted">Nothing recent on boards you can see.</p>{% endfor %}
+  </section>
+</main>
+{% endblock %}

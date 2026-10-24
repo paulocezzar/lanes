@@ -58,7 +58,19 @@ def workspace_members(request, workspace_id):
         raise Http404
     can_manage = _can_manage_workspace(ws, request.user)
     new_account = request.session.pop("new_account", None)
+    from django.db.models import Q
+
+    from .models import BoardMember, JoinRequest
+    member_ids = set(ws.memberships.values_list("user_id", flat=True))
+    guests = {}
+    for bm in BoardMember.objects.filter(board__workspace=ws, board__is_archived=False).exclude(user_id__in=member_ids) \
+            .select_related("user", "board").order_by("user__first_name"):
+        guests.setdefault(bm.user, []).append(bm.board)
+    requests_ = list(JoinRequest.objects.filter(Q(workspace=ws) | Q(board__workspace=ws), status="pending")
+                     .select_related("user", "board")) if can_manage else []
     return render(request, "boards/workspace_members.html", {
+        "guests": [{"u": u, "boards": bs} for u, bs in guests.items()],
+        "join_requests": requests_,
         "workspace": ws,
         "memberships": ws.memberships.select_related("user").order_by("user__first_name", "user__email"),
         "can_manage": can_manage,

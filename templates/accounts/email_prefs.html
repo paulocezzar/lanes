@@ -1,19 +1,39 @@
 {% extends "base.html" %}
-{% block title %}Email · Lanes{% endblock %}
+{% block title %}Settings · Lanes{% endblock %}
 {% block content %}
 <main class="home narrow">
-  <a class="back-link" href="{% url 'home' %}">← Boards</a>
-  <h1 class="page-title">Email notifications</h1>
+  <h1 class="page-title">Settings</h1>
+  <form method="post" class="stack wide">{% csrf_token %}
   <section class="panel">
-    {% if not email_enabled %}<p class="warn-note">Lanes isn't set up to send email yet, so this choice will apply once it is.</p>{% endif %}
-    <form method="post" class="stack wide">{% csrf_token %}
-      <p>When something happens that's in your 🔔 — you're assigned, mentioned, someone comments on your card, a due date is close — Lanes can email you too.</p>
-      {% for key, label in prefs %}
-      <label class="radio-row"><input type="radio" name="email_notifications" value="{{ key }}" {% if user.email_notifications == key %}checked{% endif %}> {{ label }}</label>
-      {% endfor %}
-      <p class="muted small">“As they happen” only emails things you haven't already seen in Lanes, grouped so you don't get one email per change. The morning summary arrives around 7am with your cards due that day.</p>
-      <div><button class="btn primary">Save</button></div>
-    </form>
+    <h2>Email notifications</h2>
+    {% if not email_enabled %}<p class="warn-note">Lanes isn't set up to send email yet, so these choices apply once it is. Everything still shows in the 🔔.</p>{% endif %}
+    <h4 class="section-label">How often</h4>
+    {% for key, label in prefs %}
+    <label class="radio-row"><input type="radio" name="email_notifications" value="{{ key }}" {% if user.email_notifications == key %}checked{% endif %}> {{ label }}</label>
+    {% endfor %}
+    <p class="muted small">“As they happen” only emails things you haven't already seen in Lanes, grouped so you don't get one email per change. The morning summary arrives around 7am.</p>
   </section>
+  <section class="panel">
+    <h2>What to email you about</h2>
+    <p class="muted small">You'll always get emails when you're given a card, mentioned, asked to sign something off, or someone asks to join your board.</p>
+    <label class="check-row strong"><input type="checkbox" data-select-all> Select all</label>
+    {% for k in kinds %}
+    <label class="check-row pref-row"><input type="checkbox" name="kind" value="{{ k.key }}" {% if k.on %}checked{% endif %}><span><b>{{ k.name }}</b><small class="muted">{{ k.help }}</small></span></label>
+    {% endfor %}
+  </section>
+  <section class="panel">
+    <h2>Sign-in and look</h2>
+    <p class="row"><a class="btn sm" href="{% url 'password_change' %}">Change password</a> <a class="btn sm" href="{% url 'two_step_setup' %}">Two-step sign-in{% if user.totp_enabled %} · on{% endif %}</a> <span class="muted small">Theme and colour-blind mode are in your avatar menu (top right).</span></p>
+  </section>
+  <div><button class="btn primary">Save settings</button></div>
+  </form>
 </main>
+<script>
+(() => {
+  const all = document.querySelector('[data-select-all]'), boxes = [...document.querySelectorAll('input[name=kind]')];
+  const sync = () => { all.checked = boxes.every(b => b.checked); all.indeterminate = !all.checked && boxes.some(b => b.checked); };
+  all.addEventListener('change', () => { boxes.forEach(b => (b.checked = all.checked)); });
+  boxes.forEach(b => b.addEventListener('change', sync)); sync();
+})();
+</script>
 {% endblock %}

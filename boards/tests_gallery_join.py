@@ -182,3 +182,44 @@ class BoardHeadTests(Base):
         self.assertContains(r, 'data-member-card="%d"' % self.u.pk)
         self.assertIn('"role": "Admin"', r.context["member_cards"])
         self.assertEqual(self.client.get(f"/templates/b{b.pk}/").status_code, 200)
+
+
+class AccountTests(Base):
+    def test_profile_activity_person_settings(self):
+        self.client.post("/me/profile/", {"first_name": "Una", "last_name": "Lee", "job_title": "Supervisor", "bio": "Mornings"})
+        self.u.refresh_from_db()
+        self.assertEqual((self.u.job_title, self.u.last_name), ("Supervisor", "Lee"))
+        b = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=b, user=self.u)
+        from .services import log
+        log(b, self.u, "board_created")
+        self.assertContains(self.client.get("/me/activity/"), "created this board")
+        self.client.force_login(self.admin)
+        r = self.client.get(f"/people/{self.u.pk}/")
+        self.assertContains(r, "Supervisor")
+        stranger = User.objects.create_user("s@x.com", "pw-12345")
+        self.assertEqual(self.client.get(f"/people/{stranger.pk}/").status_code, 404)
+        self.client.force_login(self.u)
+        self.client.post("/account/email/", {"email_notifications": "instant", "kind": ["commented"]})
+        self.u.refresh_from_db()
+        self.assertIn("watched", self.u.email_muted)
+        self.assertNotIn("commented", self.u.email_muted)
+
+    def test_department_tabs_and_export(self):
+        import io
+        import zipfile
+        b = Board.objects.create(workspace=self.ws, title="Line one")
+        outsider = User.objects.create_user("o@x.com", "pw-12345", first_name="Ola")
+        BoardMember.objects.create(board=b, user=outsider)
+        JoinRequest.objects.create(user=outsider, workspace=self.ws)
+        self.client.force_login(self.admin)
+        r = self.client.get(f"/departments/{self.ws.pk}/people/")
+        self.assertContains(r, "Guests (1)")
+        self.assertContains(r, "Join requests (1)")
+        self.assertContains(self.client.get(f"/departments/{self.ws.pk}/export/"), "Download 1 board")
+        r = self.client.post(f"/departments/{self.ws.pk}/export/")
+        names = zipfile.ZipFile(io.BytesIO(r.content)).namelist()
+        self.assertIn("line-one.csv", names)
+        self.assertIn("line-one.json", names)
+        self.client.force_login(self.u)
+        self.assertEqual(self.client.get(f"/departments/{self.ws.pk}/export/").status_code, 404)

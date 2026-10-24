@@ -50,6 +50,10 @@ class User(AbstractUser):
     only_unread = models.BooleanField(default=False)       # notifications panel: hide read ones
     email_notifications = models.CharField(max_length=10, choices=EMAIL_PREFS, default="daily")
     last_digest_on = models.DateField(null=True, blank=True)
+    job_title = models.CharField(max_length=100, blank=True)
+    bio = models.CharField(max_length=500, blank=True)
+    # Notification kinds this person doesn't want emailed (they still show in the bell)
+    email_muted = models.JSONField(default=list, blank=True)
     ms_oid = models.CharField(max_length=64, blank=True, db_index=True)   # Microsoft account id, once linked
 
     USERNAME_FIELD = "email"

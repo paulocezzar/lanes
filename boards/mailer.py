@@ -120,7 +120,12 @@ def notification_emails(now=None):
     for n in pending[:2000]:
         by_user[n.recipient].append(n)
     count = 0
-    for user, items in by_user.items():
+    for user, items in list(by_user.items()):
+        muted = set(user.email_muted or [])
+        Notification.objects.filter(pk__in=[n.pk for n in items if n.kind in muted]).update(emailed_at=now)
+        items = [n for n in items if n.kind not in muted]
+        if not items:
+            continue
         first = items[0]
         if len(items) == 1:
             who = first.actor.display_name if first.actor else "Lanes"
@@ -158,6 +163,7 @@ def daily_digests(now=None, hour=7):
     for user in User.objects.filter(is_active=True, email_notifications="daily").exclude(last_digest_on=today):
         unread = list(Notification.objects.filter(recipient=user, read_at__isnull=True,
                                                   created_at__gte=now - timedelta(days=1))
+                      .exclude(kind__in=user.email_muted or [])
                       .select_related("actor", "board", "card")[:30])
         due = list(Card.objects.filter(members=user, is_complete=False, is_archived=False, is_template=False,
                                        list__is_archived=False, list__board__is_archived=False,

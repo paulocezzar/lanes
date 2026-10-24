@@ -938,6 +938,7 @@ class AuditEvent(models.Model):
         "board_from_gallery": "made the board {board} from the template “{template}”",
         "board_moved": "moved the board {board} from {old} to {new}",
         "dept_renamed": "renamed the department {old} to {dept}",
+        "dept_exported": "downloaded every board in {dept} ({n} boards)",
         "dept_deleted": "deleted the department {dept}",
         "dept_member_added": "added {name} to {dept}",
         "dept_account_created": "created an account for {name} in {dept}",

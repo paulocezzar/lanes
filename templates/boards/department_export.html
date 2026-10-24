@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Export · {{ workspace.name }} · Lanes{% endblock %}
+{% block content %}
+<main class="home narrow">
+  <h1 class="page-title">Export {{ workspace.name }}</h1>
+  <section class="panel">
+    <p>Download every board in {{ workspace.name }} in one ZIP file: a spreadsheet (.csv, opens in Excel) and a full copy (.json) for each board — lists, cards, checklists, labels, fields, dates and comments.</p>
+    <form method="post">{% csrf_token %}<button class="btn primary">⬇ Download {{ boards|length }} board{{ boards|length|pluralize }}</button></form>
+    <p class="muted small">Attachments come as links. Lanes also keeps its own backups — this is a copy for you to keep.</p>
+    <h4 class="section-label">Included</h4>
+    {% for b in boards %}<div class="co-row"><span>{{ b.title }}</span>{% if b.visibility == "private" %}<small class="muted">private</small>{% endif %}</div>{% endfor %}
+  </section>
+</main>
+{% endblock %}

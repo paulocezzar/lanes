@@ -2112,3 +2112,23 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .mc-count { margin: 0; padding: 10px 14px 4px; font-size: 13px; color: var(--text-2); }
 .mc-item { display: block; text-align: left; border: 0; background: none; font: inherit; font-size: 14px; color: var(--text); padding: 9px 14px; text-decoration: none; cursor: pointer; border-top: 1px solid var(--border); }
 .mc-item:hover { background: var(--surface-2); }
+
+/* ---------- account pages, people tabs ---------- */
+.tabs-row { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 0 0 16px; flex-wrap: wrap; }
+.tabs-row a { padding: 8px 12px; color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs-row a:hover { color: var(--text); }
+.tabs-row a.on { color: var(--accent); border-bottom-color: var(--accent); }
+.profile-hero { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.profile-hero > div { display: grid; gap: 3px; min-width: 0; flex: 1 1 240px; }
+.profile-hero.big h1 { margin: 0; font-size: 1.5rem; }
+.profile-hero p { margin: 6px 0 0; }
+.two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .two-col { grid-template-columns: 1fr; } }
+.pref-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--border); }
+.pref-row span { display: grid; }
+.check-row.strong { font-weight: 700; }
+.act-day h3 { margin: 0 0 8px; font-size: 15px; }
+.act-row { display: flex; gap: 12px; padding: 6px 0; border-top: 1px solid var(--border); font-size: 14px; }
+.act-row:first-of-type { border-top: 0; }
+.act-row time { color: var(--text-2); flex: none; width: 70px; font-variant-numeric: tabular-nums; }
+.member-name a { color: inherit; }

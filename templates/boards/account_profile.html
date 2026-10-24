@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Profile · Lanes{% endblock %}
+{% block content %}
+<main class="home narrow">
+  <h1 class="page-title">Profile</h1>
+  <section class="panel profile-hero">
+    <span class="avatar xl" style="--h:{{ user.avatar_hue }}">{{ user.initials }}</span>
+    <div><b>{{ user.display_name }}</b><span class="muted">{{ user.email }}</span>
+      {% if depts %}<span class="muted small">{% for d in depts %}{{ d.workspace.name }}{% if d.role == "admin" %} (admin){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}</span>{% endif %}
+      <a class="small" href="{% url 'person' user.pk %}">See how others see you →</a></div>
+  </section>
+  <form method="post" class="panel stack wide">{% csrf_token %}
+    <h2>About you</h2>
+    <div class="two-col">
+      <label>First name<input name="first_name" value="{{ user.first_name }}" maxlength="150" required></label>
+      <label>Last name<input name="last_name" value="{{ user.last_name }}" maxlength="150"></label>
+    </div>
+    <label>Job title<input name="job_title" value="{{ user.job_title }}" maxlength="100" placeholder="e.g. Shift supervisor"></label>
+    <label><span>About <span class="muted">(optional)</span></span><textarea name="bio" rows="3" maxlength="500" placeholder="What you look after, when you work, how best to reach you">{{ user.bio }}</textarea></label>
+    <p class="muted small">Shown to people you work with when they click your picture. Your email can only be changed by a company admin.</p>
+    <div><button class="btn primary">Save</button></div>
+  </form>
+</main>
+{% endblock %}

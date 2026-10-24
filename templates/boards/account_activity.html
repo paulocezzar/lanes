@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% load lanes_extras %}
+{% block title %}Activity · Lanes{% endblock %}
+{% block content %}
+<main class="home narrow">
+  <h1 class="page-title">{% if mine %}Your activity{% else %}{{ who.display_name }}'s activity{% endif %}</h1>
+  {% for d in days %}
+  <section class="panel act-day">
+    <h3>{{ d.day|date:"l j F" }}</h3>
+    {% for a in d.items %}<div class="act-row"><time>{{ a.created_at|date:"H:i" }}</time>
+      <span>{{ a.text }}{% if a.card %} — <a href="{% url 'board' a.board_id %}?card={{ a.card_id }}">{{ a.card.title }}</a>{% endif %} <span class="muted small">on <a href="{% url 'board' a.board_id %}">{{ a.board.title }}</a></span></span></div>{% endfor %}
+  </section>
+  {% empty %}<p class="muted">Nothing yet — what you do on boards shows here.</p>{% endfor %}
+  {% if page.has_other_pages %}<p class="row">{% if page.has_previous %}<a class="btn sm" href="?page={{ page.previous_page_number }}">← Newer</a>{% endif %}{% if page.has_next %}<a class="btn sm" href="?page={{ page.next_page_number }}">Older →</a>{% endif %}</p>{% endif %}
+</main>
+{% endblock %}

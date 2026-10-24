@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import (api, api_more, views, views_describe, views_forms, views_gallery, views_join, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio,
+from . import (api, api_more, views, views_account, views_describe, views_forms, views_gallery, views_join, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio,
                views_company, views_export, views_public, views_search)
 
 urlpatterns = [
@@ -60,6 +60,10 @@ urlpatterns = [
     path("b/<int:board_id>/forms/", views_forms.forms_page, name="board_forms"),
     path("f/<str:token>/", views_forms.form_fill, name="form_fill"),
     path("join-requests/", views_join.join_requests_page, name="join_requests"),
+    path("me/profile/", views_account.profile, name="my_profile"),
+    path("me/activity/", views_account.activity, name="my_activity"),
+    path("people/<int:user_id>/", views_account.person, name="person"),
+    path("departments/<int:workspace_id>/export/", views_account.department_export, name="department_export"),
     path("join-requests/new/", views_join.join_request_create, name="join_request_create"),
     path("join-requests/<int:pk>/", views_join.join_request_decide, name="join_request_decide"),
     path("templates/", views_gallery.gallery, name="gallery"),

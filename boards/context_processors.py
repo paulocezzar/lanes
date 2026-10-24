@@ -18,7 +18,7 @@ SIDEBAR_PAGES = {
     "home", "gallery", "gallery_template", "my_cards", "notifications", "search", "join_requests", "portfolio",
     "workload", "timesheets", "workspace_members", "workspace_settings", "company_usage", "company_people",
     "company_settings", "company_audit", "company_health", "people_import", "email_prefs", "password_change",
-    "two_step_setup",
+    "two_step_setup", "my_profile", "my_activity", "person", "department_export",
 }
 
 

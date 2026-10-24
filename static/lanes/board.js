@@ -1090,9 +1090,10 @@ Invite the press`,
     if (!memberPop.hidden && memberPop.dataset.for === id) { memberPop.hidden = true; return; }
     memberPop.dataset.for = id;
     memberPop.innerHTML = `<div class="mc-top"><span class="avatar xl" style="--h:${m.hue}">${escHTML(m.initials)}</span>
-        <div><b>${escHTML(m.name)}</b><small>${escHTML(m.email)}</small>${m.role ? `<span class="mc-role">Board ${escHTML(m.role.toLowerCase())}</span>` : ''}</div>
+        <div><b>${escHTML(m.name)}</b>${m.title ? `<span class="mc-role">${escHTML(m.title)}</span>` : ''}<small>${escHTML(m.email)}</small>${m.role ? `<span class="mc-role">Board ${escHTML(m.role.toLowerCase())}</span>` : ''}</div>
         <button type="button" class="icon-btn xs mc-x" data-mc-close aria-label="Close">×</button></div>
       <p class="mc-count">${m.open ? `${m.open} open card${m.open === 1 ? '' : 's'} on this board` : 'No open cards on this board'}</p>
+      <a class="mc-item" href="/people/${id}/">View profile</a>
       ${filterForm ? `<button type="button" class="mc-item" data-mc-filter="${id}">Show only their cards here</button>` : ''}
       <a class="mc-item" href="/search/?q=${encodeURIComponent('@' + m.first + ' is:open')}">Their open cards on every board</a>
       <a class="mc-item" href="/workload/">See their workload</a>`;

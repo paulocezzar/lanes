@@ -37,7 +37,7 @@ def board_context(request, board_id, view):
     open_counts = dict(board.lists.filter(is_archived=False).values_list("cards__members").annotate(
         n=Count("cards", filter=Q(cards__is_archived=False, cards__is_complete=False))).values_list("cards__members", "n"))
     member_cards = json.dumps({u.pk: {"name": u.display_name, "email": u.email, "initials": u.initials, "hue": u.avatar_hue,
-                                      "first": u.first_name or u.email.split("@")[0],
+                                      "first": u.first_name or u.email.split("@")[0], "title": u.job_title,
                                       "role": dict(BoardMember.ROLES).get(roles.get(u.pk), ""),
                                       "open": open_counts.get(u.pk, 0)} for u in people})
     return board, {

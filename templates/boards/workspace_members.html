@@ -2,8 +2,32 @@
 {% block title %}{{ workspace.name }} people · Lanes{% endblock %}
 {% block content %}
 <main class="home narrow">
-  <a class="back-link" href="{% url 'home' %}">← Boards</a>
   <h1 class="page-title"><span class="ws-badge">{{ workspace.initial }}</span>{{ workspace.name }} <span class="muted">· people</span></h1>
+  <nav class="tabs-row" data-tabs>
+    <a href="#members" class="on">Members ({{ memberships|length }})</a>
+    <a href="#guests">Guests ({{ guests|length }})</a>
+    {% if can_manage %}<a href="#requests">Join requests ({{ join_requests|length }})</a>{% endif %}
+  </nav>
+  <div data-tab="guests" hidden>
+    <section class="panel">
+      <h2>Guests</h2>
+      <p class="muted small">People from outside {{ workspace.name }} who've been added to some of its boards. They only see the boards they're on.</p>
+      {% for g in guests %}<div class="member-row">{% include "boards/_avatar.html" with u=g.u size="lg" %}
+        <div class="member-name"><a href="{% url 'person' g.u.pk %}">{{ g.u.display_name }}</a>{% if g.u.is_guest %} <span class="role-pill">Outside the company</span>{% endif %}<small>{{ g.u.email }} · {% for b in g.boards %}<a href="{% url 'board' b.pk %}">{{ b.title }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</small></div></div>
+      {% empty %}<p class="muted">No guests — everyone on {{ workspace.name }}'s boards is in the department.</p>{% endfor %}
+    </section>
+  </div>
+  {% if can_manage %}<div data-tab="requests" hidden>
+    <section class="panel">
+      <h2>Join requests</h2>
+      {% for jr in join_requests %}<div class="jr-row">{% include "boards/_avatar.html" with u=jr.user %}
+        <div class="jr-main"><div><b>{{ jr.user.display_name }}</b> <span class="muted small">{{ jr.user.email }}</span></div>
+          <div>wants to join {% if jr.board_id %}the board <b>{{ jr.board.title }}</b>{% else %}{{ workspace.name }}{% endif %}</div>{% if jr.message %}<div class="jr-msg">“{{ jr.message }}”</div>{% endif %}</div>
+        <form method="post" action="{% url 'join_request_decide' jr.pk %}" class="jr-actions">{% csrf_token %}<button class="btn primary sm" name="action" value="approve">Let them in</button><button class="btn ghost sm" name="action" value="decline">Decline</button></form></div>
+      {% empty %}<p class="muted">Nobody is waiting.</p>{% endfor %}
+    </section>
+  </div>{% endif %}
+  <div data-tab="members">
 
   {% if new_account %}
   <div class="callout">
@@ -41,7 +65,7 @@
     {% for m in memberships %}
     <div class="member-row">
       {% include "boards/_avatar.html" with u=m.user size="lg" %}
-      <div class="member-name">{{ m.user.display_name }}{% if m.user == request.user %} (you){% endif %}<small>{{ m.user.email }}</small></div>
+      <div class="member-name"><a href="{% url 'person' m.user.pk %}">{{ m.user.display_name }}</a>{% if m.user == request.user %} (you){% endif %}{% if m.user.job_title %} <span class="muted small">· {{ m.user.job_title }}</span>{% endif %}<small>{{ m.user.email }}</small></div>
       {% if can_manage %}
       <form method="post" action="{% url 'workspace_member_update' workspace.pk m.user.pk %}" class="inline">
         {% csrf_token %}
@@ -92,7 +116,21 @@
     </details>
   </section>
   {% endif %}
+  </div>
 </main>
+<script>
+(() => {
+  const nav = document.querySelector('[data-tabs]'); if (!nav) return;
+  const show = key => {
+    if (!nav.querySelector(`a[href="#${key}"]`)) key = 'members';
+    nav.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + key));
+    document.querySelectorAll('[data-tab]').forEach(t => (t.hidden = t.dataset.tab !== key));
+  };
+  const fromHash = () => { const h = location.hash.slice(1); show(['guests', 'requests'].includes(h) ? h : 'members'); };
+  nav.addEventListener('click', e => { const a = e.target.closest('a'); if (!a) return; e.preventDefault(); history.replaceState(null, '', a.getAttribute('href')); show(a.getAttribute('href').slice(1)); });
+  fromHash(); window.addEventListener('hashchange', fromHash);
+})();
+</script>
 {% endblock %}
 {% block scripts %}
 <script>
