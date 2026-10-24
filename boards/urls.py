@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import (api, api_more, views, views_forms, views_gallery, views_join, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio,
+from . import (api, api_more, views, views_describe, views_forms, views_gallery, views_join, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio,
                views_company, views_export, views_public, views_search)
 
 urlpatterns = [
@@ -63,6 +63,7 @@ urlpatterns = [
     path("join-requests/new/", views_join.join_request_create, name="join_request_create"),
     path("join-requests/<int:pk>/", views_join.join_request_decide, name="join_request_decide"),
     path("templates/", views_gallery.gallery, name="gallery"),
+    path("boards/describe/", views_describe.describe, name="describe_board"),
     path("templates/<str:key>/", views_gallery.template_detail, name="gallery_template"),
     path("b/<int:board_id>/swimlanes/", views_board.board_swimlanes, name="board_swimlanes"),
     path("b/<int:board_id>/automation/rules/", views_automation.rule_create, name="rule_create"),

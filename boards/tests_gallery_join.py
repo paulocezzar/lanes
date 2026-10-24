@@ -26,8 +26,7 @@ class GalleryTests(Base):
         self.assertContains(r, "Project plan")
         self.assertContains(r, "Requests &amp; helpdesk")
         r = self.client.get("/templates/?cat=events")
-        self.assertContains(r, "Event planning")
-        self.assertNotContains(r, "Project plan")
+        self.assertEqual([i["title"] for i in r.context["items"]], ["Event planning"])
         self.assertContains(self.client.get("/templates/?q=onboard"), "New starter onboarding")
         self.assertEqual(self.client.get("/templates/nope/").status_code, 404)
 
@@ -127,3 +126,33 @@ class SettingsTests(Base):
         r = self.client.post(f"/api/boards/{b.pk}/update/", json.dumps({"archive": True}), content_type="application/json")
         self.assertEqual(r.status_code, 200)
         self.assertTrue(Board.objects.get(pk=b.pk).is_archived)
+
+
+class DescribeTests(Base):
+    def test_create_menu_and_describe_without_ai(self):
+        r = self.client.get("/")
+        self.assertContains(r, "data-create-toggle")
+        self.assertContains(r, "Describe a board")
+        self.assertContains(self.client.get("/boards/describe/"), "Get inspired")
+        r = self.client.post("/boards/describe/", {"text": "Run an event with guests and a venue", "workspace": self.ws.pk})
+        self.assertContains(r, "Event planning")
+        plan = r.context["plan_json"]
+        r = self.client.post("/boards/describe/", {"action": "create", "plan": plan, "workspace": self.ws.pk,
+                                                   "title": "Open day", "visibility": "workspace"})
+        b = Board.objects.get(title="Open day")
+        self.assertRedirects(r, f"/b/{b.pk}/", fetch_redirect_response=False)
+        self.assertTrue(b.lists.filter(title="Booked").exists())
+
+    def test_describe_with_ai(self):
+        from unittest import mock
+        spec = {"title": "Garden refresh", "summary": "Tidy the garden", "labels": [{"name": "Big", "colour": "nope"}],
+                "lists": [{"title": "Ideas", "cards": [{"title": "New benches", "checklist": ["Measure", "Order"]}]},
+                          {"title": "Done", "cards": []}]}
+        with mock.patch("boards.ai.enabled", return_value=True), mock.patch("boards.ai.draft_board", return_value=spec):
+            r = self.client.post("/boards/describe/", {"text": "garden", "workspace": self.ws.pk})
+        self.assertContains(r, "New benches")
+        self.client.post("/boards/describe/", {"action": "create", "plan": r.context["plan_json"], "workspace": self.ws.pk,
+                                               "title": "Garden"})
+        b = Board.objects.get(title="Garden")
+        self.assertEqual(b.labels.get().colour, "grey")
+        self.assertEqual(Card.objects.get(list__board=b).checklists.get().items.count(), 2)

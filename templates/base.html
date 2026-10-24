@@ -32,6 +32,17 @@
     </form>
     <a class="icon-btn top-search-mobile" href="{% url 'search' %}" title="Search cards" aria-label="Search cards"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></a>
     <div class="topbar-right">
+      <div class="create-wrap" data-create-wrap>
+        <button type="button" class="btn primary sm create-btn" data-create-toggle aria-expanded="false" aria-haspopup="true" aria-label="Create">＋<span class="create-word"> Create</span></button>
+        <div class="create-menu" data-create-menu hidden>
+          <a class="cm-opt" href="{% url 'describe_board' %}"><span>✨</span><b>Describe a board</b><small>Say what you want to organise — Lanes sets it up for you.</small></a>
+          <a class="cm-opt" href="{% url 'home' %}?new=1"><span>▦</span><b>Create board</b><small>An empty board with To do, Doing and Done.</small></a>
+          <a class="cm-opt" href="{% url 'gallery' %}"><span>⧉</span><b>Start with a template</b><small>Ready-made boards for projects, requests, events and more.</small></a>
+          <div class="cm-tpls"><h5>Popular templates</h5>
+            {% for k, title, bg in create_templates %}<a class="cm-tpl" href="{% url 'gallery_template' k %}"><i class="bg-{{ bg }}"></i>{{ title }}</a>{% endfor %}
+          </div>
+        </div>
+      </div>
       {% if running_timer %}<span class="timer-pill" data-timer-pill title="Timer running on {{ running_timer.card.title }}">
         <a href="{% url 'board' running_timer.card.list.board_id %}?card={{ running_timer.card_id }}"><i class="rec"></i><span data-since="{{ running_timer.started_at|date:'c' }}" data-base="{{ running_timer.minutes }}">0:00</span><small>{{ running_timer.card.title|truncatechars:24 }}</small></a>
         <button type="button" data-timer-stop-top title="Stop and log the time" aria-label="Stop timer">■</button></span>{% endif %}
@@ -137,5 +148,15 @@
   </dialog>
   <script src="{% static 'lanes/shortcuts.js' %}"></script>{% endif %}
   {% block scripts %}{% endblock %}
+<script>
+(() => {
+  const w = document.querySelector('[data-create-wrap]'); if (!w) return;
+  const b = w.querySelector('[data-create-toggle]'), m = w.querySelector('[data-create-menu]');
+  const set = on => { m.hidden = !on; b.setAttribute('aria-expanded', on); };
+  b.addEventListener('click', e => { e.stopPropagation(); set(m.hidden); });
+  document.addEventListener('click', e => { if (!w.contains(e.target)) set(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') set(false); });
+})();
+</script>
 </body>
 </html>

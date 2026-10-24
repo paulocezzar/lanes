@@ -202,6 +202,10 @@
     dlg.querySelector('input[name=title]').focus();
   }));
   dlg.querySelector('[data-close]').addEventListener('click', () => dlg.close());
+  if (new URLSearchParams(location.search).get('new') === '1') {        // from the top bar's ＋ Create menu
+    history.replaceState(null, '', location.pathname);
+    dlg.showModal(); dlg.querySelector('input[name=title]').focus();
+  }
   document.querySelector('[data-welcome-done]')?.addEventListener('submit', async e => {
     e.preventDefault();
     await fetch(e.target.action, { method: 'POST', body: new FormData(e.target), credentials: 'same-origin' }).catch(() => {});

@@ -1985,3 +1985,44 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .gal-tile small { color: var(--text-2); }
 @media (max-width: 860px) { .gallery-page { grid-template-columns: 1fr; } .gal-side { position: static; display: flex; flex-wrap: wrap; gap: 4px; } .gal-detail { grid-template-columns: 1fr; } .gal-use { position: static; } }
 .gal-tile-labels { display: flex; gap: 3px; } .gal-tile-labels i { width: 26px; height: 6px; border-radius: 3px; background: var(--accent); display: block; opacity: .7; }
+
+/* ---------- create menu + describe a board ---------- */
+.create-wrap { position: relative; }
+.create-btn { font-weight: 700; }
+.create-menu { position: absolute; right: 0; top: calc(100% + 6px); width: 340px; max-width: calc(100vw - 24px); background: var(--surface); color: var(--text); border-radius: 12px; box-shadow: var(--shadow); padding: 8px; z-index: 60; display: grid; gap: 2px; }
+.cm-opt { display: grid; grid-template-columns: 26px 1fr; gap: 2px 8px; padding: 10px; border-radius: 8px; text-decoration: none; color: var(--text); }
+.cm-opt:hover, .cm-opt:focus-visible { background: var(--surface-2); }
+.cm-opt span { grid-row: span 2; font-size: 18px; }
+.cm-opt small { color: var(--text-2); }
+.cm-tpls { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; display: grid; gap: 2px; }
+.cm-tpls h5 { margin: 4px 10px; font-size: 12px; color: var(--text-2); text-transform: uppercase; letter-spacing: .05em; }
+.cm-tpl { display: flex; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; }
+.cm-tpl:hover { background: var(--surface-2); }
+.cm-tpl i { width: 28px; height: 20px; border-radius: 4px; flex: none; }
+.describe-page { background: linear-gradient(160deg, #4b3fb5 0%, #6a4bc4 45%, #7c4fb8 100%); min-height: 100vh; }
+.describe { padding: 56px 16px 80px; color: #fff; }
+.ds-wrap { width: min(820px, 100%); margin: 0 auto; }
+.ds-wrap h1 { margin: 0; font-size: 2rem; }
+.ds-sub { margin: 4px 0 20px; color: rgb(255 255 255 / .9); }
+.ds-sub .muted { color: rgb(255 255 255 / .75); }
+.ds-row { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.ds-ws { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; }
+.ds-ws select { width: auto; }
+.ds-box { display: flex; gap: 8px; align-items: flex-end; background: rgb(20 20 30 / .55); border-radius: 28px; padding: 10px 10px 10px 22px; }
+.ds-box textarea { flex: 1; min-width: 0; background: transparent; border: 0; color: #fff; font: inherit; font-size: 1.05rem; resize: none; padding: 8px 0; field-sizing: content; max-height: 220px; }
+.ds-box textarea::placeholder { color: rgb(255 255 255 / .6); }
+.ds-box textarea:focus { outline: none; }
+.ds-box:focus-within { box-shadow: 0 0 0 3px rgb(255 255 255 / .5); }
+.ds-go { width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgb(255 255 255 / .4); background: rgb(255 255 255 / .15); color: #fff; font-size: 20px; cursor: pointer; flex: none; }
+.ds-go:hover { background: rgb(255 255 255 / .3); }
+.ds-hint { text-align: right; font-size: 12px; color: rgb(255 255 255 / .8); margin: 6px 4px 0; }
+.ds-inspire-h { font-size: 1rem; margin: 40px 0 10px; }
+.ds-inspire { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.ds-chip { height: 96px; border-radius: 14px; border: 1px solid rgb(255 255 255 / .25); background: rgb(255 255 255 / .12); color: #fff; font: inherit; font-weight: 700; font-size: 1rem; cursor: pointer; padding: 12px; }
+.ds-chip:hover, .ds-chip:focus-visible { background: rgb(255 255 255 / .24); }
+.ds-plan { margin-top: 28px; display: grid; gap: 14px; }
+.ds-how { margin: 0; font-size: 1.05rem; }
+.ds-create { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; background: var(--surface); color: var(--text); padding: 14px; border-radius: 12px; }
+.ds-create label:not(.check-inline) { display: grid; gap: 4px; font-size: 13px; font-weight: 600; flex: 1 1 220px; }
+.ds-ws { color: #fff; }
+@media (max-width: 700px) { .create-word { display: none; } .create-btn { padding-inline: 10px; } }

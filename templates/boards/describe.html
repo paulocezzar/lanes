@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Describe a board · Lanes{% endblock %}
+{% block body_class %}describe-page{% endblock %}
+{% block content %}
+<main class="describe">
+  <div class="ds-wrap">
+    <h1>Hi {{ user.first_name|default:"there" }}</h1>
+    <p class="ds-sub">Tell Lanes what you want to organise and it sets up the board for you.{% if not ai_on %} <span class="muted">(It picks the closest ready-made layout — AI help isn't switched on yet.)</span>{% endif %}</p>
+    <form method="post" class="ds-form" data-ds-form>
+      {% csrf_token %}
+      <div class="ds-row">
+        <label class="ds-ws">Department<select name="workspace">{% for w in workspaces %}<option value="{{ w.pk }}" {% if ws and ws.pk == w.pk %}selected{% endif %}>{{ w.name }}</option>{% endfor %}</select></label>
+      </div>
+      <div class="ds-box">
+        <textarea name="text" rows="2" maxlength="4000" placeholder="e.g. Plan our summer open day: stalls, volunteers, signage and a run-sheet" required data-ds-text>{{ text }}</textarea>
+        <button class="ds-go" aria-label="Make my board" title="Make my board" data-ds-go>↑</button>
+      </div>
+      <p class="ds-hint">Enter to send · Shift + Enter for a new line</p>
+    </form>
+    {% if not plan %}
+    <h2 class="ds-inspire-h">Get inspired</h2>
+    <div class="ds-inspire">
+      {% for name, prompt in inspire %}<button type="button" class="ds-chip" data-prompt="{{ prompt }}">{{ name }}</button>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if plan %}
+    <section class="ds-plan">
+      <p class="ds-how">{% if how == "ai" %}✨ Here's a board for that. Check it over, then create it — you can change anything afterwards.{% else %}The closest ready-made layout is <b>{{ plan.title }}</b>. Create it and change anything you like.{% endif %}</p>
+      <div class="gal-preview"><div class="gal-board bg-{{ plan.bg }}">
+        {% for l in preview %}<div class="gal-list"><b>{{ l.title }}</b>{% for c in l.cards %}<div class="gal-tile{% if c.tip %} tip{% endif %}">{{ c.title }}{% if c.items %}<small>☑ 0/{{ c.items|length }}</small>{% endif %}</div>{% endfor %}</div>{% endfor %}
+      </div></div>
+      <form method="post" class="ds-create">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create"><input type="hidden" name="plan" value="{{ plan_json }}">
+        <input type="hidden" name="text" value="{{ text }}"><input type="hidden" name="workspace" value="{{ ws.pk }}">
+        <label>Board title<input name="title" value="{{ plan.title }}" maxlength="120" required></label>
+        <label>Who can see it<select name="visibility">{% for k, v in visibilities %}<option value="{{ k }}" {% if k == "workspace" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+        {% if has_tips %}<label class="check-inline dark"><input type="checkbox" name="keep_tips" checked> Keep the 💡 tip cards</label>{% endif %}
+        <div class="row"><button class="btn primary">Create board</button><a class="btn light" href="{% url 'describe_board' %}">Start again</a></div>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</main>
+<script>
+(() => {
+  const f = document.querySelector('[data-ds-form]'), ta = document.querySelector('[data-ds-text]');
+  document.querySelectorAll('[data-prompt]').forEach(b => b.addEventListener('click', () => { ta.value = b.dataset.prompt; ta.focus(); }));
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (ta.value.trim()) f.requestSubmit(); } });
+  f.addEventListener('submit', () => { const g = document.querySelector('[data-ds-go]'); g.disabled = true; g.textContent = '…'; });
+})();
+</script>
+{% endblock %}

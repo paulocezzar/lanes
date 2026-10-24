@@ -269,3 +269,22 @@ def draft_cards(text, images=()):
                   model=getattr(settings, "ANTHROPIC_DRAFT_MODEL", None))
     reply = re.sub(r"^```[a-z]*\n|\n```$", "", reply.strip())
     return reply.strip()
+
+
+BOARD_SYSTEM = """You design boards for Lanes, a Trello-style app used by teams at work. The person describes what
+they want to organise. Reply with JSON only (no prose, no markdown):
+{"title": "short board name", "summary": "one sentence on what the board is for",
+ "labels": [{"name": "Urgent", "colour": "red"}],
+ "lists": [{"title": "List name", "cards": [{"title": "Card", "description": "", "checklist": ["step", "step"]}]}]}
+Rules:
+- 3 to 7 lists that follow the order work moves through, ending with a done-style list where it makes sense.
+- Put 1 to 5 useful starter cards in the early lists, based only on what they described. Later lists can be empty.
+- Checklists only where there are clear steps (at most 8 items). Descriptions short or empty.
+- 0 to 4 labels; colours from: green, yellow, orange, red, purple, blue, sky, pink, grey.
+- Plain, friendly UK English. No emoji."""
+
+
+def draft_board(text):
+    reply = _call(BOARD_SYSTEM, f"Today is {date.today():%-d %B %Y}.\n\nWhat they want to organise:\n{text}",
+                  max_tokens=3000, timeout=45, model=getattr(settings, "ANTHROPIC_DRAFT_MODEL", None))
+    return _json(reply)
