@@ -102,6 +102,7 @@ class Board(models.Model):
     member_permission = models.CharField(max_length=10, choices=MEMBER_PERMS, default="admins")
     show_complete = models.BooleanField(default=True)    # ✓ complete status on card fronts
     covers_enabled = models.BooleanField(default=True)   # show image/colour covers on card fronts
+    complete_to_done = models.BooleanField(default=True)  # completing a card moves it to the Done list (and back)
     # project management
     RAG = [("auto", "Automatic"), ("green", "On track"), ("amber", "At risk"), ("red", "Off track")]
     is_project = models.BooleanField(default=False)      # shows on the Portfolio page

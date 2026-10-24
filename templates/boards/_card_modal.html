@@ -376,12 +376,12 @@
         <div class="cm-h-row">
           <h4 class="cm-h">{% include "boards/_icon.html" with i="check" %}{{ cl.title }}</h4>
           {% if can_edit %}
-{% if can_edit %}{% with n=cl.amount_candidates %}{% if n %}<button class="btn sm" data-read-amounts="{{ cl.pk }}" title="Items like “430 Christmas Cake” become 0 / 430 and count up as you record what's done">Use the numbers as amounts ({{ n }})</button>{% endif %}{% endwith %}{% endif %}
-          {% if can_edit %}{% with left=cl.items_not_cards %}{% if left > 1 %}<button class="btn ghost sm" data-items-to-cards="{{ cl.pk }}" title="Each item becomes a card of its own, shown under Parts — with labels, dates, sign-off and everything a card has">Make each a card ({{ left }})</button>{% endif %}{% endwith %}{% endif %}
           <button class="btn ghost sm" data-hide-checked="{{ cl.hide_checked|yesno:'0,1' }}">{% if cl.hide_checked %}Show checked items{% else %}Hide checked items{% endif %}</button>
           <button class="btn ghost sm" data-delete-checklist>Delete</button>
           {% endif %}
         </div>
+        {% if can_edit and cl.amount_candidates or can_edit and cl.items_not_cards > 1 %}<div class="cl-tools">{% if can_edit %}{% with n=cl.amount_candidates %}{% if n %}<button class="link-btn" data-read-amounts="{{ cl.pk }}" title="Items like “430 Christmas Cake” become 0 / 430 and count up as you record what's done">Use the numbers as amounts ({{ n }})</button>{% endif %}{% endwith %}{% endif %}
+          {% if can_edit %}{% with left=cl.items_not_cards %}{% if left > 1 %}<button class="link-btn" data-items-to-cards="{{ cl.pk }}" title="Each item becomes a card of its own, shown under Parts — with labels, dates, sign-off and everything a card has">Make each a card ({{ left }})</button>{% endif %}{% endwith %}{% endif %}</div>{% endif %}
         {% with p=cl.progress %}
         <div class="progress"><span>{{ p }}%</span><div class="bar"><i style="width:{{ p }}%" class="{% if p == 100 %}full{% endif %}"></i></div></div>
         {% endwith %}
@@ -425,8 +425,17 @@
                 {% if not item.linked_card_id %}<hr class="pop-rule"><button type="button" class="btn sm block" data-item-to-card="{{ item.pk }}" title="Keeps the due date, person and amount — and ticks this item when the card is done">↗ Make this item a card</button>{% endif %}
               </form>
             </details>
-            {% if not item.linked_card_id %}<button type="button" class="icon-btn xs item-mk" data-item-to-card="{{ item.pk }}" title="Make this item a card — then it can have labels, attachments, sign-off, its own checklist…">↗</button>{% endif %}
-            <button class="icon-btn xs item-del" data-delete-item="{{ item.pk }}" title="Delete item">{% include "boards/_icon.html" with i="close" %}</button>
+            <details class="item-acts">
+              <summary class="icon-btn xs" title="Item actions" aria-label="Item actions">{% include "boards/_icon.html" with i="dots" %}</summary>
+              <div class="item-acts-pop">
+                <div class="pop-head">Item actions</div>
+                <button type="button" class="menu-item" data-item-edit-btn="{{ item.pk }}">Edit text</button>
+                {% if item.linked_card_id %}<a class="menu-item" href="{% url 'board' item.linked_card.list.board_id %}?card={{ item.linked_card_id }}"{% if item.linked_card.list.board_id == board.pk %} data-card-open="{{ item.linked_card_id }}"{% endif %}>Open its card</a>
+                {% else %}<button type="button" class="menu-item" data-item-to-card="{{ item.pk }}" title="The item stays here and ticks itself when its card is done">Make it a card <small>keeps it on this checklist</small></button>
+                <button type="button" class="menu-item" data-item-to-card="{{ item.pk }}" data-remove="1" title="Like Trello's Convert to card">Convert to card <small>takes it off this checklist</small></button>{% endif %}
+                <button type="button" class="menu-item danger" data-delete-item="{{ item.pk }}">Delete</button>
+              </div>
+            </details>
             {% endif %}
           </li>
           {% endif %}{% endfor %}

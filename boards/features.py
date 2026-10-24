@@ -54,6 +54,39 @@ def decide(so, user, approve, note=""):
 
 # ---------- completion side effects ----------
 
+DONE_WORDS = ("done", "complete", "finished", "closed", "delivered", "shipped")
+
+
+def done_list(board):
+    """The board's Done list: the first open list whose name says it's finished."""
+    for lst in board.lists.filter(is_archived=False).order_by("position"):
+        if any(w in lst.title.lower() for w in DONE_WORDS):
+            return lst
+    return None
+
+
+def is_done_list(lst):
+    return any(w in lst.title.lower() for w in DONE_WORDS)
+
+
+def move_to_done(card, user=None):
+    """Card just marked complete: put it at the top of the Done list (if the board does that). Returns the list."""
+    from . import positions
+    board = card.list.board
+    if not board.complete_to_done or card.is_template or is_done_list(card.list):
+        return None
+    target = done_list(board)
+    if not target:
+        return None
+    old = card.list
+    entries = sorted(positions._entry_positions(target), key=lambda e: e[1])
+    card.list = target
+    positions.place_in_list(card, target, None, entries[0][0] if entries else None)
+    card.save(update_fields=["list", "position", "updated_at"])
+    log(board, user, "card_moved", card=card, **{"from": old.title, "to": target.title})
+    return target
+
+
 def after_completion_change(card, user=None):
     """Keep checklist items that were turned into this card ticked in step with it."""
     now = timezone.now()
@@ -94,6 +127,8 @@ def item_to_card(item, target_list, user):
                                      is_done=item.is_done or item.qty_done >= item.qty_target)
     item.linked_card = card
     item.save(update_fields=["linked_card"])
+    if card.is_complete:
+        move_to_done(card, user)
     log(target_list.board, user, "card_created", card=card, list=target_list.title)
     log(src.list.board, user, "item_to_card", card=src, text=item.text, list=target_list.title)
     from .signals import bump

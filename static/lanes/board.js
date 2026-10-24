@@ -798,6 +798,16 @@ Invite the press`,
       setTimeout(() => { if (det?.open) det.querySelector('input[name="qty_target"]')?.focus(); }, 30);
       return;
     }
+    const editBtn = t.closest('[data-item-edit-btn]');
+    if (editBtn) {
+      const li = editBtn.closest('.item');
+      editBtn.closest('details')?.removeAttribute('open');
+      const span = li?.querySelector('[data-item-edit]');
+      if (span) return editItemText(span);
+      const lbl = li?.querySelector('.item-label');
+      if (lbl) { const s2 = document.createElement('span'); s2.className = 'item-label'; s2.dataset.itemEdit = editBtn.dataset.itemEditBtn; s2.textContent = lbl.textContent; lbl.replaceWith(s2); return editItemText(s2); }
+      return;
+    }
     const edit = t.closest('[data-item-edit]');
     if (edit && !edit.querySelector('input')) return editItemText(edit);
     const finish = t.closest('[data-finish-card]');
@@ -876,9 +886,10 @@ Invite the press`,
     const toCard = t.closest('[data-item-to-card]');
     if (toCard) {
       toCard.disabled = true;
-      return post(`/api/items/${toCard.dataset.itemToCard}/to-card/`, {}).then(data => {
+      const remove = toCard.dataset.remove === '1';
+      return post(`/api/items/${toCard.dataset.itemToCard}/to-card/`, remove ? { remove: true } : {}).then(data => {
         addNewTile(data.new_card); applyCard(data);
-        toast('Made it a card. The item ticks itself when that card is done.');
+        toast(remove ? 'Converted to a card — it\'s in the list now and under Parts.' : 'Made it a card. The item ticks itself when that card is done.');
       }).catch(err => toast(err.message || 'Could not do that.')).finally(() => (toCard.disabled = false));
     }
     const pSet = t.closest('[data-parent-set]');
@@ -918,6 +929,20 @@ Invite the press`,
       if (!await LanesUI.confirm('Delete this comment?', { ok: 'Delete', danger: true })) return;
       return post(`/api/comments/${delComment.dataset.deleteComment}/`, { delete: true }).then(applyCard);
     }
+  });
+
+  dialogBody.addEventListener('toggle', e => {
+    if (e.target.matches?.('details.item-acts[open]')) {
+      const pop = e.target.querySelector('.item-acts-pop');
+      pop.classList.remove('up');
+      const box = dialog.getBoundingClientRect();
+      if (pop.getBoundingClientRect().bottom > box.bottom - 8) pop.classList.add('up');
+    }
+    if (e.target.matches?.('details.item-acts[open], details.item-more[open]'))
+      $$('details.item-acts[open], details.item-more[open]', dialogBody).forEach(d => { if (d !== e.target) d.removeAttribute('open'); });
+  }, true);
+  document.addEventListener('click', e => {
+    if (!e.target.closest('details.item-acts')) $$('details.item-acts[open]', dialogBody).forEach(d => d.removeAttribute('open'));
   });
 
   // Click a checklist item's words to change them. "430 Christmas Cake" becomes an amount that counts up.

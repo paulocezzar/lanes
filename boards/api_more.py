@@ -26,6 +26,8 @@ def item_to_card(request, item_id):
         lst = get_object_or_404(List.objects.select_related("board"), pk=request.data["list_id"], is_archived=False)
         _edit(lst.board, request.user)
     new = features.item_to_card(item, lst, request.user)
+    if request.data.get("remove"):     # Trello's "Convert to card": the item leaves the checklist
+        item.delete()
     data = card_response(src.pk, request)
     data["new_card"] = {"id": new.pk, "list_id": lst.pk, "board_id": lst.board_id, "same_board": lst.board_id == src.list.board_id}
     if data["new_card"]["same_board"]:

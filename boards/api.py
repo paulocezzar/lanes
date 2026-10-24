@@ -233,6 +233,21 @@ def card_move(request, card_id):
     if new_list.pk != old_list.pk:
         log(card.list.board, request.user, "card_moved", card=card, **{"from": old_list.title, "to": new_list.title})
         automation.fire(card, Rule.MOVED, list_=new_list, actor=request.user)
+        from .features import after_completion_change, is_done_list
+        board = new_list.board
+        if board.complete_to_done and not card.is_template and is_done_list(new_list) != is_done_list(old_list):
+            # into Done → complete; dragged back out of Done → not complete
+            want = is_done_list(new_list)
+            from .features import blocked_message
+            if want and blocked_message(card):
+                want = card.is_complete            # still waiting for a sign-off: it can sit in Done, not complete
+            if card.is_complete != want:
+                card.is_complete = want
+                card.save(update_fields=["is_complete", "updated_at"])
+                log(board, request.user, "card_completed" if want else "card_reopened", card=card)
+                after_completion_change(card, request.user)
+                if want:
+                    automation.fire(card, Rule.COMPLETED, actor=request.user)
     return card_response(card.pk, request)
 
 
@@ -338,6 +353,9 @@ def card_update(request, card_id):
         from .recurring import undo_spawn
         undo_spawn(card)
     if just_completed:
+        from .features import move_to_done
+        if move_to_done(card, user):
+            automation.fire(card, Rule.MOVED, list_=card.list, actor=user)
         from .recurring import spawn_next
         nxt = spawn_next(card, request.user)
         automation.fire(card, Rule.COMPLETED, actor=request.user)
@@ -769,7 +787,7 @@ def board_update(request, board_id):
         board.voting = bool(d["voting"])
     if "card_aging" in d:
         board.card_aging = bool(d["card_aging"])
-    for flag in ("show_complete", "covers_enabled"):
+    for flag in ("show_complete", "covers_enabled", "complete_to_done"):
         if flag in d:
             setattr(board, flag, bool(d[flag]))
     if d.get("comment_permission") in dict(Board.COMMENTS):

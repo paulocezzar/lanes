@@ -205,8 +205,11 @@ body.board-page { overflow: hidden; }
 .lc-sky { background: #6cc3e0; } .lc-pink { background: #e774bb; } .lc-grey { background: #8c9bab; }
 
 /* ---------- card modal ---------- */
-.card-dialog { border: 0; padding: 0; border-radius: 14px; background: var(--surface); width: min(1040px, calc(100vw - 24px));
+.card-dialog { border: 0; padding: 0; border-radius: 14px; background: var(--surface); width: min(1180px, calc(100vw - 48px));
   max-height: calc(100vh - 48px); box-shadow: var(--shadow); overflow: hidden; }
+/* Open big, like Trello: near the top of the screen and most of its height, whatever is on the card. */
+@media (min-width: 761px) { .card-dialog[open] { margin: 40px auto 24px; height: calc(100vh - 64px); max-height: none; }
+  .card-dialog[open] .cm { max-height: none; height: 100%; } }
 .card-dialog[open] { display: flex; }
 #card-dialog-body { width: 100%; display: flex; }
 .cm { width: 100%; display: flex; flex-direction: column; max-height: calc(100vh - 48px); }
@@ -2164,3 +2167,19 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .item-mk { font-weight: 700; }
 .item .icon-btn.item-mk { margin-left: 0; }
 @media (hover: none) { .item .icon-btn.item-mk { visibility: visible; } }
+
+.item-acts { position: relative; }
+.item-acts > summary { list-style: none; visibility: hidden; }
+.item-acts > summary::-webkit-details-marker { display: none; }
+.item:hover .item-acts > summary, .item-acts[open] > summary { visibility: visible; }
+@media (hover: none) { .item-acts > summary { visibility: visible; } }
+.item .item-acts > .icon-btn { margin-left: 0; }
+.item-acts-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; width: 250px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 6px; display: grid; gap: 2px; }
+.item-acts-pop .pop-head { text-align: center; font-weight: 700; padding: 6px; }
+.item-acts-pop .menu-item { text-align: left; display: block; width: 100%; padding: 8px 10px; border-radius: 6px; background: none; border: 0; color: var(--text); font: inherit; text-decoration: none; cursor: pointer; }
+.item-acts-pop .menu-item:hover { background: var(--surface-2); }
+.item-acts-pop .menu-item small { display: block; color: var(--text-2); font-size: 12px; }
+.item-acts-pop .menu-item.danger { color: var(--danger, #dc2626); }
+.cl-tools { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: -2px 0 8px 32px; font-size: 13px; }
+.cl-tools .link-btn { font-size: 13px; }
+.item-acts-pop.up { top: auto; bottom: calc(100% + 4px); }

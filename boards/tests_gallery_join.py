@@ -290,3 +290,46 @@ class ItemsToCardsTests(Base):
         self.assertTrue(soak.checklists.get().items.get().is_done)
         self.assertEqual(card.children.count(), 2)
         self.assertEqual(cl.items_not_cards(), 0)
+
+    def test_convert_takes_item_off(self):
+        from .models import Card, Checklist, ChecklistItem
+        b = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=b, user=self.u, role="admin")
+        card = b.lists.create(title="To do", position=1).cards.create(title="Cakes", position=1)
+        cl = Checklist.objects.create(card=card, title="What it needs", position=1)
+        it = ChecklistItem.objects.create(checklist=cl, text="Order tins", position=1)
+        self.client.post(f"/api/items/{it.pk}/to-card/", '{"remove": true}', content_type="application/json")
+        self.assertFalse(ChecklistItem.objects.filter(pk=it.pk).exists())
+        self.assertTrue(Card.objects.filter(title="Order tins", parent=card).exists())
+
+
+class DoneListTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.b = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.todo = self.b.lists.create(title="To do", position=1)
+        self.done = self.b.lists.create(title="Done", position=2)
+        self.card = self.todo.cards.create(title="X", position=1)
+
+    def post(self, url, body):
+        import json
+        return self.client.post(url, json.dumps(body), content_type="application/json")
+
+    def test_complete_moves_to_done_and_drag_back_reopens(self):
+        r = self.post(f"/api/cards/{self.card.pk}/update/", {"is_complete": True})
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.list_id, self.done.pk, r.content[:300])
+        self.post(f"/api/cards/{self.card.pk}/move/", {"list_id": self.todo.pk})
+        self.card.refresh_from_db()
+        self.assertFalse(self.card.is_complete)
+        self.post(f"/api/cards/{self.card.pk}/move/", {"list_id": self.done.pk})
+        self.card.refresh_from_db()
+        self.assertTrue(self.card.is_complete)
+
+    def test_switched_off(self):
+        self.b.complete_to_done = False
+        self.b.save()
+        self.post(f"/api/cards/{self.card.pk}/update/", {"is_complete": True})
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.list_id, self.todo.pk)

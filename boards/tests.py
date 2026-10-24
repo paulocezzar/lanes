@@ -3187,6 +3187,8 @@ class AutomationParityTests(TestCase):
         self.assertEqual(self.comments(card).count("Monday nudge"), 1)
 
     def test_filters(self):
+        self.l3.board.complete_to_done = False   # only the rule decides here
+        self.l3.board.save()
         self.rule("card_moved", [{"type": "complete"}], trigger_list=self.l3,
                   filters=[{"type": "label", "label": self.red.pk}, {"type": "has_due"}])
         a = Card.objects.create(list=self.l1, title="a")
