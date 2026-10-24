@@ -2228,3 +2228,45 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .item-card-link { margin-left: 8px; font-size: 12px; vertical-align: 1px; }
 .checklist .item .item-grip { left: -14px; top: 7px; padding: 2px; font-size: 13px; }
 .sortable-chosen.item { background: var(--surface-2); }
+
+/* Gantt: parts nested under their card, a summary bar spanning them, checklist items as markers */
+.gt-lrow .gt-title { padding-left: calc(var(--lvl, 0) * 16px); }
+.gt-sumrow .gt-title { font-weight: 700; }
+.gt-item { color: var(--text-2); font-size: .82rem; }
+.gt-item .gt-tick { margin-right: 6px; }
+.gt-item.done .gt-title { text-decoration: line-through; opacity: .7; }
+.gt-sum { position: absolute; height: 10px; margin-top: 13px; background: color-mix(in srgb, var(--text) 70%, transparent); border-radius: 2px; cursor: pointer; z-index: 2; }
+.gt-sum::before, .gt-sum::after { content: ""; position: absolute; bottom: -6px; border: 6px solid transparent; border-top-color: color-mix(in srgb, var(--text) 70%, transparent); border-bottom: 0; }
+.gt-sum::before { left: 0; border-left-color: color-mix(in srgb, var(--text) 70%, transparent); }
+.gt-sum::after { right: 0; border-right-color: color-mix(in srgb, var(--text) 70%, transparent); }
+.gt-sum .gt-fill { position: absolute; inset: 0 auto 0 0; background: var(--ok); border-radius: 2px; opacity: .9; }
+.gt-sum span { position: absolute; left: calc(100% + 8px); top: -4px; white-space: nowrap; font-size: .78rem; font-weight: 600; color: var(--text); }
+.gt-sum.done { opacity: .55; }
+.gt-imark { position: absolute; width: var(--colw); height: var(--row); display: grid; place-items: center; z-index: 2; pointer-events: auto; }
+.gt-imark i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent); background: var(--surface); }
+.gt-imark.done i { background: var(--ok); border-color: var(--ok); }
+.gt-slot { position: absolute; left: 0; right: 0; height: var(--row); cursor: copy; z-index: 1; }
+.gt-slot:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+/* Portfolio: shared timeline and per-project cards */
+.pf-tl { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; margin: 0 0 16px; }
+.pf-tl-head, .pf-tl-row { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; align-items: center; }
+.pf-tl-head { height: 22px; }
+.pf-tl-scale, .pf-tl-track { position: relative; height: 100%; }
+.pf-tl-scale i { position: absolute; top: 2px; font-style: normal; font-size: 11px; color: var(--text-2); border-left: 1px solid var(--border); padding-left: 4px; white-space: nowrap; }
+.pf-tl-row { height: 32px; border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.pf-tl-row > a { color: var(--text); text-decoration: none; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-tl-track { height: 32px; }
+.pf-tl-track small { position: absolute; top: 8px; }
+.pf-tl-bar { position: absolute; top: 9px; height: 14px; border-radius: 4px; overflow: hidden; min-width: 6px; }
+.pf-tl-bar i { position: absolute; inset: 0 auto 0 0; background: rgb(255 255 255 / .35); }
+.rag-bg-green { background: #1f845a; } .rag-bg-amber { background: #e2a03f; } .rag-bg-red { background: #c9372c; }
+.pf-tl-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+.pf-open { border: 0; background: none; color: var(--text-2); cursor: pointer; padding: 0 6px 0 0; font-size: 13px; }
+.pf-detail td { background: var(--surface-2); padding: 8px 16px 12px 36px !important; }
+.pf-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pf-cards li { display: grid; grid-template-columns: minmax(160px, 260px) 120px 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13px; }
+.pf-cards li.done a { text-decoration: line-through; opacity: .7; }
+.pf-cards li > small.pf-late { grid-column: 1 / -1; }
+.pf-bar.sm { height: 6px; margin: 0; }
+@media (max-width: 760px) { .pf-tl-head, .pf-tl-row { grid-template-columns: 110px minmax(0, 1fr); } .pf-cards li { grid-template-columns: 1fr 60px 40px; } .pf-cards li > :nth-child(n+4) { grid-column: 1 / -1; } }

@@ -414,8 +414,10 @@ Setup:
     <h4 class="section-label">Card fronts</h4>
     <label class="check-inline dark"><input type="checkbox" data-board-flag="show_complete" {% if board.show_complete %}checked{% endif %}> Show complete status (✓) on card fronts</label>
     <label class="check-inline dark"><input type="checkbox" data-board-flag="covers_enabled" {% if board.covers_enabled %}checked{% endif %}> Show card covers (image attachments and colours)</label>
-    <h4 class="section-label">Done list</h4>
+    <h4 class="section-label">Moving cards along</h4>
     <label class="check-inline dark"><input type="checkbox" data-board-flag="complete_to_done" {% if board.complete_to_done %}checked{% endif %}> Completing a card moves it to the Done list — and dragging a card into Done completes it</label>
+    <label class="check-inline dark"><input type="checkbox" data-board-flag="progress_to_doing" {% if board.progress_to_doing %}checked{% endif %}> First progress on a card (an item ticked or an amount recorded) moves it to Doing</label>
+    <p class="muted small">A card also completes itself — and moves to Done — when all its checklist items and parts are done.</p>
     <h4 class="section-label">Public link</h4>
     {% if public_off %}<p class="muted small">Public links are switched off for the company.</p>{% else %}
     <label class="check-inline dark"><input type="checkbox" data-public-toggle {% if board.public_token %}checked{% endif %} {% if not can_public and not board.public_token %}disabled{% endif %}> Anyone with the link can view this board (read-only, no sign-in)</label>

@@ -24,6 +24,16 @@
   // keep the left table rows and the chart in step when the left side is clicked
   root.querySelector('[data-gt-critical]')?.addEventListener('change', e => root.classList.toggle('no-crit', !e.target.checked));
   root.querySelector('[data-gt-print]')?.addEventListener('click', () => window.print());
+  root.querySelector('[data-gt-items]')?.addEventListener('change', e => {
+    const u = new URL(location.href);
+    if (e.target.checked) u.searchParams.set('items', '1'); else u.searchParams.delete('items');
+    try { localStorage.setItem('lanes-gantt-items', e.target.checked ? '1' : '0'); } catch {}
+    location.href = u.toString();
+  });
+  try {   // remember the tickbox between visits
+    const u = new URL(location.href);
+    if (!u.searchParams.has('items') && localStorage.getItem('lanes-gantt-items') === '1') { u.searchParams.set('items', '1'); location.replace(u.toString()); }
+  } catch {}
 
   // scroll so today is in view on first load
   const today = root.querySelector('.gt-today');
@@ -33,6 +43,16 @@
   }
 
   if (!canEdit) return;
+
+  // click a day on an unscheduled row to give it dates (3 days from there)
+  body.addEventListener('click', async e => {
+    const slot = e.target.closest('[data-gt-slot]');
+    if (!slot) return;
+    const lo = root.dataset.lo, idx = Math.floor(e.offsetX / colW);
+    const start = shift(lo, idx), end = shift(start, 2);
+    try { await post(`/api/cards/${slot.dataset.gtSlot}/update/`, { start_date: start, due_at: `${end}T17:00` }); reload(); }
+    catch (err) { toast(err.message); }
+  });
 
   let drag = null;
   body.addEventListener('pointerdown', e => {

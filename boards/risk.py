@@ -35,15 +35,11 @@ def reason(card, now=None):
         if s.status == "rejected":
             return f"{s.approver.display_name} asked for changes before signing off"
     items = [i for cl in card.checklists.all() for i in cl.items.all()]
-    if items:
-        pct = 100 * sum(i.fraction for i in items) / len(items)
-        if (days <= 1 and pct < 75) or (days <= 2 and pct < 50) or pct < 25:
-            return f"Checklist only {pct:.0f}% done with {_left(left)} left"
     kids = [c for c in card.children.all() if not c.is_archived]
-    if kids:
-        pct = 100 * sum(1 for c in kids if c.is_complete) / len(kids)
+    if items or kids:
+        pct = 100 * card.work_fraction()          # the same % the card, Gantt and Portfolio show
         if (days <= 1 and pct < 75) or (days <= 2 and pct < 50) or pct < 25:
-            return f"Only {sum(1 for c in kids if c.is_complete)} of {len(kids)} parts done with {_left(left)} left"
+            return f"Only {pct:.0f}% done with {_left(left)} left"
     if days <= 2 and not card.members.all():
         return "Nobody is on this card"
     touched = max([card.updated_at] + [i.done_at for i in items if i.done_at])

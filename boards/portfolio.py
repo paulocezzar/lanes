@@ -34,9 +34,13 @@ def health(board, now=None):
     now = now or timezone.now()
     today = timezone.localdate(now)
     cards = list(Card.objects.filter(list__board=board, list__is_archived=False, is_archived=False, is_template=False)
-                 .select_related("list"))
+                 .select_related("list").prefetch_related("children", "checklists__items", "members",
+                                                          "signoffs__approver", "dependencies__depends_on"))
     total = len(cards)
     done = sum(c.is_complete for c in cards)
+    ids = {c.pk for c in cards}
+    top = [c for c in cards if c.parent_id not in ids]      # parts count inside their card, not twice
+    work = round(100 * sum(c.work_fraction() for c in top) / len(top)) if top else 0
     open_ = [c for c in cards if not c.is_complete]
     overdue = sorted([c for c in open_ if c.due_at and c.due_at < now], key=lambda c: c.due_at)
     milestones = sorted([c for c in cards if c.is_milestone and c.due_at], key=lambda c: c.due_at)
@@ -70,14 +74,24 @@ def health(board, now=None):
     if blocked:
         auto = "amber" if auto == "green" else auto
         reasons.append(f"{len(blocked)} starting before what they wait for")
-    if board.is_project and (not board.status_updated_at or board.status_updated_at < now - timedelta(days=14)):
+    from .risk import reason as risk_reason
+    at_risk = [(c, r) for c in open_ for r in [risk_reason(c, now)] if r]
+    if at_risk:
+        auto = "amber" if auto == "green" else auto
+        c, r = at_risk[0]
+        more = f" (+{len(at_risk) - 1} more)" if len(at_risk) > 1 else ""
+        reasons.append(f"{c.title}: {r[0].lower() + r[1:]}{more}")
+    since = board.status_updated_at or board.created_at
+    if board.is_project and since and since < now - timedelta(days=14):
         auto = "amber" if auto == "green" else auto
         reasons.append("no status update for 2 weeks")
     rag = auto if board.rag == "auto" else board.rag
     week_ago, week_ahead = now - timedelta(days=7), now + timedelta(days=7)
     return {
         "board": board, "rag": rag, "rag_label": RAG_LABEL[rag], "auto": board.rag == "auto", "auto_rag": auto,
-        "reasons": reasons, "total": total, "done": done, "pct": round(100 * done / total) if total else 0,
+        "reasons": reasons, "total": total, "done": done, "pct": work, "cards_pct": round(100 * done / total) if total else 0,
+        "items": [_line(c, now, info) for c in sorted(top, key=lambda c: (c.is_complete, c.due_at or now + timedelta(days=9999), c.position))],
+        "start": min((v["start"] for v in info.values()), default=None), "at_risk": at_risk,
         "overdue": overdue, "milestones": milestones, "next_ms": next_ms, "late_ms": late_ms,
         "blocked": blocked, "finish": finish, "critical": critical[:8],
         "done_week": [c for c in cards if c.is_complete and c.updated_at >= week_ago],
@@ -86,6 +100,47 @@ def health(board, now=None):
         "left": (budget - spent) if budget else None,
         "budget_pct": round(used) if used is not None else None, "today": today,
     }
+
+
+def _line(card, now, info):
+    """One card in a project's drill-down: how far along it is and what stage it's at."""
+    stage = ""
+    kids = [k for k in card.children.all() if not k.is_archived]
+    kid_ids = {k.pk for k in kids}
+    for cl in card.checklists.all():
+        for it in cl.items.all():
+            if it.linked_card_id in kid_ids or it.is_done or (it.has_qty and it.qty_done >= it.qty_target):
+                continue
+            stage = it.text + (f" {it.qty_done_txt}/{it.qty_target_txt}" if it.has_qty else "")
+            break
+        if stage:
+            break
+    if not stage:
+        nxt = next((k for k in sorted(kids, key=lambda k: (k.due_at or now + timedelta(days=9999))) if not k.is_complete), None)
+        if nxt:
+            stage = nxt.title
+    return {"card": card, "pct": card.work_pct(), "stage": stage, "risk": card.risk(now),
+            "end": info[card.pk]["end"] if card.pk in info else None}
+
+
+def timeline(rows, today):
+    """A shared calendar for the Portfolio: each project's bar from its first start to its finish."""
+    spans = [(r["start"], r["finish"]) for r in rows if r.get("start") and r.get("finish")]
+    if not spans:
+        return None
+    lo = min([s for s, _ in spans] + [today]) - timedelta(days=3)
+    hi = max([e for _, e in spans] + [today]) + timedelta(days=7)
+    total = max((hi - lo).days, 1)
+    pct = lambda d: round(100 * (d - lo).days / total, 2)
+    for r in rows:
+        if r.get("start") and r.get("finish"):
+            r["tl"] = {"left": pct(r["start"]), "width": max(pct(r["finish"]) - pct(r["start"]), 0.8)}
+    months, d = [], lo.replace(day=1)
+    while d <= hi:
+        if d >= lo:
+            months.append({"label": d.strftime("%b %y"), "left": pct(d)})
+        d = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return {"today": pct(today), "months": months}
 
 
 def projects_for(user):

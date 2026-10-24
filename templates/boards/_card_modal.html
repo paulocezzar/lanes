@@ -256,7 +256,7 @@
 
       {% if children or can_edit %}
       <section class="cm-section parts" data-opt="parts" {% if not children %}hidden{% endif %}>
-        <h4 class="cm-h"><span class="cm-ico" aria-hidden="true">▦</span>Parts{% if child_progress %} <span class="muted small">{{ child_progress.done }} of {{ child_progress.total }} done</span>{% endif %}</h4>
+        <h4 class="cm-h"><span class="cm-ico" aria-hidden="true">▦</span>Parts{% if child_progress %} <span class="muted small">{{ child_progress.done }} of {{ child_progress.total }} done · whole card {{ card.work_pct }}% done</span>{% endif %}</h4>
         {% if child_progress %}<div class="progress"><span>{{ child_progress.pct }}%</span><div class="bar"><i style="width:{{ child_progress.pct }}%" class="{% if child_progress.pct == 100 %}full{% endif %}"></i></div></div>{% endif %}
         <ul class="part-list">
           {% for c in children %}<li class="part{% if c.is_complete %} done{% endif %}">

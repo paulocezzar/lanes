@@ -372,16 +372,38 @@ def board_map(request, board_id=None):
 @login_required
 def board_gantt(request, board_id):
     """Gantt chart: task table + bars, finish-to-start arrows, milestones, critical path."""
-    from .models import Dependency
+    from .models import Card, Dependency
     from .schedule import analyse, board_cards, span
     board, ctx = board_context(request, board_id, "gantt")
     today = timezone.localdate()
     zooms = {"day": 34, "week": 16, "month": 6}
     zoom = request.GET.get("z") if request.GET.get("z") in zooms else "week"
     col_w = zooms[zoom]
-    cards = list(board_cards(board).order_by("list__position", "position"))
-    deps = list(Dependency.objects.filter(card__in=cards).values_list("card_id", "depends_on_id", "lag_days"))
-    info = analyse(cards, deps)
+    show_items = request.GET.get("items") == "1"
+    cards = list(board_cards(board).prefetch_related("children").order_by("list__position", "position"))
+    ids = {c.pk for c in cards}
+    # parts that live on other boards still show under their parent here
+    extra = list(Card.objects.filter(parent__in=cards, is_archived=False, is_template=False).exclude(pk__in=ids)
+                 .select_related("list__board").prefetch_related("members", "checklists__items", "children"))
+    allc = cards + extra
+    all_ids = {c.pk for c in allc}
+    deps = list(Dependency.objects.filter(card__in=allc).values_list("card_id", "depends_on_id", "lag_days"))
+    info = analyse(allc, deps)
+    kids = {}
+    for c in allc:
+        if c.parent_id in all_ids and c.parent_id != c.pk:
+            kids.setdefault(c.parent_id, []).append(c)
+
+    def whole_span(c, seen=()):
+        """Own dates plus every part's — the summary bar of a card with parts."""
+        out = [(info[c.pk]["start"], info[c.pk]["end"])] if c.pk in info else []
+        for k in kids.get(c.pk, []):
+            if k.pk not in seen:
+                sp = whole_span(k, seen + (c.pk,))
+                if sp:
+                    out.append(sp)
+        return (min(s for s, _ in out), max(e for _, e in out)) if out else None
+
     dated = [v for v in info.values()]
     if dated:
         lo = min(v["start"] for v in dated) - timedelta(days=3)
@@ -399,35 +421,55 @@ def board_gantt(request, board_id):
     days = [lo + timedelta(days=i) for i in range(span_days)]
     ROW = 36
 
-    rows, y, pos = [], 0, {}
+    rows, pos = [], {}
+    y = 0
+
+    def add_card(c, level, seen):
+        nonlocal y
+        i = info.get(c.pk)
+        children = sorted(kids.get(c.pk, []), key=lambda k: (info[k.pk]["start"] if k.pk in info else date.max, k.position))
+        summary = whole_span(c) if children else None
+        start, end = (summary if summary else ((i["start"], i["end"]) if i else (None, None)))
+        row = {"card": c, "y": y, "pct": c.work_pct(), "owners": list(c.members.all())[:3], "level": level,
+               "start": start, "end": end, "days": ((end - start).days + 1) if start else None,
+               "critical": bool(i and i["critical"]) and not children, "late": bool(i and i["late"]),
+               "float": i["float"] if i else None, "milestone": c.is_milestone and not children,
+               "summary": bool(children), "other_board": c.list.board_id != board.pk}
+        if start:
+            x = (start - lo).days * col_w
+            w = ((end - start).days + 1) * col_w
+            row.update(x=x, w=w, visible=end >= lo and start <= days[-1])
+            if i and not children:
+                pos[c.pk] = (x, w, y + ROW // 2)
+        rows.append(row)
+        y += ROW
+        kid_ids = {k.pk for k in children}
+        if show_items:
+            for cl in c.checklists.all():
+                for it in cl.items.all():
+                    if it.linked_card_id in kid_ids:
+                        continue
+                    irow = {"item": it, "card_id": c.pk, "y": y, "level": level + 1, "pct": round(100 * it.fraction),
+                            "owners": [it.assignee] if it.assignee_id else [], "end": timezone.localdate(it.due_at) if it.due_at else None}
+                    if irow["end"] and lo <= irow["end"] <= days[-1]:
+                        irow["x"] = (irow["end"] - lo).days * col_w
+                    rows.append(irow)
+                    y += ROW
+        for k in children:
+            if k.pk not in seen:
+                add_card(k, level + 1, seen | {c.pk})
+
     by_list = OrderedDict()
     for c in cards:
+        if c.parent_id in all_ids:
+            continue                      # shown under its parent
         by_list.setdefault(c.list, []).append(c)
     for lst, items in by_list.items():
         rows.append({"group": lst.title, "y": y})
         y += ROW
-        items.sort(key=lambda c: (info[c.pk]["start"] if c.pk in info else date.max, c.position))
+        items.sort(key=lambda c: ((whole_span(c) or (date.max,))[0], c.position))
         for c in items:
-            i = info.get(c.pk)
-            total = done = 0
-            for cl in c.checklists.all():
-                for it in cl.items.all():
-                    total += 1
-                    done += it.is_done
-            prog = c.progress() if hasattr(c, "progress") else None
-            pct = 100 if c.is_complete else (prog["pct"] if prog else (round(100 * done / total) if total else 0))
-            row = {"card": c, "y": y, "pct": pct, "owners": list(c.members.all())[:3],
-                   "start": i["start"] if i else None, "end": i["end"] if i else None,
-                   "days": ((i["end"] - i["start"]).days + 1) if i else None,
-                   "critical": bool(i and i["critical"]), "late": bool(i and i["late"]),
-                   "float": i["float"] if i else None, "milestone": c.is_milestone}
-            if i:
-                x = (i["start"] - lo).days * col_w
-                w = ((i["end"] - i["start"]).days + 1) * col_w
-                row.update(x=x, w=w, visible=i["end"] >= lo and i["start"] <= days[-1])
-                pos[c.pk] = (x, w, y + ROW // 2)
-            rows.append(row)
-            y += ROW
+            add_card(c, 0, frozenset())
     arrows = []
     for cid, pid, lag in deps:
         if cid in pos and pid in pos:
@@ -454,7 +496,7 @@ def board_gantt(request, board_id):
             m["label"] = ""
         elif w < 80:
             m["label"] = date(y_, mo, 1).strftime("%b")
-    crit_days = sum(r["days"] or 0 for r in rows if r.get("critical"))
+    crit_days = sum(r.get("days") or 0 for r in rows if r.get("critical"))
     ctx.update({
         "zoom": zoom, "zooms": [("day", "Days"), ("week", "Weeks"), ("month", "Months")], "col_w": col_w,
         "days": days, "months": months, "rows": rows, "arrows": arrows, "row_h": ROW,
@@ -464,6 +506,7 @@ def board_gantt(request, board_id):
         "late_count": sum(1 for r in rows if r.get("late")),
         "project_end": max((v["end"] for v in dated), default=None),
         "undated": sum(1 for r in rows if "card" in r and not r["start"]),
+        "show_items": show_items, "q_items": "&items=1" if show_items else "",
         "dep_count": len(deps), "crit_days": crit_days,
         "prev": (lo - timedelta(days=28 if zoom != "month" else 90)).isoformat(),
         "next": (lo + timedelta(days=28 if zoom != "month" else 90)).isoformat(),

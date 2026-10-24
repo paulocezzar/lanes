@@ -103,6 +103,7 @@ class Board(models.Model):
     show_complete = models.BooleanField(default=True)    # ✓ complete status on card fronts
     covers_enabled = models.BooleanField(default=True)   # show image/colour covers on card fronts
     complete_to_done = models.BooleanField(default=True)  # completing a card moves it to the Done list (and back)
+    progress_to_doing = models.BooleanField(default=True)  # first progress on a card moves it to the Doing list
     # project management
     RAG = [("auto", "Automatic"), ("green", "On track"), ("amber", "At risk"), ("red", "Off track")]
     is_project = models.BooleanField(default=False)      # shows on the Portfolio page
@@ -324,6 +325,29 @@ class Card(models.Model):
     def checklist_counts(self):
         items = [i for cl in self.checklists.all() for i in cl.items.all()]
         return sum(1 for i in items if i.is_done), len(items)
+
+    def work_fraction(self, _seen=None):
+        """How much of the work is done, 0–1 — the one rule used on the card, its tile, the Gantt and Portfolio.
+        Every checklist item and every part counts the same; an item with an amount counts by how much of it is
+        done (150 of 430 = 0.35); a part counts by its own progress. Items that became parts count once."""
+        if self.is_complete:
+            return 1.0
+        seen = (_seen or set()) | {self.pk}
+        kids = [c for c in self.children.all() if not c.is_archived and c.pk not in seen]
+        kid_ids = {c.pk for c in kids}
+        units = [i.fraction for cl in self.checklists.all() for i in cl.items.all() if i.linked_card_id not in kid_ids]
+        units += [c.work_fraction(seen) for c in kids]
+        return sum(units) / len(units) if units else 0.0
+
+    def work_pct(self):
+        return round(100 * self.work_fraction())
+
+    def tile_progress(self):
+        """% for the bar on the card front — shown when the card counts amounts or has parts."""
+        has_qty = any(i.has_qty for cl in self.checklists.all() for i in cl.items.all())
+        if not has_qty and not any(not c.is_archived for c in self.children.all()):
+            return None
+        return self.work_pct()
 
 
 class Checklist(models.Model):

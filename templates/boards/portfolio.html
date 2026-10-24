@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Portfolio · Lanes{% endblock %}
+{% block scripts %}<script>
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-pf-open]'); if (!b) return;
+  const row = document.querySelector(`[data-pf-detail="${b.dataset.pfOpen}"]`); if (!row) return;
+  row.hidden = !row.hidden; b.textContent = row.hidden ? '▸' : '▾'; b.setAttribute('aria-expanded', String(!row.hidden));
+});
+</script>{% endblock %}
 {% block content %}
 <main class="home pf">
   <header class="pf-head">
@@ -21,23 +28,41 @@
     <a href="?{% if dept %}dept={{ dept }}&{% endif %}rag=amber" class="pf-count amber{% if rag == 'amber' %} on{% endif %}"><b>{{ counts.amber }}</b> at risk</a>
     <a href="?{% if dept %}dept={{ dept }}&{% endif %}rag=red" class="pf-count red{% if rag == 'red' %} on{% endif %}"><b>{{ counts.red }}</b> off track</a>
   </div>
+  {% if tl %}
+  <section class="pf-tl">
+    <div class="pf-tl-head"><span></span><div class="pf-tl-scale">{% for m in tl.months %}<i style="left: {{ m.left }}%">{{ m.label }}</i>{% endfor %}</div></div>
+    {% for r in rows %}<div class="pf-tl-row"><a href="{% url 'board_gantt' r.board.pk %}" title="Open its Gantt">{{ r.board.title }}</a>
+      <div class="pf-tl-track">{% if r.tl %}<span class="pf-tl-bar rag-bg-{{ r.rag }}" style="left: {{ r.tl.left }}%; width: {{ r.tl.width }}%" title="{{ r.start|date:'j M' }} → {{ r.finish|date:'j M Y' }} · {{ r.pct }}% done"><i style="width: {{ r.pct }}%"></i></span>{% else %}<small class="muted">no dates yet</small>{% endif %}
+        <b class="pf-tl-today" style="left: {{ tl.today }}%"></b></div></div>{% endfor %}
+  </section>
+  {% endif %}
   {% if rows %}
   <div class="pf-table-wrap">
   <table class="pf-table">
     <thead><tr><th>Project</th><th>Status</th><th>Progress</th><th>Next milestone</th><th class="num">Overdue</th><th>Finishes</th><th>Budget</th><th></th></tr></thead>
     <tbody>
     {% for r in rows %}<tr>
-      <td><a class="pf-name" href="{% url 'board' r.board.pk %}">{{ r.board.title }}</a><small>{{ r.board.workspace.name }}{% if r.board.project_owner %} · {{ r.board.project_owner.display_name }}{% endif %}</small></td>
+      <td>{% if r.items %}<button type="button" class="pf-open" data-pf-open="{{ r.board.pk }}" aria-expanded="false" title="Show its cards">▸</button>{% endif %}<a class="pf-name" href="{% url 'board' r.board.pk %}">{{ r.board.title }}</a><small>{{ r.board.workspace.name }}{% if r.board.project_owner %} · {{ r.board.project_owner.display_name }}{% endif %}</small></td>
       <td><span class="rag rag-{{ r.rag }}">{{ r.rag_label }}</span>{% if r.auto %}<small class="muted" title="Worked out automatically">auto</small>{% endif %}
         {% if r.board.status_note %}<div class="pf-note">“{{ r.board.status_note }}”</div>{% endif %}
         {% if r.reasons %}<div class="pf-why">{{ r.reasons|join:" · " }}</div>{% endif %}</td>
-      <td><div class="pf-bar"><i style="width: {{ r.pct }}%"></i></div><small>{{ r.done }} of {{ r.total }} cards · {{ r.pct }}%</small></td>
+      <td><div class="pf-bar"><i style="width: {{ r.pct }}%"></i></div><small title="Counts checklist items, amounts and parts">{{ r.pct }}% of the work · {{ r.done }} of {{ r.total }} cards done</small></td>
       <td>{% if r.next_ms %}◆ {{ r.next_ms.title }}<small>{{ r.next_ms.due_at|date:"D j M" }}</small>{% else %}<span class="muted">—</span>{% endif %}{% if r.late_ms %}<div class="pf-late">◆ {{ r.late_ms|length }} late</div>{% endif %}</td>
       <td class="num{% if r.overdue %} pf-late{% endif %}">{{ r.overdue|length }}</td>
       <td>{{ r.finish|date:"j M Y"|default:"—" }}</td>
       <td>{% if r.budget %}<div class="pf-bar money{% if r.budget_pct >= 100 %} over{% elif r.budget_pct >= 90 %} warn{% endif %}"><i style="width: {% if r.budget_pct > 100 %}100{% else %}{{ r.budget_pct }}{% endif %}%"></i></div><small>£{{ r.spent|floatformat:"0g" }} of £{{ r.budget|floatformat:"0g" }} · {{ r.budget_pct }}%</small>{% elif r.spent %}<small>£{{ r.spent|floatformat:"0g" }} spent · no budget set</small>{% else %}<span class="muted">—</span>{% endif %}</td>
       <td class="pf-links"><a href="{% url 'status_report' r.board.pk %}">Report</a> · <a href="{% url 'board_gantt' r.board.pk %}">Gantt</a></td>
-    </tr>{% endfor %}
+    </tr>
+    {% if r.items %}<tr class="pf-detail" data-pf-detail="{{ r.board.pk }}" hidden><td colspan="8">
+      <ul class="pf-cards">{% for it in r.items|slice:":12" %}<li class="{% if it.card.is_complete %}done{% endif %}">
+        <a href="{% url 'board' r.board.pk %}?card={{ it.card.pk }}">{{ it.card.title }}</a>
+        <span class="pf-bar sm"><i style="width: {{ it.pct }}%"></i></span><b>{{ it.pct }}%</b>
+        <span class="muted">{% if it.card.is_complete %}done{% elif it.stage %}next: {{ it.stage }}{% endif %}</span>
+        {% if it.end %}<small>{{ it.end|date:"j M" }}</small>{% endif %}
+        {% if it.risk %}<small class="pf-late" title="{{ it.risk }}">⚠ {{ it.risk }}</small>{% endif %}
+      </li>{% endfor %}</ul>
+      {% if r.items|length > 12 %}<p class="small"><a href="{% url 'board' r.board.pk %}">{{ r.items|length|add:"-12" }} more on the board →</a></p>{% endif %}
+    </td></tr>{% endif %}{% endfor %}
     </tbody>
   </table>
   </div>

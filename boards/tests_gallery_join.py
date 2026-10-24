@@ -358,3 +358,72 @@ class ItemMoveTests(Base):
         self.assertEqual(list(cl.items.values_list("text", flat=True)), ["x", "z", "y"])
         self.client.post(f"/api/items/{x.pk}/", json.dumps({"move": {"checklist_id": cl2.pk}}), content_type="application/json")
         self.assertEqual(list(cl2.items.values_list("text", flat=True)), ["x"])
+
+
+class AutoMoveTests(Base):
+    def setUp(self):
+        super().setUp()
+        from .models import Checklist
+        self.b = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.todo = self.b.lists.create(title="To do", position=1)
+        self.doing = self.b.lists.create(title="Doing", position=2)
+        self.done = self.b.lists.create(title="Done", position=3)
+        self.card = self.todo.cards.create(title="Cakes", position=1)
+        self.cl = Checklist.objects.create(card=self.card, title="Needs", position=1)
+
+    def item(self, pk, **d):
+        import json
+        return self.client.post(f"/api/items/{pk}/", json.dumps(d), content_type="application/json")
+
+    def test_progress_moves_to_doing_then_all_done_completes_into_done(self):
+        from .models import ChecklistItem
+        a = ChecklistItem.objects.create(checklist=self.cl, text="Bake", position=1, qty_target=430)
+        b = ChecklistItem.objects.create(checklist=self.cl, text="Tins", position=2)
+        self.item(a.pk, qty_add=150)
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.list_id, self.doing.pk)
+        self.assertEqual(self.card.work_pct(), round(100 * (150 / 430) / 2))
+        self.item(a.pk, qty_add=280)
+        self.item(b.pk, is_done=True)
+        self.card.refresh_from_db()
+        self.assertTrue(self.card.is_complete)
+        self.assertEqual(self.card.list_id, self.done.pk)
+        self.item(b.pk, is_done=False)
+        self.card.refresh_from_db()
+        self.assertFalse(self.card.is_complete)
+
+    def test_parts_done_finish_the_parent(self):
+        import json
+        p1 = self.todo.cards.create(title="Soak", position=2, parent=self.card)
+        p2 = self.todo.cards.create(title="Bake", position=3, parent=self.card)
+        for p in (p1, p2):
+            self.client.post(f"/api/cards/{p.pk}/update/", json.dumps({"is_complete": True}), content_type="application/json")
+        self.card.refresh_from_db()
+        self.assertTrue(self.card.is_complete)
+        self.assertEqual(self.card.list_id, self.done.pk)
+
+    def test_doing_switched_off(self):
+        from .models import ChecklistItem
+        self.b.progress_to_doing = False
+        self.b.save()
+        a = ChecklistItem.objects.create(checklist=self.cl, text="Bake", position=1)
+        ChecklistItem.objects.create(checklist=self.cl, text="Tins", position=2)
+        self.item(a.pk, is_done=True)
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.list_id, self.todo.pk)
+
+
+class PortfolioWorkTests(Base):
+    def test_new_project_not_stale_and_progress_counts_work(self):
+        from .models import Checklist, ChecklistItem
+        from .portfolio import health
+        b = Board.objects.create(workspace=self.ws, title="P", is_project=True)
+        lst = b.lists.create(title="To do", position=1)
+        c = lst.cards.create(title="Cakes", position=1)
+        ChecklistItem.objects.create(checklist=Checklist.objects.create(card=c, title="N"), text="Bake", qty_target=100, qty_done=50)
+        lst.cards.create(title="Part", position=2, parent=c)
+        h = health(b)
+        self.assertNotIn("no status update for 2 weeks", h["reasons"])
+        self.assertEqual(h["pct"], 25)     # one card: item 50% + part 0% → 25%
+        self.assertEqual(len(h["items"]), 1)

@@ -544,6 +544,8 @@ def item_update(request, item_id):
     if request.data.get("delete"):
         log(card.list.board, request.user, "item_deleted", card=card, text=item.text, checklist=item.checklist.title)
         item.delete()
+        from .features import settle
+        settle(Card.objects.get(pk=card.pk), request.user)
         return card_response(card.pk, request)
     if "move" in request.data:
         _move_item(item, card, request.data["move"] or {})
@@ -610,6 +612,13 @@ def item_update(request, item_id):
         job = production.on_item_toggle(item, item.is_done)
     if request.data.get("is_done") and automation.checklists_all_done(card):
         automation.fire(card, Rule.CHECKLIST_DONE, actor=request.user)
+    if "is_done" in request.data or qty_changed:
+        from .features import settle, start_doing
+        progressed = item.is_done or (item.has_qty and item.qty_done > 0)
+        card.refresh_from_db()
+        if progressed and not card.is_complete:
+            start_doing(card, request.user)
+        settle(card, request.user)
     data = card_response(card.pk, request)
     if job:
         data["refresh_board"] = True
@@ -790,7 +799,7 @@ def board_update(request, board_id):
         board.voting = bool(d["voting"])
     if "card_aging" in d:
         board.card_aging = bool(d["card_aging"])
-    for flag in ("show_complete", "covers_enabled", "complete_to_done"):
+    for flag in ("show_complete", "covers_enabled", "complete_to_done", "progress_to_doing"):
         if flag in d:
             setattr(board, flag, bool(d[flag]))
     if d.get("comment_permission") in dict(Board.COMMENTS):

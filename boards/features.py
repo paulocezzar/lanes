@@ -100,13 +100,83 @@ def after_completion_change(card, user=None):
             src = item.checklist.card
             log(src.list.board, user, "item_done" if card.is_complete else "item_undone", card=src, text=item.text)
     parent = card.parent
-    if parent and card.is_complete and not parent.is_complete:
-        kids = [c for c in parent.children.all() if not c.is_archived]
-        if kids and all(c.is_complete for c in kids):
-            log(parent.list.board, None, "children_done", card=parent, n=len(kids))
-            for u in parent.members.all():
-                notify.send(u, "watched", card=parent, text=f"every part of {parent.title} is done",
-                            dedupe_key=f"kidsdone:{parent.pk}:{len(kids)}")
+    if parent and not parent.is_archived:
+        settle(Card.objects.get(pk=parent.pk), user)
+        parent.refresh_from_db()
+        if card.is_complete and not parent.is_complete:
+            kids = [c for c in parent.children.all() if not c.is_archived]
+            if kids and all(c.is_complete for c in kids):
+                log(parent.list.board, None, "children_done", card=parent, n=len(kids))
+                for u in parent.members.all():
+                    notify.send(u, "watched", card=parent, text=f"every part of {parent.title} is done",
+                                dedupe_key=f"kidsdone:{parent.pk}:{len(kids)}")
+
+
+# ---------- work done → card done, first progress → Doing ----------
+
+DOING_WORDS = ("doing", "in progress", "progress", "underway", "under way", "wip", "started", "working")
+
+
+def all_work_done(card):
+    """True when the card has work in it (items or parts) and all of it is done."""
+    items = list(ChecklistItem.objects.filter(checklist__card=card))
+    kids = list(card.children.filter(is_archived=False))
+    if not items and not kids:
+        return False
+    return all(i.is_done or (i.has_qty and i.qty_done >= i.qty_target) for i in items) and all(c.is_complete for c in kids)
+
+
+def settle(card, user=None):
+    """After work on a card changes: everything done → complete it (and so move it to Done);
+    something un-done on a card that was complete → open it again. Respects sign-offs and templates."""
+    if card.is_template or card.is_archived:
+        return False
+    done = all_work_done(card)
+    if done and not card.is_complete:
+        if blocked_message(card):
+            return False
+        card.is_complete = True
+        card.save(update_fields=["is_complete", "updated_at"])
+        log(card.list.board, user, "card_completed", card=card)
+        after_completion_change(card, user)
+        move_to_done(card, user)
+        from . import automation
+        from .models import Rule
+        automation.fire(card, Rule.COMPLETED, actor=user)
+        return True
+    if card.is_complete and not done and (ChecklistItem.objects.filter(checklist__card=card).exists()
+                                          or card.children.filter(is_archived=False).exists()):
+        card.is_complete = False
+        card.save(update_fields=["is_complete", "updated_at"])
+        log(card.list.board, user, "card_reopened", card=card)
+        after_completion_change(card, user)
+        return True
+    return False
+
+
+def doing_list(board):
+    for lst in board.lists.filter(is_archived=False).order_by("position"):
+        t = lst.title.lower()
+        if any(w in t for w in DOING_WORDS) and not is_done_list(lst):
+            return lst
+    return None
+
+
+def start_doing(card, user=None):
+    """First progress on a card waiting to start: move it to the board's Doing list (if the board does that)."""
+    from . import positions
+    board = card.list.board
+    if not board.progress_to_doing or card.is_complete or card.is_template or is_done_list(card.list):
+        return None
+    target = doing_list(board)
+    if not target or target.pk == card.list_id or card.list.position > target.position:
+        return None
+    old = card.list
+    card.list = target
+    card.position = positions.end_position(target.cards.filter(is_archived=False))
+    card.save(update_fields=["list", "position", "updated_at"])
+    log(board, user, "card_moved", card=card, **{"from": old.title, "to": target.title})
+    return target
 
 
 # ---------- checklist item → card ----------

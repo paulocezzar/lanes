@@ -20,9 +20,11 @@ def portfolio_page(request):
     if rag in ("green", "amber", "red"):
         rows = [r for r in rows if r["rag"] == rag]
     counts = {k: sum(1 for r in rows if r["rag"] == k) for k in ("green", "amber", "red")}
+    from .portfolio import timeline
+    tl = timeline(rows, timezone.localdate())
     depts = Workspace.objects.filter(boards__in=projects_for(request.user)).distinct().order_by("name")
     return render(request, "boards/portfolio.html", {
-        "rows": rows, "counts": counts, "depts": depts, "dept": dept, "rag": rag, "now": timezone.now(),
+        "rows": rows, "counts": counts, "tl": tl, "depts": depts, "dept": dept, "rag": rag, "now": timezone.now(),
         "editable": {b.pk for b in boards if permissions.can_edit(b, request.user)},
     })
 
