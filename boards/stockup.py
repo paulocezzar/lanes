@@ -495,7 +495,8 @@ def refresh_plan_board(board, user=None, detail=None):
         sell_end = _parse(detail["plan"].get("end"))
         # A product's bar is its SELLING period — launch to the end of the plan — not a deadline
         # that passes on launch day. (Boards made before this had launch as a milestone due date.)
-        if new or card.is_milestone or not card.due_at:
+        untouched = card.due_at is None or (launch and card.due_at == _due(launch) and not card.start_date)
+        if new or untouched:      # never overwrite dates someone set by hand
             Card.objects.filter(pk=card.pk).update(start_date=launch, due_at=_due(sell_end or launch),
                                                    is_milestone=False)
         desc = f"{fmt(p['quantity'], '')} planned{(' · ' + p['pack_size']) if p.get('pack_size') else ''}" \

@@ -199,3 +199,19 @@ class StockUpLinkTests(TestCase):
         self.client.force_login(cook)
         self.client.post(f"/departments/{other.pk}/settings/", {"action": "stockup", "stockup_department": "Butchery"})
         self.assertEqual(self.client.get("/stockup/").status_code, 200)
+
+
+    def test_refresh_keeps_dates_set_by_hand(self):
+        from datetime import datetime
+        from django.utils import timezone
+        from .stockup import build_plan_board, refresh_plan_board
+        self.fake.plan["end"] = (DAY + timedelta(days=60)).isoformat()
+        board = build_plan_board(7, self.boss, self.ws)
+        card = Card.objects.get(list__board=board, stockup__kind="product")
+        mine = timezone.make_aware(datetime(2026, 11, 30, 17))
+        Card.objects.filter(pk=card.pk).update(due_at=mine)
+        refresh_plan_board(board)
+        card.refresh_from_db()
+        self.assertEqual(card.due_at, mine)
+        r = self.post(f"/api/cards/{card.pk}/stockup/", {"refresh": True})
+        self.assertEqual(r.status_code, 200)

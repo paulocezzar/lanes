@@ -162,7 +162,10 @@ def card_link(request, card_id):
             stockup.unlink_card(card, request.user)
         elif d.get("refresh"):
             link = getattr(card, "stockup", None)
-            if link and link.run_id:
+            board = card.list.board
+            if link and link.kind != link.RUN and board.stockup_plan_id:
+                stockup.refresh_plan_board(board, request.user)     # products/components: re-read the plan
+            elif link and link.run_id:
                 stockup.sync(run_ids=[link.run_id], job_ids=[link.job_id] if link.job_id else [])
         elif d.get("qty") and hasattr(card, "stockup") and not d.get("plan_id"):
             stockup.change_run(card.stockup, request.user, day=False, qty=Decimal(str(d["qty"])))
