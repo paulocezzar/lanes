@@ -262,6 +262,8 @@ def settings_page(request):
         ("create_boards", "Who can create boards", CompanySettings.CREATE_CHOICES, ""),
         ("private_boards", "Who can make a board private (hidden from its department)", CompanySettings.PRIVATE_CHOICES,
          "Company admins can always see every board."),
+        ("archive_boards", "Who can close (archive) whole boards", CompanySettings.ARCHIVE_CHOICES,
+         "Closed boards can be reopened from the Boards page by the same people."),
         ("microsoft_login", "Sign in with Microsoft", CompanySettings.MICROSOFT_CHOICES,
          "Microsoft handles its own two-step checks, so Lanes doesn't ask again. “Required” means leavers lose access "
          "as soon as IT disables their Microsoft account."),
@@ -293,6 +295,13 @@ def settings_page(request):
             if value in dict(choices) and value != current:
                 setattr(cs, name, value)
                 changes.append(f"{label.split(' (')[0].lower()} → {dict(choices)[value].split(' —')[0].lower()}")
+        if "allowed_domains" in request.POST:
+            raw = request.POST.get("allowed_domains", "")
+            clean = ", ".join(dict.fromkeys(d.strip().lower().lstrip("@") for d in raw.replace(";", ",").replace(" ", ",").split(",")
+                                            if d.strip() and "." in d))[:300]
+            if clean != cs.allowed_domains:
+                cs.allowed_domains = clean
+                changes.append(f"company email addresses → {clean or 'any'}")
         if changes:
             cs.updated_by = request.user
             cs.save()

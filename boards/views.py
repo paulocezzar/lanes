@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import automation, permissions, positions
-from .models import Board, BoardMember, ChecklistItem, Label, List, Workspace
+from .models import Board, BoardMember, ChecklistItem, JoinRequest, Label, List, Workspace
 from .services import board_people, cards_qs, lists_with_entries, log, render_modal
 from .board_context import board_context
 
@@ -56,6 +56,10 @@ def home(request):
         "backgrounds": Board.BACKGROUNDS,
         "create_workspaces": [ws for ws in workspaces if permissions.can_create_board(ws, user)],
         "templates": templates,
+        "other_departments": [] if user.is_superuser or user.is_guest else
+        Workspace.objects.exclude(pk__in=[w.pk for w in workspaces]).order_by("name"),
+        "asked_departments": set(JoinRequest.objects.filter(user=user, status="pending", workspace__isnull=False)
+                                 .values_list("workspace_id", flat=True)),
     })
 
 
@@ -147,6 +151,9 @@ def board_restore(request, board_id):
     board = get_object_or_404(Board, pk=board_id, is_archived=True)
     if not permissions.can_manage(board, request.user):
         raise Http404
+    if not permissions.can_archive_board(board, request.user):
+        messages.error(request, f"Only {permissions.who_can('archive_boards')} can reopen closed boards.")
+        return redirect("home")
     board.is_archived = False
     board.save(update_fields=["is_archived"])
     from . import audit

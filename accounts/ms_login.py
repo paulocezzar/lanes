@@ -107,7 +107,8 @@ def callback(request):
     from boards.models import CompanySettings
     if user is None:
         email = str(c.get("email") or c.get("preferred_username") or "").strip().lower()
-        if not CompanySettings.get().microsoft_auto_create or "@" not in email:
+        from boards.permissions import email_allowed
+        if not CompanySettings.get().microsoft_auto_create or "@" not in email or not email_allowed(email):
             return _fail(request, f"There's no Lanes account for {email or 'that Microsoft account'} yet. "
                                   "Ask your manager to add you.")
         first = str(c.get("given_name") or "").strip() or (str(c.get("name") or "").split(" ")[0])

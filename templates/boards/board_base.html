@@ -242,7 +242,7 @@ Setup:
     <button class="mitem" data-expand-all>{% include "boards/_icon.html" with i="expand" %}<span>Expand all lists</span></button>{% endif %}
     <button class="mitem" data-goto="copy" data-title="Copy board">{% include "boards/_icon.html" with i="copy" %}<span>Copy board</span></button>
     {% if me %}<button class="mitem" data-leave-board>{% include "boards/_icon.html" with i="leave" %}<span>Leave board</span></button>{% endif %}
-    {% if can_manage %}<hr><button class="mitem" data-archive-board>{% include "boards/_icon.html" with i="minus" %}<span>Close board</span></button>{% endif %}
+    {% if can_archive %}<hr><button class="mitem" data-archive-board>{% include "boards/_icon.html" with i="minus" %}<span>Close board</span></button>{% endif %}
     <p class="muted small mlist-foot">Made by {{ board.created_by.display_name|default:"—" }} · {{ board.created_at|date:"j M Y" }} · {{ board.workspace.name }}</p>
   </nav>
   <div class="drawer-pane" data-pane="about" hidden>
@@ -418,7 +418,7 @@ Setup:
     <p class="muted small">Comments, attachments and member emails are never shown publicly. Turning it off and on again makes a new link, so old links stop working.</p>
     <h4 class="section-label">Template</h4>
     <label class="check-inline dark"><input type="checkbox" data-board-template {% if board.is_template %}checked{% endif %}> Use this board as a template</label>
-    <p class="muted small">Templates appear on everyone's Boards page so they can start new boards from them.</p>
+    <p class="muted small">Templates appear on everyone's Boards page and in the template gallery so they can start new boards from them.</p>
   </div>
   <div class="drawer-pane" data-pane="background" hidden>
     <p class="muted small">Pick a background for everyone on this board.</p>

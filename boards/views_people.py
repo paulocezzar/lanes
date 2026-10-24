@@ -83,6 +83,9 @@ def workspace_member_add(request, workspace_id):
         return back
 
     person = User.objects.filter(email__iexact=email).first()
+    if person is None and not permissions.email_allowed(email):
+        messages.error(request, permissions.domain_message())
+        return back
     if person is None:
         if not first:
             messages.error(request, f"No account for {email} yet — add their first name and it will be created.")

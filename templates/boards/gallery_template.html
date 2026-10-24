@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ t.title }} · Templates · Lanes{% endblock %}
+{% block content %}
+<main class="home gallery-page one">
+  <nav class="gal-crumbs"><a href="{% url 'gallery' %}">Templates</a> / <a href="{% url 'gallery' %}?cat={{ t.cat }}">{{ t.category }}</a> / <span>{{ t.title }}</span></nav>
+  <header class="gal-detail-head">
+    <span class="gal-badge bg-{{ t.bg }}" aria-hidden="true"></span>
+    <div class="gal-detail-title"><h1>{{ t.title }}</h1><p class="muted">by {{ t.by }}{% if t.extras %} · includes {{ t.extras|join:", "|lower }}{% endif %}</p></div>
+    {% if workspaces %}<button type="button" class="btn primary" data-open-use>Use template</button>{% endif %}
+  </header>
+  <div class="gal-detail">
+    <section class="gal-about">
+      {% if t.summary %}<p class="gal-lead">{{ t.summary }}</p>{% endif %}
+      {% for para in t.about %}<p>{{ para }}</p>{% endfor %}
+      {% if t.labels or t.fields %}<h3>Comes with</h3>
+        {% if t.labels %}<p class="label-row">{% for name, colour in t.labels %}<span class="label-swatch lc-{{ colour }}">{{ name }}</span>{% endfor %}</p>{% endif %}
+        {% if t.fields %}<p class="muted">Fields: {{ t.fields|join:", " }}</p>{% endif %}{% endif %}
+      <h3>Lists</h3>
+      <ol class="gal-lists">{% for l in preview %}<li><b>{{ l.title }}</b>{% with tip=l.cards|first %}{% if tip.tip and tip.desc %} — {{ tip.desc }}{% endif %}{% endwith %}</li>{% endfor %}</ol>
+    </section>
+    <form method="post" class="gal-use" data-use-form {% if not workspaces %}hidden{% endif %}>
+      {% csrf_token %}
+      <h3>Make a board from it</h3>
+      <label>Board title<input name="title" required maxlength="120" value="{{ t.title }}"></label>
+      <label>Department<select name="workspace">{% for w in workspaces %}<option value="{{ w.pk }}">{{ w.name }}</option>{% endfor %}</select></label>
+      <label>Who can see it<select name="visibility">{% for k, v in visibilities %}<option value="{{ k }}" {% if k == "workspace" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+      <label class="check-inline dark"><input type="checkbox" name="keep_cards" checked> Keep the example cards</label>
+      {% if t.has_tips %}<label class="check-inline dark"><input type="checkbox" name="keep_tips" checked> Keep {% if company %}template cards{% else %}the 💡 tip cards{% endif %}</label>{% endif %}
+      <p class="muted small">Comments, activity and members are never copied.</p>
+      <button class="btn primary block">Create board</button>
+    </form>
+    {% if not workspaces %}<p class="muted">You can't create boards in any department. Ask a department admin.</p>{% endif %}
+  </div>
+  <h3 class="gal-prev-h">Preview</h3>
+  <div class="gal-preview">
+    <div class="gal-board bg-{{ t.bg }}">
+      {% for l in preview %}
+      <div class="gal-list"><b>{{ l.title }}</b>
+        {% for c in l.cards %}<div class="gal-tile{% if c.tip %} tip{% endif %}">{% if c.labels %}<span class="gal-tile-labels">{% for x in c.labels %}<i></i>{% endfor %}</span>{% endif %}{{ c.title }}{% if c.items %}<small>☑ 0/{{ c.items|length }}</small>{% endif %}</div>{% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</main>
+<script>
+document.querySelector('[data-open-use]')?.addEventListener('click', () => {
+  const f = document.querySelector('[data-use-form]'); f.scrollIntoView({ behavior: 'smooth', block: 'center' }); f.title.focus(); f.title.select();
+});
+</script>
+{% endblock %}

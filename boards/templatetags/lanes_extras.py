@@ -153,3 +153,11 @@ def at(seq, i):
         return seq[i]
     except (IndexError, KeyError, TypeError):
         return None
+
+
+@register.filter
+def get_item(mapping, key):
+    try:
+        return mapping.get(key, "")
+    except AttributeError:
+        return ""

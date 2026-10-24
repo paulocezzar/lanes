@@ -20,7 +20,12 @@ VIEW_TABS = [
 
 def board_context(request, board_id, view):
     board = get_object_or_404(Board.objects.select_related("workspace"), pk=board_id, is_archived=False)
-    permissions.require(permissions.can_view, board, request.user)
+    if not permissions.can_view(board, request.user):
+        if getattr(request.user, "is_guest", False):
+            from django.http import Http404
+            raise Http404                      # people outside the company don't learn which boards exist
+        from .views_join import NoAccess
+        raise NoAccess(board)              # staff get the "This board is private — Ask to join" page
     recent = list(request.user.recent_boards or [])
     if recent[:1] != [board.pk]:
         request.user.recent_boards = [board.pk] + [b for b in recent if b != board.pk][:7]
@@ -52,6 +57,7 @@ def board_context(request, board_id, view):
         "can_public": permissions.can_public_link(board, request.user),
         "public_off": permissions.public_links_off(),
         "can_private": permissions.can_make_private(board, request.user),
+        "can_archive": permissions.can_archive_board(board, request.user),
         "can_guests": permissions.can_invite_guests(board, request.user),
         "watching_board": board.watches.filter(user=request.user, card__isnull=True).exists(),
     }

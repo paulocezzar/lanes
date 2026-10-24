@@ -53,6 +53,8 @@ def notification_open(request, pk):
         return redirect(f"{reverse('board', args=[n.card.list.board_id])}?card={n.card_id}")
     if n.board_id:
         return redirect("board", board_id=n.board_id)
+    if n.kind == "join":
+        return redirect("join_requests")
     if n.kind == "system" and request.user.is_superuser:
         return redirect("company_health")
     return redirect("notifications")

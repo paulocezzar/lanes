@@ -26,9 +26,9 @@
   </section>
   {% endif %}
 
-  {% if templates %}
   <section class="home-section">
-    <h2>Templates</h2>
+    <div class="row space"><h2>Templates</h2><a class="btn light sm" href="{% url 'gallery' %}">Browse the template gallery →</a></div>
+  {% if templates %}
     <div class="tile-grid">
       {% for b in templates %}
       <div class="board-tile tpl bg-{{ b.background }}">
@@ -40,8 +40,9 @@
       </div>
       {% endfor %}
     </div>
-  </section>
+  {% else %}<p class="muted">Start a board from a ready-made layout — projects, requests, events, onboarding and more.</p>
   {% endif %}
+  </section>
 
   <div class="home-tools">
     <input type="search" class="board-filter" placeholder="Find a board…" data-board-filter aria-label="Find a board">
@@ -111,6 +112,19 @@
     </div>
   </section>
   {% endif %}
+
+  {% if other_departments %}
+  <section class="home-section">
+    <h2>Other departments</h2>
+    <p class="muted small">You're not in these. Ask to join and their admins will be notified.</p>
+    <div class="join-dept">
+      {% for ws in other_departments %}
+        {% if ws.pk in asked_departments %}<span class="btn ghost sm" aria-disabled="true">{{ ws.name }} · asked ✓</span>
+        {% else %}<form method="post" action="{% url 'join_request_create' %}">{% csrf_token %}<input type="hidden" name="workspace" value="{{ ws.pk }}"><button class="btn light sm">{{ ws.name }} · Ask to join</button></form>{% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 </main>
 
 <dialog id="use-template" class="dialog">
@@ -144,7 +158,7 @@
       </select>
     </label>
     <div class="dialog-actions">
-      <button type="button" class="link-btn" data-open-import>Moving from Trello? Import a board</button>
+      <span class="dlg-links"><a class="link-btn" href="{% url 'gallery' %}">Start from a template</a> · <button type="button" class="link-btn" data-open-import>Moving from Trello? Import a board</button></span>
       <button type="button" class="btn ghost" data-close>Cancel</button>
       <button class="btn primary">Create</button>
     </div>

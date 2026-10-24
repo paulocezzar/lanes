@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% load lanes_extras %}
+{% block title %}Join requests · Lanes{% endblock %}
+{% block content %}
+<main class="home join-page">
+  <h1 class="page-title">Join requests</h1>
+  <section class="dash-card">
+    <h3>Waiting for you {% if pending %}<span class="count">{{ pending|length }}</span>{% endif %}</h3>
+    {% for jr in pending %}
+    <div class="jr-row">
+      {% include "boards/_avatar.html" with u=jr.user %}
+      <div class="jr-main">
+        <div><b>{{ jr.user.display_name }}</b> <span class="muted small">{{ jr.user.email }}</span></div>
+        <div>wants to join {% if jr.board_id %}the board <a href="{% url 'board' jr.board_id %}"><b>{{ jr.board.title }}</b></a> <span class="muted small">· {{ jr.board.workspace.name }}</span>{% else %}the department <b>{{ jr.workspace.name }}</b>{% endif %}</div>
+        {% if jr.message %}<div class="jr-msg">“{{ jr.message }}”</div>{% endif %}
+        <small class="muted">{{ jr.created_at|ago }}</small>
+      </div>
+      <form method="post" action="{% url 'join_request_decide' jr.pk %}" class="jr-actions">{% csrf_token %}
+        <button class="btn primary sm" name="action" value="approve">Let them in</button>
+        <button class="btn ghost sm" name="action" value="decline">Decline</button>
+      </form>
+    </div>
+    {% empty %}<p class="muted">Nobody is waiting. When someone asks to join one of your boards or departments, it shows here and in your notifications.</p>{% endfor %}
+  </section>
+  {% if mine %}
+  <section class="dash-card">
+    <h3>Your requests</h3>
+    {% for jr in mine %}<div class="co-row"><span>{% if jr.board_id %}{% if jr.status == "approved" %}<a href="{% url 'board' jr.board_id %}">{{ jr.board.title }}</a>{% else %}A private board{% endif %}{% else %}{{ jr.workspace.name }}{% endif %} <small class="muted">· asked {{ jr.created_at|ago }}</small></span>
+      <b class="jr-status {{ jr.status }}">{% if jr.status == "approved" %}✓ Let in{% elif jr.status == "declined" %}Declined{% else %}Waiting{% endif %}</b></div>{% endfor %}
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

@@ -11,6 +11,7 @@ import re
 from django.contrib.auth import get_user_model
 
 from .models import Workspace, WorkspaceMember
+from .permissions import email_allowed
 
 User = get_user_model()
 MAX_ROWS = 1000
@@ -104,6 +105,8 @@ def plan(rows, create_departments):
             item["problem"] = f"No department called “{dept}” (tick “create missing departments”)"
         elif user is None and not item["first"]:
             item["problem"] = "New account needs a first name"
+        elif user is None and not email_allowed(email):
+            item["problem"] = "Not a company email address (Company → Settings → Company email addresses)"
         elif user is not None and not user.is_active:
             item["problem"] = "Account is switched off — switch it back on first"
         elif user is not None and ws and WorkspaceMember.objects.filter(workspace=ws, user=user).exists():

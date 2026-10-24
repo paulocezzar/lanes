@@ -1,0 +1,129 @@
+"""Template gallery, join requests, company email addresses and who can close boards."""
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+
+from .models import (Board, BoardMember, Card, CompanySettings, JoinRequest, List, Notification, RequestForm, Rule,
+                     Workspace, WorkspaceMember)
+
+User = get_user_model()
+
+
+class Base(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Dept")
+        self.other = Workspace.objects.create(name="Other dept")
+        self.boss = User.objects.create_superuser("boss@x.com", "pw")
+        self.admin = User.objects.create_user("a@x.com", "pw-12345", first_name="Ada")
+        self.u = User.objects.create_user("u@x.com", "pw-12345", first_name="Una")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.admin, role="admin")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.client.force_login(self.u)
+
+
+class GalleryTests(Base):
+    def test_gallery_lists_and_filters(self):
+        r = self.client.get("/templates/")
+        self.assertContains(r, "Project plan")
+        self.assertContains(r, "Requests &amp; helpdesk")
+        r = self.client.get("/templates/?cat=events")
+        self.assertContains(r, "Event planning")
+        self.assertNotContains(r, "Project plan")
+        self.assertContains(self.client.get("/templates/?q=onboard"), "New starter onboarding")
+        self.assertEqual(self.client.get("/templates/nope/").status_code, 404)
+
+    def test_use_builtin_with_and_without_tips(self):
+        self.assertContains(self.client.get("/templates/requests/"), "Make a board from it")
+        r = self.client.post("/templates/requests/", {"title": "Maintenance", "workspace": self.ws.pk,
+                                                      "visibility": "workspace", "keep_cards": "on"})
+        b = Board.objects.get(title="Maintenance")
+        self.assertRedirects(r, f"/b/{b.pk}/", fetch_redirect_response=False)
+        self.assertEqual([l.title for l in b.lists.order_by("position")], ["New", "Assigned", "In progress", "Waiting", "Done"])
+        self.assertFalse(Card.objects.filter(list__board=b, title__startswith="💡").exists())
+        f = RequestForm.objects.get(board=b)
+        self.assertTrue(any(q["to"].startswith("field:") for q in f.questions))
+        self.assertTrue(Rule.objects.filter(board=b, trigger="card_moved").exists())
+        self.client.post("/templates/project/", {"title": "P", "workspace": self.ws.pk, "keep_cards": "on", "keep_tips": "on"})
+        p = Board.objects.get(title="P")
+        self.assertTrue(p.is_project)
+        self.assertTrue(Card.objects.filter(list__board=p, title__startswith="💡").exists())
+        self.assertTrue(Card.objects.filter(list__board=p, title="Agree the budget", due_at__isnull=False).exists())
+
+    def test_company_template_and_department_check(self):
+        tpl = Board.objects.create(workspace=self.ws, title="Our launch", is_template=True)
+        BoardMember.objects.create(board=tpl, user=self.u, role="admin")
+        lst = List.objects.create(board=tpl, title="Steps")
+        Card.objects.create(list=lst, title="Normal card")
+        Card.objects.create(list=lst, title="Template card", is_template=True)
+        self.assertContains(self.client.get("/templates/?cat=company"), "Our launch")
+        self.client.post(f"/templates/b{tpl.pk}/", {"title": "Launch 2", "workspace": self.ws.pk, "keep_cards": "on"})
+        b = Board.objects.get(title="Launch 2")
+        self.assertEqual(sorted(Card.objects.filter(list__board=b).values_list("title", flat=True)), ["Normal card"])
+        self.client.post("/templates/event/", {"title": "Sneaky", "workspace": self.other.pk})
+        self.assertFalse(Board.objects.filter(title="Sneaky").exists())
+
+
+class JoinTests(Base):
+    def test_private_board_ask_and_approve(self):
+        b = Board.objects.create(workspace=self.ws, title="Secret plans", visibility="private")
+        BoardMember.objects.create(board=b, user=self.admin, role="admin")
+        r = self.client.get(f"/b/{b.pk}/")
+        self.assertEqual(r.status_code, 403)
+        self.assertContains(r, "This board is private", status_code=403)
+        self.assertNotContains(r, "Secret plans", status_code=403)
+        self.client.post("/join-requests/new/", {"board": b.pk, "message": "Covering for Sam"})
+        self.client.post("/join-requests/new/", {"board": b.pk})                 # no duplicate
+        self.assertEqual(JoinRequest.objects.count(), 1)
+        self.assertTrue(Notification.objects.filter(recipient=self.admin, kind="join").exists())
+        self.assertContains(self.client.get(f"/b/{b.pk}/"), "already asked", status_code=403)
+        jr = JoinRequest.objects.get()
+        self.assertEqual(self.client.post(f"/join-requests/{jr.pk}/", {"action": "approve"}).status_code, 404)
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get("/join-requests/"), "Covering for Sam")
+        self.client.post(f"/join-requests/{jr.pk}/", {"action": "approve"})
+        self.assertTrue(BoardMember.objects.filter(board=b, user=self.u).exists())
+        self.client.force_login(self.u)
+        self.assertEqual(self.client.get(f"/b/{b.pk}/").status_code, 200)
+        self.assertTrue(Notification.objects.filter(recipient=self.u, kind="join").exists())
+
+    def test_department_ask_and_decline(self):
+        self.assertContains(self.client.get("/"), "Other dept · Ask to join")
+        self.client.post("/join-requests/new/", {"workspace": self.other.pk})
+        self.assertContains(self.client.get("/"), "asked ✓")
+        jr = JoinRequest.objects.get()
+        self.client.force_login(self.boss)                        # no department admins → company admins decide
+        self.client.post(f"/join-requests/{jr.pk}/", {"action": "decline"})
+        self.assertEqual(JoinRequest.objects.get().status, "declined")
+        self.assertFalse(WorkspaceMember.objects.filter(workspace=self.other, user=self.u).exists())
+
+
+class SettingsTests(Base):
+    def test_company_email_only(self):
+        from . import permissions
+        cs = CompanySettings.get()
+        cs.allowed_domains = "example.co.uk"
+        cs.save()
+        self.assertTrue(permissions.email_allowed("jo@example.co.uk"))
+        self.assertFalse(permissions.email_allowed("jo@gmail.com"))
+        self.client.force_login(self.admin)
+        self.client.post(f"/departments/{self.ws.pk}/people/add/", {"email": "jo@gmail.com", "first_name": "Jo"})
+        self.assertFalse(User.objects.filter(email="jo@gmail.com").exists())
+        self.client.post(f"/departments/{self.ws.pk}/people/add/", {"email": "jo@example.co.uk", "first_name": "Jo"})
+        self.assertTrue(User.objects.filter(email="jo@example.co.uk").exists())
+        self.client.force_login(self.boss)
+        self.client.post("/company/settings/", {"allowed_domains": "@a.com; b.org", "require_two_step": "off"})
+        self.assertEqual(CompanySettings.get().allowed_domains, "a.com, b.org")
+
+    def test_who_can_close_boards(self):
+        import json
+        b = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=b, user=self.u, role="admin")
+        cs = CompanySettings.get()
+        cs.archive_boards = "dept_admins"
+        cs.save()
+        r = self.client.post(f"/api/boards/{b.pk}/update/", json.dumps({"archive": True}), content_type="application/json")
+        self.assertEqual(r.status_code, 403)
+        self.assertNotContains(self.client.get(f"/b/{b.pk}/"), "data-archive-board")
+        self.client.force_login(self.admin)
+        r = self.client.post(f"/api/boards/{b.pk}/update/", json.dumps({"archive": True}), content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(Board.objects.get(pk=b.pk).is_archived)

@@ -148,3 +148,27 @@ def who_can(setting):
     """Plain words for an error message, e.g. 'department admins'."""
     return {"board_admins": "board admins", "dept_admins": "department admins", "company_admins": "company admins",
             "everyone": "everyone in the department", "nobody": "nobody"}[getattr(_settings(), setting)]
+
+
+def can_archive_board(board, user):
+    return _allowed(_settings().archive_boards, board.workspace, user, board)
+
+
+def allowed_domains():
+    raw = (_settings().allowed_domains or "").replace(";", ",").replace(" ", ",")
+    return [d.strip().lower().lstrip("@") for d in raw.split(",") if d.strip()]
+
+
+def email_allowed(email):
+    """Staff accounts must use the company's email domains when they're set. Guests are never checked."""
+    domains = allowed_domains()
+    if not domains:
+        return True
+    host = (email or "").rsplit("@", 1)[-1].lower()
+    return any(host == d or host.endswith("." + d) for d in domains)
+
+
+def domain_message():
+    ds = allowed_domains()
+    return ("Only company email addresses can have a Lanes account (" + ", ".join("@" + d for d in ds) +
+            "). Add people from outside the company as guests on a board instead.")

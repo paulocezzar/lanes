@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% load lanes_extras %}
+{% block title %}Templates · Lanes{% endblock %}
+{% block content %}
+<main class="home gallery-page">
+  <aside class="gal-side">
+    <a class="gal-cat{% if not cat %} on{% endif %}" href="{% url 'gallery' %}">All templates</a>
+    {% for k, name in categories %}<a class="gal-cat{% if cat == k %} on{% endif %}" href="?cat={{ k }}">{{ name }}<span class="muted">{{ counts|get_item:k }}</span></a>{% endfor %}
+  </aside>
+  <section class="gal-main">
+    <div class="gal-head">
+      <div><h1>Templates</h1><p class="muted">Start a board from a ready-made layout. Every template can be changed once it's yours.</p></div>
+      <form method="get" class="gal-search" role="search">{% if cat %}<input type="hidden" name="cat" value="{{ cat }}">{% endif %}<input type="search" name="q" value="{{ q }}" placeholder="Find a template" aria-label="Find a template"></form>
+    </div>
+    <div class="gal-grid">
+      {% for i in items %}
+      <a class="gal-card" href="{% url 'gallery_template' i.key %}">
+        <span class="gal-cover bg-{{ i.bg }}"><span class="gal-mini">{% for n in "1234"|make_list %}<i></i>{% endfor %}</span></span>
+        <span class="gal-body">
+          <b>{{ i.title }}</b>
+          <small class="muted">by {{ i.by }} · {{ i.lists }} lists{% if i.cards %} · {{ i.cards }} cards{% endif %}</small>
+          <span class="gal-sum">{{ i.summary }}</span>
+          {% if i.extras %}<span class="gal-tags">{% for x in i.extras %}<span>{{ x }}</span>{% endfor %}</span>{% endif %}
+        </span>
+      </a>
+      {% empty %}<p class="muted">No templates match{% if q %} “{{ q }}”{% endif %}.</p>{% endfor %}
+    </div>
+    <p class="muted small gal-own">Made a board others could reuse? Open it, click Share and tick “Use this board as a template” — it appears here under “Made in your company”.</p>
+  </section>
+</main>
+{% endblock %}

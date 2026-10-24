@@ -68,7 +68,8 @@ def copy_card(card, target_list, *, user, title=None, keep_labels=True, keep_mem
 
 
 @transaction.atomic
-def copy_board(board, *, workspace, title, user, keep_cards=True, visibility=None, background=None):
+def copy_board(board, *, workspace, title, user, keep_cards=True, visibility=None, background=None,
+               keep_template_cards=True):
     new = Board.objects.create(
         workspace=workspace, title=title[:120], description=board.description,
         background=background or board.background, visibility=visibility or board.visibility,
@@ -88,7 +89,7 @@ def copy_board(board, *, workspace, title, user, keep_cards=True, visibility=Non
                     "labels", "checklists__items", "field_values"):
                 copy_card(card, list_map[lst.pk], user=user, keep_members=False, keep_dates=False,
                           label_map=label_map, field_map=field_map, position=card.position)
-            for card in lst.cards.filter(is_archived=False, is_template=True):
+            for card in lst.cards.filter(is_archived=False, is_template=True) if keep_template_cards else []:
                 c = copy_card(card, list_map[lst.pk], user=user, keep_members=False, keep_dates=False,
                               label_map=label_map, field_map=field_map, position=card.position)
                 c.is_template = True

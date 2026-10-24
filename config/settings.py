@@ -35,6 +35,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "accounts.twofactor.EnforceTwoStepMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "boards.views_join.NoAccessMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

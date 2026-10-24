@@ -774,7 +774,7 @@ class Notification(models.Model):
              (ITEM_DUE_SOON, "Checklist item due soon"), (ADDED_TO_BOARD, "Added to a board"),
              (WATCHED, "Something you watch changed"), (AUTOMATION, "From a board rule"),
              ("budget", "Project budget warning"), ("signoff", "Sign-off"), ("risk", "Card at risk"),
-             ("form", "New request from a form"), ("system", "Lanes needs attention")]
+             ("form", "New request from a form"), ("system", "Lanes needs attention"), ("join", "Asked to join")]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
@@ -934,6 +934,8 @@ class AuditEvent(models.Model):
         "login_failed": "failed to sign in as {email}",
         "dept_created": "created the department {dept}",
         "board_imported": "imported the board {board} from Trello",
+        "join_approved": "let {name} join {where}",
+        "board_from_gallery": "made the board {board} from the template “{template}”",
         "board_moved": "moved the board {board} from {old} to {new}",
         "dept_renamed": "renamed the department {old} to {dept}",
         "dept_deleted": "deleted the department {dept}",
@@ -1019,6 +1021,11 @@ class CompanySettings(models.Model):
                          ("required", "Required for staff — Lanes passwords only for guests and company admins")]
     microsoft_login = models.CharField(max_length=10, choices=MICROSOFT_CHOICES, default="allowed")
     microsoft_auto_create = models.BooleanField(default=False)   # make accounts for anyone in the directory
+    ARCHIVE_CHOICES = [(BOARD_ADMINS, "Board admins"), (DEPT_ADMINS, "Department admins"),
+                       (COMPANY_ADMINS, "Company admins only")]
+    archive_boards = models.CharField(max_length=20, choices=ARCHIVE_CHOICES, default=BOARD_ADMINS)
+    # e.g. "thenewt.co.uk, thenewt.com" — staff accounts must use one of these; guests can use any address
+    allowed_domains = models.CharField(max_length=300, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
 
@@ -1147,3 +1154,23 @@ class ErrorReport(models.Model):
 
     class Meta:
         ordering = ["-last_seen"]
+
+
+class JoinRequest(models.Model):
+    """Someone asking to be let into a private board or a department."""
+    PENDING, APPROVED, DECLINED = "pending", "approved", "declined"
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="join_requests")
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, null=True, blank=True, related_name="join_requests")
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, null=True, blank=True, related_name="join_requests")
+    message = models.CharField(max_length=300, blank=True)
+    status = models.CharField(max_length=10, default=PENDING)
+    decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def target(self):
+        return self.board or self.workspace

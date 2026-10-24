@@ -811,6 +811,8 @@ def board_update(request, board_id):
         audit.record(request, "board_moved", board=board, old=board.workspace.name, new=ws.name)
         board.workspace, board.collection, moved = ws, None, True
     if "archive" in d and bool(d["archive"]) != board.is_archived:
+        if not permissions.can_archive_board(board, request.user):
+            raise ApiError(f"Only {permissions.who_can('archive_boards')} can close boards.", 403)
         board.is_archived = bool(d["archive"])
         audit.record(request, "board_archived" if board.is_archived else "board_restored", board=board)
     board.save()

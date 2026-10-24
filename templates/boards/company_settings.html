@@ -12,6 +12,11 @@
       {% if f.help %}<small class="muted">{{ f.help }}</small>{% endif %}
     </div>
     {% endfor %}
+    <div class="setting">
+      <label for="s-domains"><b>Company email addresses</b></label>
+      <input id="s-domains" name="allowed_domains" value="{{ cs.allowed_domains }}" placeholder="e.g. yourcompany.co.uk" maxlength="300">
+      <small class="muted">When set, only these addresses can have staff accounts (separate several with commas). Leave empty to allow any address. People outside the company can still be added to a board as guests.</small>
+    </div>
     <div class="row"><button class="btn primary">Save settings</button>{% if cs.updated_by %}<small class="muted">Last changed by {{ cs.updated_by.display_name }}, {{ cs.updated_at|ago }}</small>{% endif %}</div>
   </form>
   <section class="dash-card settings-form">

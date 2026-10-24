@@ -64,12 +64,12 @@ class BoardFlowTests(TestCase):
 
     def test_private_board_hidden_from_others(self):
         self.client.force_login(self.dept)
-        self.assertEqual(self.client.get(reverse("board", args=[self.board.pk])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("board", args=[self.board.pk])).status_code, 403)   # private: “Ask to join” page, board not shown
         self.board.visibility = Board.WORKSPACE
         self.board.save()
         self.assertEqual(self.client.get(reverse("board", args=[self.board.pk])).status_code, 200)
         self.client.force_login(self.outsider)
-        self.assertEqual(self.client.get(reverse("board", args=[self.board.pk])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("board", args=[self.board.pk])).status_code, 403)   # another department: can ask to join
 
     def test_card_create_move_and_activity(self):
         r = self.api(self.member, f"/api/lists/{self.todo.pk}/cards/", {"title": "Order tins"})
@@ -304,7 +304,7 @@ class BoardViewsTests(TestCase):
         other = User.objects.create_user("o@x.com", "pw")
         self.client.force_login(other)
         for name in ("board_calendar", "board_table", "board_timeline", "board_dashboard"):
-            self.assertEqual(self.client.get(reverse(name, args=[self.board.pk])).status_code, 404)
+            self.assertEqual(self.client.get(reverse(name, args=[self.board.pk])).status_code, 403)   # private: “Ask to join” page, board not shown
 
 
 class AdvancedFeaturesTests(TestCase):
@@ -2405,7 +2405,7 @@ class CrossDepartmentTests(TestCase):
         return c.post(url, json.dumps(data), content_type="application/json")
 
     def test_1_share_then_assign(self):
-        self.assertEqual(self.m.get(f"/b/{self.hrb.pk}/").status_code, 404)                       # private: invisible
+        self.assertEqual(self.m.get(f"/b/{self.hrb.pk}/").status_code, 403)   # private: “Ask to join” page, board not shown                       # private: invisible
         self.assertEqual(self.j(self.h, f"/api/cards/{self.card.pk}/members/", {"user_id": self.marco.pk}).status_code, 400)
         self.assertEqual(self.j(self.h, f"/api/boards/{self.hrb.pk}/share/", {"email": "marco@x.com", "role": "member"}).status_code, 200)
         self.assertEqual(self.j(self.h, f"/api/cards/{self.card.pk}/members/", {"user_id": self.marco.pk}).status_code, 200)
@@ -2423,7 +2423,7 @@ class CrossDepartmentTests(TestCase):
         self.assertEqual(r.status_code, 200, r.content)
         page = self.m.get(f"/b/{self.bb.pk}/")
         self.assertContains(page, "Gemma induction")                                              # shows on Bakery board
-        self.assertEqual(self.m.get(f"/b/{self.hrb.pk}/").status_code, 404)                       # HR board still hidden
+        self.assertEqual(self.m.get(f"/b/{self.hrb.pk}/").status_code, 403)   # private: “Ask to join” page, board not shown                       # HR board still hidden
         self.assertEqual(self.m.get(f"/cards/{self.card.pk}/").status_code, 200)                  # Marco can open the card
 
     def test_3_move_to_their_board(self):

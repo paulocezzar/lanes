@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Private board · Lanes{% endblock %}
+{% block content %}
+<main class="home no-access">
+  <div class="na-card">
+    <p class="na-lock" aria-hidden="true">🔒</p>
+    <h1>This board is private</h1>
+    {% if pending %}
+      <p>You've already asked to join. You'll get a notification as soon as one of its admins answers.</p>
+      <p><a class="btn light" href="{% url 'join_requests' %}">See my requests</a> <a class="btn ghost" href="{% url 'home' %}">Back to boards</a></p>
+    {% else %}
+      <p>Only the people on it can see it. Ask its admins to let you in — they'll be notified straight away.</p>
+      <form method="post" action="{% url 'join_request_create' %}" class="na-form">
+        {% csrf_token %}<input type="hidden" name="board" value="{{ board_id }}"><input type="hidden" name="next" value="{% url 'join_requests' %}">
+        <label for="na-msg">Why do you need it? <span class="muted">(optional)</span></label>
+        <textarea id="na-msg" name="message" rows="2" maxlength="300" placeholder="e.g. I'm covering for Sam this week"></textarea>
+        <div class="row"><button class="btn primary">Ask to join</button><a class="btn ghost" href="{% url 'home' %}">Back to boards</a></div>
+      </form>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}
