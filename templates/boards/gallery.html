@@ -1,11 +1,7 @@
 {% extends "base.html" %}{% load lanes_extras %}
 {% block title %}Templates · Lanes{% endblock %}
 {% block content %}
-<main class="home gallery-page">
-  <aside class="gal-side">
-    <a class="gal-cat{% if not cat %} on{% endif %}" href="{% url 'gallery' %}">All templates</a>
-    {% for k, name in categories %}<a class="gal-cat{% if cat == k %} on{% endif %}" href="?cat={{ k }}">{{ name }}<span class="muted">{{ counts|get_item:k }}</span></a>{% endfor %}
-  </aside>
+<main class="home gallery-page one">
   <section class="gal-main">
     <div class="gal-head">
       <div><h1>Templates</h1><p class="muted">Start a board from a ready-made layout. Every template can be changed once it's yours.</p></div>

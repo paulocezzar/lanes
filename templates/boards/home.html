@@ -2,6 +2,13 @@
 {% block title %}Boards · Lanes{% endblock %}
 {% block content %}
 <main class="home">
+  {% if dept %}
+  <header class="dept-head">
+    <span class="dept-badge">{{ dept.workspace.initial }}</span>
+    <div><h1>{{ dept.workspace.name }}{% if dept.admin %} <a class="icon-btn xs" href="{% url 'workspace_members' dept.workspace.pk %}#settings" title="Rename or change the department" aria-label="Department settings">✎</a>{% endif %}</h1>
+      <p class="muted">{{ dept.n_people }} {{ dept.n_people|pluralize:"person,people" }} · {{ dept.boards|length }} board{{ dept.boards|length|pluralize }} · <a href="{% url 'workspace_members' dept.workspace.pk %}">Members</a></p></div>
+  </header>
+  {% endif %}
   {% if not user.welcomed %}
   <section class="welcome" data-welcome>
     <div class="welcome-head">
@@ -15,6 +22,13 @@
       <div><b>3 · Tick things off</b><span>Open a card to tick checklists or record amounts (<b>120 / 430</b>). Everything you're on is in <b>My cards</b> and the <b>Planner</b>.</span></div>
     </div>
     <p class="muted small">📱 On your phone: open Lanes in the browser and choose <b>Add to Home Screen</b>. It then works like an app — and keeps working with no signal.</p>
+  </section>
+  {% endif %}
+  {% if not dept %}
+  {% if recent %}
+  <section class="home-section">
+    <h2>{% include "boards/_icon.html" with i="history" %} Recently viewed</h2>
+    <div class="tile-grid">{% for b in recent %}{% include "boards/_board_tile.html" %}{% endfor %}</div>
   </section>
   {% endif %}
   {% if starred %}
@@ -44,6 +58,7 @@
   {% endif %}
   </section>
 
+  {% endif %}
   <div class="home-tools">
     <input type="search" class="board-filter" placeholder="Find a board…" data-board-filter aria-label="Find a board">
     <a class="btn ghost sm" href="{% url 'all_calendar' %}">All boards: Calendar</a>
@@ -52,9 +67,9 @@
   </div>
 
   {% for g in groups %}
-  <section class="home-section">
-    <h2><span class="ws-badge">{{ g.workspace.initial }}</span>{{ g.workspace.name }}
-      <a class="btn ghost sm head-link" href="{% url 'workspace_members' g.workspace.pk %}">{% include "boards/_icon.html" with i="people" %}People</a></h2>
+  <section class="home-section" id="dept-{{ g.workspace.pk }}">
+    {% if not dept %}<h2><span class="ws-badge">{{ g.workspace.initial }}</span>{{ g.workspace.name }}
+      <a class="btn ghost sm head-link" href="{% url 'workspace_members' g.workspace.pk %}">{% include "boards/_icon.html" with i="people" %}People</a></h2>{% endif %}
     {% for c in g.collections %}
     <h3 class="collection-h">{{ c.collection.name }} <span class="count">{{ c.boards|length }}</span></h3>
     <div class="tile-grid">{% for b in c.boards %}{% include "boards/_board_tile.html" %}{% endfor %}</div>
@@ -90,6 +105,7 @@
   </section>
   {% endif %}
 
+  {% if not dept %}
   {% if archived_boards %}
   <section class="home-section">
     <details class="archived-boards">
@@ -124,6 +140,7 @@
       {% endfor %}
     </div>
   </section>
+  {% endif %}
   {% endif %}
 </main>
 

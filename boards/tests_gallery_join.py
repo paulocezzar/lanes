@@ -156,3 +156,17 @@ class DescribeTests(Base):
         b = Board.objects.get(title="Garden")
         self.assertEqual(b.labels.get().colour, "grey")
         self.assertEqual(Card.objects.get(list__board=b).checklists.get().items.count(), 2)
+
+
+class SidebarTests(Base):
+    def test_sidebar_and_department_page(self):
+        b = Board.objects.create(workspace=self.ws, title="Dept board")
+        BoardMember.objects.create(board=b, user=self.u)
+        r = self.client.get("/")
+        self.assertContains(r, 'class="side"')
+        self.assertContains(r, "data-apps-toggle")
+        r = self.client.get(f"/?dept={self.ws.pk}")
+        self.assertContains(r, "dept-head")
+        self.assertContains(r, "Dept board")
+        self.assertNotContains(r, "Other departments")
+        self.assertNotContains(self.client.get(f"/b/{b.pk}/"), 'class="side"')     # boards keep the full width

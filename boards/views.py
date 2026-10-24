@@ -47,7 +47,16 @@ def home(request):
         archived = [b for b in archived.filter(Q(memberships__user=user, memberships__role=BoardMember.ADMIN)
                                                | Q(workspace__memberships__user=user,
                                                    workspace__memberships__role="admin")).distinct()]
+    dept = None
+    if request.GET.get("dept", "").isdigit():
+        dept = next((g for g in groups if g["workspace"].pk == int(request.GET["dept"])), None)
+        if dept:
+            ws = dept["workspace"]
+            dept["n_people"] = ws.memberships.count()
+            dept["admin"] = user.is_superuser or permissions.is_workspace_admin(ws, user)
+            groups = [dept]
     return render(request, "boards/home.html", {
+        "dept": dept,
         "archived_boards": archived,
         "groups": groups,
         "guest_boards": guest,
@@ -56,6 +65,7 @@ def home(request):
         "backgrounds": Board.BACKGROUNDS,
         "create_workspaces": [ws for ws in workspaces if permissions.can_create_board(ws, user)],
         "templates": templates,
+        "recent": [b for bid in (user.recent_boards or [])[:4] for b in boards if b.pk == bid],
         "other_departments": [] if user.is_superuser or user.is_guest else
         Workspace.objects.exclude(pk__in=[w.pk for w in workspaces]).order_by("name"),
         "asked_departments": set(JoinRequest.objects.filter(user=user, status="pending", workspace__isnull=False)

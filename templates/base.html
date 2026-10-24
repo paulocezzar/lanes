@@ -13,9 +13,30 @@
   <link rel="stylesheet" href="{% static 'lanes/app.css' %}">
   {% block head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}"{% if user.is_authenticated %} data-sw="1"{% endif %}>
+<body class="{% block body_class %}{% endblock %}{% if show_sidebar %} with-side{% endif %}"{% if user.is_authenticated %} data-sw="1"{% endif %}>
   {% if user.is_authenticated %}
   <header class="topbar">
+    <div class="apps-wrap" data-apps-wrap>
+      <button type="button" class="icon-btn apps-btn" data-apps-toggle aria-expanded="false" aria-haspopup="true" title="Everything in Lanes" aria-label="Everything in Lanes">{% include "boards/_icon.html" with i="grid" %}</button>
+      <div class="apps-panel" data-apps-panel hidden>
+        <div class="apps-head"><span class="apps-mark" aria-hidden="true"><i></i><i></i><i></i></span><div><b>Lanes</b><small>Boards, lists and cards for every team</small></div></div>
+        <div class="apps-grid">
+          <a href="{% url 'home' %}">{% include "boards/_icon.html" with i="board" %}<b>Boards</b><small>Every board you can see</small></a>
+          <a href="{% url 'gallery' %}">{% include "boards/_icon.html" with i="template" %}<b>Templates</b><small>Start from a ready-made board</small></a>
+          <a href="{% url 'describe_board' %}">{% include "boards/_icon.html" with i="sparkle" %}<b>Describe a board</b><small>Say it — Lanes sets it up</small></a>
+          <a href="{% url 'planner' %}">{% include "boards/_icon.html" with i="calendar" %}<b>Planner</b><small>Your week and your inbox</small></a>
+          <a href="{% url 'my_cards' %}">{% include "boards/_icon.html" with i="card" %}<b>My cards</b><small>Everything you're on</small></a>
+          <a href="{% url 'portfolio' %}">{% include "boards/_icon.html" with i="chart" %}<b>Portfolio</b><small>All projects, red/amber/green</small></a>
+          <a href="{% url 'workload' %}">{% include "boards/_icon.html" with i="person" %}<b>Workload</b><small>Who has how much on</small></a>
+          <a href="{% url 'timesheets' %}">{% include "boards/_icon.html" with i="clock" %}<b>Timesheets</b><small>Time logged on cards</small></a>
+          <a href="{% url 'search' %}">{% include "boards/_icon.html" with i="search" %}<b>Search</b><small>Find any card, in plain words</small></a>
+          <a href="{% url 'join_requests' %}">{% include "boards/_icon.html" with i="people" %}<b>Join requests</b><small>Asked to join, and asks for you</small></a>
+          {% if user.is_superuser %}<a href="{% url 'company_usage' %}">{% include "boards/_icon.html" with i="gear" %}<b>Company</b><small>Usage, people, settings, health</small></a>{% endif %}
+        </div>
+        <div class="apps-tip"><span class="apps-tip-k">💡 Tip</span><p data-tip></p><button type="button" class="link-btn" data-next-tip>Get a new tip</button></div>
+        <div class="apps-foot"><button type="button" class="link-btn" data-show-shortcuts>Keyboard shortcuts</button><a href="{% url 'email_prefs' %}">Email settings</a><a href="{% url 'export_all' %}">Export my boards</a></div>
+      </div>
+    </div>
     <a class="brand" href="{% url 'home' %}">
       {% include "_logo.html" %}Lanes
     </a>
@@ -97,7 +118,9 @@
   {% if messages %}
     <div class="toasts">{% for m in messages %}<div class="toast {{ m.tags }}">{{ m }}</div>{% endfor %}</div>
   {% endif %}
+  {% if show_sidebar %}<div class="app-shell">{% include "_sidebar.html" %}<div class="app-main">{% endif %}
   {% block content %}{% endblock %}
+  {% if show_sidebar %}</div></div>{% endif %}
   <div id="toast" class="toast floating" hidden></div>
   <script>
     setTimeout(() => document.querySelectorAll('.toasts .toast').forEach(t => t.remove()), 5000);
@@ -149,6 +172,38 @@
   <script src="{% static 'lanes/shortcuts.js' %}"></script>{% endif %}
   {% block scripts %}{% endblock %}
 <script>
+(() => {
+  const w = document.querySelector('[data-apps-wrap]'); if (!w) return;
+  const b = w.querySelector('[data-apps-toggle]'), m = w.querySelector('[data-apps-panel]'), tipEl = m.querySelector('[data-tip]');
+  const TIPS = [
+    'Type a date into a new card’s title — “Friday 3pm” or “12 June” — and Lanes sets the due date.',
+    'Press ? anywhere to see keyboard shortcuts.',
+    'Open a card and use ⊂ Part of… to put it inside a bigger job. The big card shows how many parts are done.',
+    'In a checklist, type “300 kg Flour” or “1 x Tin” and it counts up as it’s done.',
+    'Ask for a sign-off on a card — it can’t be marked complete until it’s approved.',
+    'Share a request form so other teams can send you work without joining your board.',
+    'Try the Swimlanes view to see each person’s cards across your lists.',
+    'Search in plain words: “my cards due this week” or “waiting for sign-off”.',
+    'Mark a board as a template (Share → Use this board as a template) and it appears in the template gallery.',
+    'Cards that look likely to miss their date are flagged “At risk” — with the reason.',
+    'On your phone, add Lanes to your home screen. It keeps working with no signal.',
+    'A rule can have several triggers: “when moved to Done or when every checklist item is ticked”.',
+  ];
+  let t = Math.floor(Math.random() * TIPS.length);
+  const showTip = () => { tipEl.textContent = TIPS[t % TIPS.length]; };
+  m.querySelector('[data-next-tip]').addEventListener('click', e => { e.stopPropagation(); t++; showTip(); });
+  const set = on => { m.hidden = !on; b.setAttribute('aria-expanded', on); if (on) showTip(); };
+  b.addEventListener('click', e => { e.stopPropagation(); set(m.hidden); });
+  document.addEventListener('click', e => { if (!w.contains(e.target)) set(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') set(false); });
+  m.querySelector('[data-show-shortcuts]')?.addEventListener('click', () => set(false));
+  // sidebar: remember which departments are open
+  document.querySelectorAll('[data-side-dept]').forEach(d => {
+    const k = 'lanes-side-' + d.dataset.sideDept;
+    try { const v = localStorage.getItem(k); if (v !== null && !d.hasAttribute('data-forced')) d.open = v === '1'; } catch {}
+    d.addEventListener('toggle', () => { try { localStorage.setItem(k, d.open ? '1' : '0'); } catch {} });
+  });
+})();
 (() => {
   const w = document.querySelector('[data-create-wrap]'); if (!w) return;
   const b = w.querySelector('[data-create-toggle]'), m = w.querySelector('[data-create-menu]');
