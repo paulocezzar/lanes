@@ -341,3 +341,20 @@ class DoneListTests(Base):
         self.assertContains(r, "data-delete-open-card")
         self.post(f"/api/cards/{self.card.pk}/delete/", {"confirm": "DELETE CARD"})
         self.assertFalse(type(self.card).objects.filter(pk=self.card.pk).exists())
+
+
+class ItemMoveTests(Base):
+    def test_drag_item_between_others_and_across_checklists(self):
+        import json
+        from .models import Checklist, ChecklistItem
+        b = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=b, user=self.u, role="admin")
+        card = b.lists.create(title="To do", position=1).cards.create(title="Cakes", position=1)
+        cl = Checklist.objects.create(card=card, title="A", position=1)
+        cl2 = Checklist.objects.create(card=card, title="B", position=2)
+        x, y, z = (ChecklistItem.objects.create(checklist=cl, text=t, position=p) for t, p in (("x", 1), ("y", 2), ("z", 3)))
+        self.client.post(f"/api/items/{z.pk}/", json.dumps({"move": {"checklist_id": cl.pk, "before_id": x.pk, "after_id": y.pk}}),
+                         content_type="application/json")
+        self.assertEqual(list(cl.items.values_list("text", flat=True)), ["x", "z", "y"])
+        self.client.post(f"/api/items/{x.pk}/", json.dumps({"move": {"checklist_id": cl2.pk}}), content_type="application/json")
+        self.assertEqual(list(cl2.items.values_list("text", flat=True)), ["x"])

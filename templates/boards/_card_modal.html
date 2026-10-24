@@ -385,9 +385,9 @@
         {% with p=cl.progress %}
         <div class="progress"><span>{{ p }}%</span><div class="bar"><i style="width:{{ p }}%" class="{% if p == 100 %}full{% endif %}"></i></div></div>
         {% endwith %}
-        <ul class="items">
+        <ul class="items"{% if can_edit %} data-cl-items="{{ cl.pk }}"{% endif %}>
           {% for item in cl.items.all %}{% if not cl.hide_checked or not item.is_done %}
-          <li class="item{% if item.is_done %} done{% endif %}">
+          <li class="item{% if item.is_done %} done{% endif %}" data-item-id="{{ item.pk }}">{% if can_edit %}<span class="item-grip" title="Drag to move" aria-hidden="true">⋮⋮</span>{% endif %}
             <input type="checkbox" data-item="{{ item.pk }}" {% if item.is_done %}checked{% endif %} {% if not can_edit %}disabled{% endif %} aria-label="{{ item.text }}">
             <span class="item-text">{% if item.linked_card_id %}<a class="item-label is-card" href="{% url 'board' item.linked_card.list.board_id %}?card={{ item.linked_card_id }}"{% if item.linked_card.list.board_id == board.pk %} data-card-open="{{ item.linked_card_id }}"{% endif %} title="Open its card — labels, dates, sign-off and everything else live there">{{ item.text }}</a>{% else %}<span class="item-label"{% if can_edit %} data-item-edit="{{ item.pk }}" title="Click to edit"{% endif %}>{{ item.text }}</span>{% endif %}{% if item.has_qty %}
               <span class="item-qty" title="{{ item.qty_pct }}% done{% if item.per_unit is not None %} · {{ item.per_unit_txt }} {{ item.qty_unit }} per product{% endif %}">
@@ -430,6 +430,8 @@
               <div class="item-acts-pop">
                 <div class="pop-head">Item actions</div>
                 <button type="button" class="menu-item" data-item-edit-btn="{{ item.pk }}">Edit text</button>
+                <button type="button" class="menu-item" data-item-move="top">Move to top</button>
+                <button type="button" class="menu-item" data-item-move="bottom">Move to bottom</button>
                 {% if item.linked_card_id %}<a class="menu-item" href="{% url 'board' item.linked_card.list.board_id %}?card={{ item.linked_card_id }}"{% if item.linked_card.list.board_id == board.pk %} data-card-open="{{ item.linked_card_id }}"{% endif %}>Open its card</a>
                 {% else %}<button type="button" class="menu-item" data-item-to-card="{{ item.pk }}" title="The item stays here and ticks itself when its card is done">Make it a card <small>keeps it on this checklist</small></button>
                 <button type="button" class="menu-item" data-item-to-card="{{ item.pk }}" data-remove="1" title="Like Trello's Convert to card">Convert to card <small>takes it off this checklist</small></button>{% endif %}

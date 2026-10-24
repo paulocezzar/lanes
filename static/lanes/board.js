@@ -689,6 +689,19 @@ Invite the press`,
   function wireModal() {
     const root = $('.cm', dialogBody);
     if (!root) return;
+    // drag checklist items to reorder them (or onto another checklist on this card)
+    $$('[data-cl-items]', root).forEach(ul => Sortable.create(ul, {
+      group: `cl-items-${openCardId}`, animation: 150, forceFallback: true, handle: '.item-grip, .item', draggable: '.item[data-item-id]',
+      filter: 'input, button, details, a, .item-label, .iq-add', preventOnFilter: false,
+      delay: 150, delayOnTouchOnly: true, fallbackTolerance: 4, ghostClass: 'item-ghost',
+      onEnd: evt => {
+        if (evt.from === evt.to && evt.oldIndex === evt.newIndex) return;
+        const el = evt.item, prev = el.previousElementSibling, next = el.nextElementSibling;
+        post(`/api/items/${el.dataset.itemId}/`, { move: { checklist_id: +evt.to.dataset.clItems,
+          before_id: prev?.dataset.itemId ? +prev.dataset.itemId : null, after_id: next?.dataset.itemId ? +next.dataset.itemId : null } })
+          .then(applyCard).catch(() => openCard(openCardId));
+      },
+    }));
     setTimeout(() => showSummary && showSummary());
     const title = $('[data-card-title]', root);
     if (title) inlineEdit(title, v => cardPost('update', { title: v }));
@@ -806,6 +819,16 @@ Invite the press`,
       $$(`.card-tile[data-card-id="${id}"]`, listsEl).forEach(el => el.remove());
       closeCard(); if (typeof refreshCounts === 'function') refreshCounts();
       return toast('Card deleted.');
+    }
+    const mvBtn = t.closest('[data-item-move]');
+    if (mvBtn) {
+      const li = mvBtn.closest('.item'), ul = li.closest('[data-cl-items]');
+      mvBtn.closest('details')?.removeAttribute('open');
+      const others = $$('.item[data-item-id]', ul).filter(x => x !== li);
+      if (!others.length) return;
+      const top = mvBtn.dataset.itemMove === 'top';
+      return post(`/api/items/${li.dataset.itemId}/`, { move: { checklist_id: +ul.dataset.clItems,
+        before_id: top ? null : +others[others.length - 1].dataset.itemId, after_id: top ? +others[0].dataset.itemId : null } }).then(applyCard);
     }
     const editBtn = t.closest('[data-item-edit-btn]');
     if (editBtn) {

@@ -545,6 +545,9 @@ def item_update(request, item_id):
         log(card.list.board, request.user, "item_deleted", card=card, text=item.text, checklist=item.checklist.title)
         item.delete()
         return card_response(card.pk, request)
+    if "move" in request.data:
+        _move_item(item, card, request.data["move"] or {})
+        return card_response(card.pk, request)
     if "text" in request.data:
         item.text = _text(request.data["text"], 250)
         if request.data.get("reparse") and not item.has_qty:
@@ -1379,6 +1382,29 @@ def _planned(card):
             except Exception:
                 return None
     return None
+
+
+def _move_item(item, card, mv):
+    """Drag a checklist item: {checklist_id, before_id, after_id} — the items it now sits between."""
+    from . import positions
+    cl = get_object_or_404(Checklist, pk=mv.get("checklist_id") or item.checklist_id, card=card)
+    sibs = {i.pk: i for i in cl.items.exclude(pk=item.pk)}
+    b, a = sibs.get(_int(mv.get("before_id"))), sibs.get(_int(mv.get("after_id")))
+    if positions.needs_rebalance(b and b.position, a and a.position):
+        for n, i in enumerate(sorted(sibs.values(), key=lambda i: (i.position, i.pk)), 1):
+            i.position = n * positions.GAP
+            i.save(update_fields=["position"])
+    item.checklist = cl
+    item.position = (positions.between(b.position if b else None, a.position if a else None)
+                     if (b or a) else positions.end_position(cl.items.exclude(pk=item.pk)))
+    item.save(update_fields=["checklist", "position"])
+
+
+def _int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def _amount_from_text(item, card):

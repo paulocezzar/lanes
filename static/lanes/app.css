@@ -2185,3 +2185,7 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .item-acts-pop.up { top: auto; bottom: calc(100% + 4px); }
 .chip-btn.danger { color: var(--danger, #dc2626); }
 .ui-typed { display: grid; gap: 6px; margin: 4px 0 12px; font-size: 14px; }
+.item-grip { cursor: grab; color: var(--text-2); font-size: 12px; letter-spacing: -2px; width: 8px; margin: 0 -6px 0 -2px; flex: none; visibility: hidden; user-select: none; }
+.item:hover .item-grip { visibility: visible; }
+@media (hover: none) { .item-grip { visibility: visible; } }
+.item-ghost { opacity: .4; background: var(--surface-2); }
