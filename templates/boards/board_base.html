@@ -232,6 +232,7 @@ Setup:
     {% if can_edit %}<button class="mitem" data-goto="fields" data-title="Custom fields">{% include "boards/_icon.html" with i="field" %}<span>Custom fields</span></button>{% endif %}
     <hr>
     <a class="mitem" href="{% url 'board_automation' board.pk %}">{% include "boards/_icon.html" with i="bolt" %}<span>Automation</span></a>
+    <a class="mitem" href="{% url 'board_forms' board.pk %}">📝<span>Request forms</span></a>
     {% if can_edit %}<button class="mitem" data-goto="labels" data-title="Labels">{% include "boards/_icon.html" with i="label" %}<span>Labels</span></button>{% endif %}
     <button class="mitem" data-goto="activity" data-title="Activity">{% include "boards/_icon.html" with i="history" %}<span>Activity</span></button>
     <button class="mitem" data-goto="archived" data-title="Archived items">{% include "boards/_icon.html" with i="archive" %}<span>Archived items</span></button>

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Health · Company · Lanes{% endblock %}
+{% block content %}
+<main class="home company">
+  {% include "boards/_company_tabs.html" %}
+
+  <section class="dash-card">
+    <h3>What's switched on</h3>
+    <div class="health-grid">
+      <div class="hc {% if email_on %}ok{% else %}warn{% endif %}"><b>Email</b>
+        {% if email_on %}<span>Sending through {{ email_via }} · {{ email_sent_week }} sent this week{% if email_failed %} · <span class="bad">{{ email_failed }} couldn't be sent</span>{% endif %}</span>
+        {% else %}<span>Not set up — notifications, the morning summary and sign-off requests only show inside Lanes (the bell). Add an email sender in Render's settings to send them to inboxes.</span>{% endif %}</div>
+      <div class="hc {% if ai_on %}ok{% else %}warn{% endif %}"><b>AI help</b>
+        <span>{% if ai_on %}On — “Describe or paste anything”, Suggest steps, Summarise and Write it up are available.{% else %}Off — the AI buttons are hidden. Add ANTHROPIC_API_KEY in Render's settings to switch them on.{% endif %}</span></div>
+      <div class="hc {% if files_on %}ok{% else %}bad{% endif %}"><b>File attachments</b>
+        <span>{% if files_on %}Stored safely.{% else %}Not stored permanently — files attached to cards are lost when Lanes is updated. Links are fine. Set up file storage before people rely on attachments.{% endif %}</span></div>
+      <div class="hc ok"><b>Backups</b>
+        <span>The database is backed up continuously by Render and can be restored to any moment in the last few days (Render dashboard → lanes-db → Recovery). For a copy you keep yourself, download everything below.</span></div>
+    </div>
+    <p class="row"><a class="btn primary sm" href="{% url 'export_all' %}">⬇ Download everything (all boards, JSON)</a> <span class="muted small">Cards, lists, checklists, comments and fields from every board. Keep it somewhere safe; do this before big changes.</span></p>
+  </section>
+
+  <section class="dash-card">
+    <h3>Problems {% if reports %}<span class="count">{{ reports|length }}</span>{% endif %}
+      <a class="btn sm ghost" href="?{% if not show_all %}all=1{% endif %}">{% if show_all %}Hide fixed ones{% else %}Show fixed ones ({{ resolved_count }}){% endif %}</a></h3>
+    <p class="muted small">When something breaks for someone, it's recorded here and Lanes admins get one notification about it — not one per person who hit it.</p>
+    {% for r in reports %}
+    <details class="problem{% if r.resolved_at %} fixed{% endif %}">
+      <summary><b>{{ r.message|truncatechars:140 }}</b>
+        <span class="muted small">{{ r.count }}× · last {{ r.last_seen|date:"j M, H:i" }}{% if r.path %} · {{ r.path }}{% endif %}{% if r.resolved_at %} · marked fixed {{ r.resolved_at|date:"j M" }}{% endif %}</span></summary>
+      <pre class="problem-detail">{{ r.detail }}</pre>
+      {% if not r.resolved_at %}<form method="post">{% csrf_token %}<input type="hidden" name="resolve" value="{{ r.pk }}"><button class="btn sm">Mark as fixed</button> <span class="muted small">If it happens again, it comes back here and you're told again.</span></form>{% endif %}
+    </details>
+    {% empty %}<p class="ok-note">✓ Nothing has gone wrong{% if not show_all %} that hasn't been dealt with{% endif %}.</p>{% endfor %}
+  </section>
+</main>
+{% endblock %}

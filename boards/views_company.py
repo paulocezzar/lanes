@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Q
 from django.db.models.functions import TruncDate
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
@@ -62,6 +62,37 @@ def usage(request):
              .exclude(activity__created_at__gte=d30).select_related("workspace").order_by("title")[:15])
     never = people.filter(last_login__isnull=True).order_by("first_name")
 
+    # people making changes, week by week (last 8 weeks) — is use growing?
+    weeks = []
+    start = timezone.localdate() - timedelta(days=timezone.localdate().weekday())
+    for i in range(7, -1, -1):
+        a = start - timedelta(weeks=i)
+        n = Activity.objects.filter(created_at__date__gte=a, created_at__date__lt=a + timedelta(days=7),
+                                    actor__isnull=False).values("actor").distinct().count()
+        weeks.append({"start": a, "n": n})
+    top_week = max((w["n"] for w in weeks), default=0) or 1
+    for w in weeks:
+        w["pct"] = round(100 * w["n"] / top_week)
+
+    # one department in detail: who's using it and who isn't
+    dept = None
+    if request.GET.get("dept"):
+        ws = Workspace.objects.filter(pk=request.GET["dept"]).first()
+        if ws:
+            last = dict(Activity.objects.filter(actor__isnull=False, board__workspace=ws).values("actor")
+                        .annotate(t=Max("created_at")).values_list("actor", "t"))
+            n30 = dict(Activity.objects.filter(actor__isnull=False, board__workspace=ws, created_at__gte=d30)
+                       .values("actor").annotate(n=Count("id")).values_list("actor", "n"))
+            rows = []
+            for m in ws.memberships.select_related("user").filter(user__is_active=True):
+                u = m.user
+                rows.append({"u": u, "role": m.get_role_display(), "last_login": u.last_login, "last_change": last.get(u.pk),
+                             "n30": n30.get(u.pk, 0)})
+            rows.sort(key=lambda r: (r["n30"] > 0, r["last_change"] or now - timedelta(days=9999)))
+            dept = {"ws": ws, "rows": rows, "quiet": sum(1 for r in rows if not r["n30"]),
+                    "boards": Board.objects.filter(workspace=ws, is_archived=False, is_template=False)
+                    .annotate(n=Count("activity", filter=Q(activity__created_at__gte=d30))).order_by("-n", "title")}
+
     return render(request, "boards/company_usage.html", {
         "tab": "usage",
         "people_total": people.count(),
@@ -77,6 +108,50 @@ def usage(request):
         "done30": Activity.objects.filter(verb="card_completed", created_at__gte=d30).count(),
         "depts": depts, "top_people": top_people,
         "chart": chart, "busiest": busiest, "quiet": quiet, "never": never[:50], "never_count": never.count(),
+        "weeks": weeks, "dept": dept,
+        "feature_use": _feature_use(d30),
+    })
+
+
+def _feature_use(since):
+    """How much the newer tools are used — a hint at what to show people."""
+    from .models import RequestForm, Rule, SignOff
+    return [
+        ("Rules running", Rule.objects.filter(is_enabled=True).count()),
+        ("Request forms", RequestForm.objects.filter(is_open=True).count()),
+        ("Requests sent in (30 days)", Activity.objects.filter(verb="form_request", created_at__gte=since).count()),
+        ("Sign-offs asked for (30 days)", SignOff.objects.filter(requested_at__gte=since).count()),
+        ("Cards split into parts", Card.objects.filter(children__isnull=False).distinct().count()),
+    ]
+
+
+@login_required
+def health(request):
+    """Problems, backups and what's switched on — for whoever looks after Lanes."""
+    from django.conf import settings
+    from django.shortcuts import redirect
+
+    from . import ai
+    from .models import ErrorReport, OutgoingEmail
+    _admin_only(request)
+    if request.method == "POST":
+        rep = ErrorReport.objects.filter(pk=request.POST.get("resolve")).first()
+        if rep:
+            rep.resolved_at = timezone.now()
+            rep.save(update_fields=["resolved_at"])
+        return redirect("company_health")
+    show_all = request.GET.get("all") == "1"
+    reports = ErrorReport.objects.all() if show_all else ErrorReport.objects.filter(resolved_at__isnull=True)
+    week = timezone.now() - timedelta(days=7)
+    return render(request, "boards/company_health.html", {
+        "tab": "health",
+        "reports": reports[:100], "show_all": show_all,
+        "resolved_count": ErrorReport.objects.filter(resolved_at__isnull=False).count(),
+        "email_on": settings.EMAIL_ENABLED, "email_via": settings.EMAIL_VIA,
+        "email_failed": OutgoingEmail.objects.filter(sent_at__isnull=True, attempts__gte=5).count(),
+        "email_sent_week": OutgoingEmail.objects.filter(sent_at__gte=week).count(),
+        "ai_on": ai.enabled(), "files_on": settings.ATTACHMENTS_PERSISTENT,
+        "db_vendor": __import__("django.db", fromlist=["connection"]).connection.vendor,
     })
 
 

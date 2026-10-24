@@ -90,7 +90,19 @@
     { tab: 'Filters', fixed: { type: 'complete' }, tokens: [T('that is complete')] },
     { tab: 'Filters', fixed: { type: 'incomplete' }, tokens: [T("that isn't complete")] },
     { tab: 'Filters', fixed: { type: 'in_list' }, tokens: [T('in list'), S('list', 'list')] },
+    { tab: 'Filters', fixed: { type: 'no_member' }, tokens: [T('with nobody on it')] },
+    { tab: 'Filters', fixed: { type: 'checklists_done' }, tokens: [T('with every checklist item done')] },
+    { tab: 'Filters', fixed: { type: 'checklists_open' }, tokens: [T('with checklist items still to do')] },
+    { tab: 'Filters', fixed: { type: 'overdue' }, tokens: [T('that is overdue')] },
+    { tab: 'Filters', fixed: { type: 'signed_off' }, tokens: [T('that has been signed off')] },
+    { tab: 'Filters', fixed: { type: 'awaiting_signoff' }, tokens: [T('still waiting for sign-off')] },
+    { tab: 'Filters', fixed: { type: 'field_is' }, tokens: [T('where'), S('field', 'field'), T('is'), I('value', 'value')] },
   ];
+  // Triggers that can also be added as "or when…" next to the main one
+  const ALSO_OK = ['card_added', 'card_moved', 'card_completed', 'checklist_done', 'label_added', 'member_added', 'board_added',
+    'card_archived', 'due_set', 'due_removed', 'attachment_added', 'comment_added', 'mentioned', 'field_set'];
+  const ALSO_ROWS = RULE_TRIGGERS.filter(r => ALSO_OK.includes(r.fixed.trigger))
+    .map(r => ({ ...r, tokens: r.tokens.filter(t => t.k !== 'by_whom') }));
   const CARD_ACTIONS = [
     { tab: 'Move', fixed: { type: 'move' }, tokens: [T('move the card to the'), S('position', 'pos'), T('of list'), S('list', 'list')] },
     { tab: 'Move', fixed: { type: 'move_top' }, tokens: [T('move the card to the top of its list')] },
@@ -111,6 +123,7 @@
     { tab: 'Members', fixed: { type: 'add_member' }, tokens: [T('add'), S('user', 'person'), T('to the card')] },
     { tab: 'Members', fixed: { type: 'add_me' }, tokens: [T('add me (whoever presses it) to the card')], only: 'cardbtn' },
     { tab: 'Members', fixed: { type: 'remove_member' }, tokens: [T('remove'), S('user', 'person'), T('from the card')] },
+    { tab: 'Members', fixed: { type: 'request_signoff' }, tokens: [T('ask'), S('user', 'person'), T('to sign the card off')], only: 'rule' },
     { tab: 'Members', fixed: { type: 'clear_members' }, tokens: [T('remove all members from the card')] },
     { tab: 'Content', fixed: { type: 'comment' }, tokens: [T('post the comment'), I('text', 'Comment')] },
     { tab: 'Content', fixed: { type: 'notify' }, tokens: [T("notify the card's members"), I('text', 'with a message (optional)', false)] },
@@ -196,7 +209,7 @@
   }
 
   // ---------- state ----------
-  const FRESH = () => ({ trigger: null, actions: [], filters: [], pickTrigger: false, pickAction: true, pickFilter: false,
+  const FRESH = () => ({ trigger: null, actions: [], filters: [], also: [], pickAlso: false, pickTrigger: false, pickAction: true, pickFilter: false,
                          tTab: null, aTab: null, name: '', icon: '', enabled: true, closeCard: false, editId: null });
   const st = FRESH();
 
@@ -259,6 +272,17 @@
         if (tabs.length > 1) h += `<div class="ab-tabs">${tabs.map(t => `<button type="button" data-ttab="${esc(t)}" class="${t === st.tTab ? 'on' : ''}">${esc(t)}</button>`).join('')}</div>`;
         h += c.triggers.map((r, i) => r.tab === st.tTab ? rowHTML(r, i, 't') : '').join('');
       }
+      // "Or when…": more triggers that run the same rule
+      if (st.trigger && MODE === 'rule' && ALSO_OK.includes(st.trigger.data.trigger)) {
+        st.also.forEach((a, i) => {
+          h += `<div class="ab-chosen ab-or"><span><b class="ab-or-word">or</b> ${a.html}</span><button type="button" class="icon-btn" data-del-also="${i}" title="Remove" aria-label="Remove">🗑</button><span class="ab-gap"></span></div>`;
+        });
+        if (st.pickAlso) {
+          h += `<h4>Or also when…</h4>` + ALSO_ROWS.map((r, i) => rowHTML(r, i, 'o')).join('');
+        } else if (st.also.length < 3) {
+          h += `<button type="button" class="ab-link" data-pick-also>+ Or also when… (another trigger)</button>`;
+        }
+      }
       // Advanced: filters on card triggers
       if (st.trigger && MODE !== 'schedule' && !isListCreated()) {
         st.filters.forEach((f, i) => {
@@ -312,15 +336,17 @@
     if (b.matches('[data-pick-trigger]')) { st.pickTrigger = true; return render(); }
     if (b.matches('[data-pick-action]')) { st.pickAction = true; return render(); }
     if (b.matches('[data-pick-filter]')) { st.pickFilter = true; return render(); }
+    if (b.matches('[data-pick-also]')) { st.pickAlso = true; return render(); }
+    if (b.dataset.delAlso != null) { st.also.splice(+b.dataset.delAlso, 1); return render(); }
     if (b.dataset.ttab) { st.tTab = b.dataset.ttab; return render(); }
     if (b.dataset.atab) { st.aTab = b.dataset.atab; return render(); }
-    if (b.matches('[data-del-trigger]')) { st.trigger = null; st.pickTrigger = true; return render(); }
+    if (b.matches('[data-del-trigger]')) { st.trigger = null; st.also = []; st.pickTrigger = true; return render(); }
     if (b.dataset.delFilter != null) { st.filters.splice(+b.dataset.delFilter, 1); return render(); }
     if (b.dataset.delAction != null) { st.actions.splice(+b.dataset.delAction, 1); if (!st.actions.length) st.pickAction = true; return render(); }
     if (b.dataset.upAction != null) { const i = +b.dataset.upAction; [st.actions[i - 1], st.actions[i]] = [st.actions[i], st.actions[i - 1]]; return render(); }
     if (b.dataset.add) {
       const [kind, idx] = b.dataset.add.split(':');
-      const row = (kind === 't' ? CFG.triggers : kind === 'f' ? FILTERS : actionsNow())[+idx];
+      const row = (kind === 't' ? CFG.triggers : kind === 'f' ? FILTERS : kind === 'o' ? ALSO_ROWS : actionsNow())[+idx];
       const r = readRow(b.closest('.ab-row'), row);
       if (r.error) return error(r.error);
       add(kind, row, r.vals);
@@ -356,6 +382,7 @@
       if (wasNew !== isListCreated()) st.actions = [];        // card actions ↔ board actions
       if (isListCreated()) st.filters = [];
     } else if (kind === 'f') { st.filters.push(item); st.pickFilter = false; }
+    else if (kind === 'o') { st.also.push(item); st.pickAlso = false; }
     else { st.actions.push(item); st.pickAction = false; }
     error(''); render();
   }
@@ -375,6 +402,7 @@
       url = D.urls.rule;
       Object.assign(f, st.trigger.data);
       f.filters = JSON.stringify(st.filters.map(x => x.data));
+      if (MODE === 'rule') f.also = JSON.stringify(st.also.map(x => x.data));
       actionFields('', st.actions);
     } else if (MODE === 'schedule') {
       url = D.urls.schedule;
@@ -473,6 +501,7 @@
       if (t) st.trigger = t; else st.pickTrigger = true;
     }
     (d.filters || []).forEach(f => { const it = itemFrom(FILTERS, f); if (it) st.filters.push(it); });
+    (d.also || []).forEach(a => { const it = itemFrom(ALSO_ROWS, a); if (it) st.also.push(it); });
     if (d.name) { st.name = d.name; st.icon = d.icon || ''; }
     if (d.enabled === false) st.enabled = false;
     if (d.close_card) st.closeCard = true;

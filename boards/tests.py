@@ -1636,7 +1636,7 @@ class EmailTests(TestCase):
         self.addCleanup(self.override.disable)
         self.ws = Workspace.objects.create(name="Bakery E")
         self.boss = User.objects.create_superuser("boss4@x.com", "pw", first_name="Bo")
-        self.u = User.objects.create_user("e@x.com", "pw-12345", first_name="Eve")
+        self.u = User.objects.create_user("e@x.com", "pw-12345", first_name="Eve", email_notifications="instant")
         WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
         WorkspaceMember.objects.create(workspace=self.ws, user=self.boss, role="admin")
         self.board = Board.objects.create(workspace=self.ws, title="B")

@@ -164,11 +164,12 @@ PASSWORD_RESET_TIMEOUT = 7 * 24 * 3600     # invite / reset links last a week
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
-    "root": {"handlers": ["console"], "level": "INFO"},
+    "handlers": {"console": {"class": "logging.StreamHandler"},
+                 "alert": {"class": "boards.errors.AdminAlertHandler", "level": "ERROR"}},
+    "root": {"handlers": ["console", "alert"], "level": "INFO"},
     "loggers": {
         "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
-        "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+        "django.request": {"handlers": ["console", "alert"], "level": "ERROR", "propagate": False},
         "botocore": {"level": "WARNING"},
         "boto3": {"level": "WARNING"},
     },

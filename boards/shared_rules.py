@@ -64,6 +64,16 @@ def translate(rule, board):
         if missing:
             return None, f"it has no {missing}"
         out[attr] = val
+    also = []
+    for a in rule.also or []:
+        a = dict(a)
+        for key, kind in (("trigger_list", "lists"), ("trigger_label", "labels"), ("trigger_field", "fields")):
+            if key in a:
+                a[key], missing = _swap(a[key], kind, maps)
+                if missing:
+                    return None, f"it has no {missing}"
+        also.append(a)
+    out["also"] = also
     for attr in ("filters", "actions"):
         items = []
         for a in getattr(rule, attr) or []:

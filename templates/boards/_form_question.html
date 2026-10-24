@@ -1,0 +1,15 @@
+<li class="fb-q">
+  <div class="fb-q-row">
+    <input name="q_label_{{ i }}" maxlength="200" value="{{ q.label|default:'' }}" placeholder="Question, e.g. Where is it?" aria-label="Question">
+    <select name="q_kind_{{ i }}" aria-label="Kind of answer">{% for k, v in kinds %}<option value="{{ k }}" {% if q.kind == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+    <select name="q_to_{{ i }}" aria-label="Where the answer goes">{% for k, v in targets %}<option value="{{ k }}" {% if q.to == k or not q and k == "description" %}selected{% endif %}>→ {{ v }}</option>{% endfor %}</select>
+    <label class="check-inline dark"><input type="checkbox" name="q_required_{{ i }}" value="1" {% if q.required %}checked{% endif %}> Required</label>
+    <button type="button" class="icon-btn xs" data-q-up title="Move up" aria-label="Move up">↑</button>
+    <button type="button" class="icon-btn xs" data-q-del title="Remove question" aria-label="Remove question">✕</button>
+  </div>
+  <div class="fb-q-row">
+    <input name="q_help_{{ i }}" maxlength="200" value="{{ q.help|default:'' }}" placeholder="Hint under the question (optional)" aria-label="Hint">
+  </div>
+  <div data-q-options hidden><textarea name="q_options_{{ i }}" rows="3" placeholder="Choices — one per line" aria-label="Choices">{% for o in q.options %}{{ o }}{% if not forloop.last %}
+{% endif %}{% endfor %}</textarea></div>
+</li>

@@ -100,15 +100,21 @@ def invite(user, inviter=None, where="", now=True):
 
 # ---------- notifications ----------
 
+# Sent straight away even to people on the once-a-day summary: someone is waiting on them.
+URGENT_KINDS = ("signoff", "system")
+
+
 def notification_emails(now=None):
     """One email per person with their new unread notifications."""
     if not enabled():
         return 0
+    from django.db.models import Q
     now = now or timezone.now()
-    pending = (Notification.objects.filter(emailed_at__isnull=True, read_at__isnull=True,
+    pending = (Notification.objects.filter(Q(recipient__email_notifications="instant")
+                                           | Q(recipient__email_notifications="daily", kind__in=URGENT_KINDS),
+                                           emailed_at__isnull=True, read_at__isnull=True,
                                            created_at__lte=now - timedelta(minutes=2),
-                                           created_at__gte=now - timedelta(days=2),
-                                           recipient__is_active=True, recipient__email_notifications="instant")
+                                           created_at__gte=now - timedelta(days=2), recipient__is_active=True)
                .select_related("recipient", "actor", "card", "board").order_by("created_at"))
     by_user = defaultdict(list)
     for n in pending[:2000]:
@@ -128,7 +134,8 @@ def notification_emails(now=None):
         count += 1
     # people who don't want emails: mark as handled so they're never sent later
     Notification.objects.filter(emailed_at__isnull=True, created_at__lte=now - timedelta(minutes=2)) \
-        .exclude(recipient__email_notifications="instant").update(emailed_at=now)
+        .exclude(recipient__email_notifications="instant") \
+        .exclude(recipient__email_notifications="daily", kind__in=URGENT_KINDS).update(emailed_at=now)
     return count
 
 
@@ -156,12 +163,27 @@ def daily_digests(now=None, hour=7):
                                        list__is_archived=False, list__board__is_archived=False,
                                        due_at__lte=now + timedelta(days=1)).select_related("list__board")
                    .order_by("due_at")[:20])
+        from .models import SignOff
+        from .risk import reason
+        from .services import cards_qs
+        waiting = list(SignOff.objects.filter(approver=user, status="pending", card__is_archived=False)
+                       .select_related("card__list__board", "requested_by")[:20])
+        risky = []
+        for c in cards_qs().filter(members=user, is_complete=False, is_archived=False, is_template=False,
+                                   due_at__gt=now, due_at__lte=now + timedelta(days=3))[:50]:
+            why = reason(c, now)
+            if why:
+                risky.append({"title": c.title, "why": why, "link": url(f"/b/{c.list.board_id}/?card={c.pk}"),
+                              "when": timezone.localtime(c.due_at).strftime("%a %-d %b")})
         user.last_digest_on = today
         user.save(update_fields=["last_digest_on"])
-        if not unread and not due:
+        if not unread and not due and not waiting and not risky:
             continue
         text, html = render("digest", {
             "user": user, "items": [_item(n) for n in unread], "prefs": url("/account/email/"),
+            "signoffs": [{"title": so.card.title, "ask": so.ask, "who": so.requested_by.display_name if so.requested_by else "",
+                          "link": url(f"/b/{so.card.list.board_id}/?card={so.card_id}")} for so in waiting],
+            "risky": risky,
             "due": [{"title": c.title, "where": f"{c.list.board.title} › {c.list.title}",
                      "when": timezone.localtime(c.due_at).strftime("%a %-d %b, %H:%M"),
                      "overdue": c.due_at < now, "link": url(f"/b/{c.list.board_id}/?card={c.pk}")} for c in due],

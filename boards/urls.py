@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import (api, views, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio,
+from . import (api, api_more, views, views_forms, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio,
                views_company, views_export, views_public, views_search)
 
 urlpatterns = [
@@ -17,6 +17,8 @@ urlpatterns = [
     path("timesheets/", views_portfolio.timesheets_page, name="timesheets"),
     path("company/", views_company.usage, name="company_usage"),
     path("company/audit/", views_company.audit_log, name="company_audit"),
+    path("company/health/", views_company.health, name="company_health"),
+    path("company/problems/", views_company.health),
     path("company/people/", views_company.people, name="company_people"),
     path("company/people/import/", views_company.people_import, name="people_import"),
     path("company/settings/", views_company.settings_page, name="company_settings"),
@@ -55,6 +57,9 @@ urlpatterns = [
     path("api/users/<int:user_id>/capacity/", api.user_capacity),
     path("b/<int:board_id>/dashboard/", views_board.board_dashboard, name="board_dashboard"),
     path("b/<int:board_id>/automation/", views_automation.automation_page, name="board_automation"),
+    path("b/<int:board_id>/forms/", views_forms.forms_page, name="board_forms"),
+    path("f/<str:token>/", views_forms.form_fill, name="form_fill"),
+    path("b/<int:board_id>/swimlanes/", views_board.board_swimlanes, name="board_swimlanes"),
     path("b/<int:board_id>/automation/rules/", views_automation.rule_create, name="rule_create"),
     path("b/<int:board_id>/automation/rules/<int:rule_id>/", views_automation.rule_update, name="rule_update"),
     path("b/<int:board_id>/automation/schedules/", views_automation.schedule_create, name="schedule_create"),
@@ -133,5 +138,12 @@ urlpatterns = [
     path("api/comments/<int:comment_id>/react/", api.comment_react),
     path("api/cards/<int:card_id>/vote/", api.card_vote),
     path("api/cards/<int:card_id>/delete/", api.card_delete),
+    path("api/items/<int:item_id>/to-card/", api_more.item_to_card),
+    path("api/cards/lookup/", api_more.card_lookup),
+    path("api/cards/<int:card_id>/parent/", api_more.card_parent),
+    path("api/cards/<int:card_id>/children/", api_more.card_child_create),
+    path("api/cards/<int:card_id>/signoffs/", api_more.signoff_request),
+    path("api/signoffs/<int:signoff_id>/", api_more.signoff_update),
+    path("api/cards/<int:card_id>/lane/", api_more.card_lane),
     path("boards/<int:board_id>/restore/", views.board_restore, name="board_restore"),
 ]

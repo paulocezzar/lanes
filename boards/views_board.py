@@ -469,3 +469,35 @@ def board_gantt(request, board_id):
         "next": (lo + timedelta(days=28 if zoom != "month" else 90)).isoformat(),
     })
     return render(request, "boards/view_gantt.html", ctx)
+
+
+@login_required
+def board_swimlanes(request, board_id):
+    """The board split into rows — one per person or per label — so you can see who has what across the lists.
+    Drag a card sideways to move it to another list, or down to give it to someone else (or another label)."""
+    board, ctx = board_context(request, board_id, "swimlanes")
+    by = request.GET.get("by") if request.GET.get("by") in ("member", "label") else "member"
+    lists = list(board.lists.filter(is_archived=False).order_by("position", "pk"))
+    cards = list(cards_qs().filter(list__board=board, list__is_archived=False, is_archived=False, is_template=False)
+                 .order_by("position", "pk"))
+    if by == "member":
+        lanes = [(str(u.pk), u.display_name, u) for u in ctx["people"]] + [("none", "Nobody yet", None)]
+        key = lambda c: [str(u.pk) for u in c.members.all()] or ["none"]  # noqa: E731
+    else:
+        lanes = [(str(lab.pk), lab.name or lab.get_colour_display(), lab) for lab in board.labels.all()] + \
+                [("none", "No label", None)]
+        key = lambda c: [str(lab.pk) for lab in c.labels.all()] or ["none"]  # noqa: E731
+    cells = {}
+    for c in cards:
+        for k in key(c):
+            cells.setdefault((k, c.list_id), []).append(c)
+    rows = []
+    for k, name, obj in lanes:
+        row = [{"list": l, "cards": cells.get((k, l.pk), [])} for l in lists]
+        n = sum(len(x["cards"]) for x in row)
+        rows.append({"key": k, "name": name, "obj": obj, "cells": row, "count": n})
+    hide_empty = request.GET.get("all") != "1"
+    shown = [r for r in rows if r["count"] or not hide_empty]
+    ctx.update({"by": by, "lists": lists, "rows": shown, "hidden_lanes": len(rows) - len(shown),
+                "base_template": "boards/board_base.html"})
+    return render(request, "boards/view_swimlanes.html", ctx)

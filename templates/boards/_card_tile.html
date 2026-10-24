@@ -12,11 +12,14 @@
   {% with qp=card.qty_progress %}{% if qp is not None %}<div class="tile-progress{% if qp == 100 %} done{% endif %}" title="Checklist quantities {{ qp }}% done"><div class="tp-bar"><i style="width: {{ qp }}%"></i></div><small>{{ qp }}% done</small></div>{% endif %}{% endwith %}
   {% with pg=card.progress %}{% if pg %}<div class="tile-progress{% if pg.done %} done{% endif %}" title="{{ pg.made }} of {{ pg.target }}{% if pg.unit %} {{ pg.unit }}{% endif %} made"><div class="tp-bar"><i style="width: {{ pg.pct }}%"></i></div><small>{{ pg.made }} / {{ pg.target }}{% if pg.unit %} {{ pg.unit }}{% endif %} · {{ pg.pct }}%</small></div>{% endif %}{% endwith %}
   {% with tf=card.tile_fields %}{% if tf %}<div class="tile-fields">{% for v in tf %}<span class="field-badge"><b>{{ v.field.name }}</b> {{ v.display }}</span>{% endfor %}</div>{% endif %}{% endwith %}
+  {% with risk=card.risk %}{% if risk and not public %}<div class="tile-risk" title="{{ risk }}">⚠ At risk · <span>{{ risk }}</span></div>{% endif %}{% endwith %}
   {% with votes=card.votes.all|length %}
-  {% if card.due_at or card.description or card.comments.all or counts.1 or card.members.all or card.attachments.all or votes and card.list.board.voting %}
+  {% if card.children.all or card.signoffs.all or card.due_at or card.description or card.comments.all or counts.1 or card.members.all or card.attachments.all or votes and card.list.board.voting %}
   <div class="tile-badges">
     {% if votes and card.list.board.voting %}<span class="badge vote-badge" title="{{ votes }} vote{{ votes|pluralize }}">👍{{ votes }}</span>{% endif %}
     {% if card.due_at %}<span class="badge due-{{ card.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ card.due_at|date:"j M" }}</span>{% endif %}
+    {% with kp=card.child_progress %}{% if kp %}<span class="badge{% if kp.done == kp.total %} all-done{% endif %}" title="{{ kp.done }} of {{ kp.total }} parts done">▦ {{ kp.done }}/{{ kp.total }}</span>{% endif %}{% endwith %}
+    {% if card.signoffs.all %}{% with so=card.open_signoffs %}<span class="badge so-badge{% if not so %} all-done{% endif %}" title="{% if so %}Waiting for sign-off{% else %}Signed off{% endif %}">✔{% if so %} sign-off{% endif %}</span>{% endwith %}{% endif %}
     {% if card.recur %}<span class="badge recur-badge" title="Repeats {{ card.get_recur_display|lower }}">🔁</span>{% endif %}
     {% if card.description %}<span class="badge" title="Has a description">{% include "boards/_icon.html" with i="desc" %}</span>{% endif %}
     {% if card.attachments.all %}<span class="badge" title="Attachments">📎{{ card.attachments.all|length }}</span>{% endif %}

@@ -61,7 +61,59 @@ def filters_ok(rule, card):
             return False
         if t == "in_list" and card.list_id != f.get("list"):
             return False
+        if t == "no_member" and card.members.exists():
+            return False
+        if t in ("checklists_done", "checklists_open"):
+            items = ChecklistItem.objects.filter(checklist__card=card)
+            done = items.exists() and not items.filter(is_done=False).exists()
+            if done != (t == "checklists_done"):
+                return False
+        if t == "overdue" and not (card.due_at and not card.is_complete and card.due_at < timezone.now()):
+            return False
+        if t in ("signed_off", "awaiting_signoff"):
+            sos = list(card.signoffs.all())
+            ok = bool(sos) and all(s.status == "approved" for s in sos)
+            if (t == "signed_off") != ok or (t == "awaiting_signoff" and not sos):
+                return False
+        if t == "field_is":
+            from .models import CardFieldValue
+            v = CardFieldValue.objects.filter(card=card, field_id=f.get("field")).values_list("value", flat=True).first()
+            want = str(f.get("value", "")).strip().lower()
+            have = "" if v in (None, False) else ("yes" if v is True else str(v)).strip().lower()
+            if have != want:
+                return False
     return True
+
+
+class _Alt:
+    """One of a rule's extra "or when…" triggers, shaped like a Rule for _matches_event / describe_rule."""
+    def __init__(self, rule, data):
+        self.board, self.created_by, self.created_by_id = rule.board, rule.created_by, rule.created_by_id
+        self.trigger = data.get("trigger")
+        self.trigger_list_id = data.get("trigger_list")
+        self.trigger_label_id = data.get("trigger_label")
+        self.trigger_field_id = data.get("trigger_field")
+        self.trigger_count = data.get("trigger_count")
+        self.trigger_me = data.get("member_who") == "me"
+        self.trigger_hours = self.trigger_weekday = None
+        self.by_whom, self.filters = "anyone", []
+
+    @property
+    def trigger_list(self):
+        return List.objects.filter(pk=self.trigger_list_id).first() if self.trigger_list_id else None
+
+    @property
+    def trigger_label(self):
+        return Label.objects.filter(pk=self.trigger_label_id).first() if self.trigger_label_id else None
+
+    @property
+    def trigger_field(self):
+        from .models import CustomField
+        return CustomField.objects.filter(pk=self.trigger_field_id).first() if self.trigger_field_id else None
+
+
+def alternatives(rule):
+    return [_Alt(rule, a) for a in (rule.also or []) if isinstance(a, dict) and a.get("trigger") in Rule.ALSO_OK]
 
 
 def _matches_event(rule, card, *, list_, label, member, field, mentioned):
@@ -90,13 +142,16 @@ def fire(card, trigger, *, list_=None, label=None, actor=None, member=None, fiel
     people @mentioned in a comment."""
     board = card.list.board
     triggers = [trigger, *ALSO_FIRES.get(trigger, [])]
-    rules = Rule.objects.filter(board=board, trigger__in=triggers, is_enabled=True)
+    rules = [r for r in Rule.objects.filter(board=board, is_enabled=True).select_related("board", "created_by")
+             if r.trigger in triggers or any(a.get("trigger") in triggers for a in (r.also or []) if isinstance(a, dict))]
+    ev = dict(list_=list_, label=label, member=member, field=field, mentioned=mentioned)
     for rule in rules:
-        if card.is_archived and rule.trigger != Rule.ARCHIVED:
+        if card.is_archived and trigger != Rule.ARCHIVED:
             continue
         if not _by_whom_ok(rule, actor):
             continue
-        if not _matches_event(rule, card, list_=list_, label=label, member=member, field=field, mentioned=mentioned):
+        ways = ([rule] if rule.trigger in triggers else []) + [a for a in alternatives(rule) if a.trigger in triggers]
+        if not any(_matches_event(w, card, **ev) for w in ways):
             continue
         if not filters_ok(rule, card):
             continue
@@ -167,8 +222,12 @@ def run_action(card, action):
     elif t in ("complete", "incomplete"):
         want = t == "complete"
         if card.is_complete != want:
+            from .features import after_completion_change, blocking_signoffs
+            if want and blocking_signoffs(card):
+                return "left it open — it still needs signing off"
             card.is_complete = want
             card.save(update_fields=["is_complete", "updated_at"])
+            after_completion_change(card)
             return "marked complete" if want else "marked incomplete"
     elif t == "check_all":
         items = ChecklistItem.objects.filter(checklist__card=card, is_done=False)
@@ -195,6 +254,13 @@ def run_action(card, action):
             from . import notify
             notify.send(m.user, "assigned", card=card, text=f"assigned you to {card.title} (automation)")
             return f"added {m.user.display_name}"
+    elif t == "request_signoff":
+        from .models import SignOff
+        m = BoardMember.objects.filter(board=board, user_id=action.get("user")).select_related("user").first()
+        if m and not SignOff.objects.filter(card=card, approver=m.user, status="pending").exists():
+            from .features import request_signoff
+            request_signoff(card, m.user, None)
+            return f"asked {m.user.display_name} to sign it off"
     elif t == "clear_members":
         if card.members.exists():
             card.members.clear()
@@ -395,12 +461,16 @@ def describe_rule(rule):
     if rule.trigger not in Rule.TIME_TRIGGERS and rule.by_whom != "anyone":
         name = rule.created_by.display_name if rule.created_by else "?"
         when += f" by {name}" if rule.by_whom == "me" else f" by anyone except {name}"
+    for alt in alternatives(rule) if isinstance(rule, Rule) else []:
+        when += " or when " + describe_rule(alt)[0].removeprefix("When ")
     if rule.filters:
         when += ", " + " and ".join(describe_filter(rule.board, f) for f in rule.filters)
     if rule.trigger == Rule.LIST_CREATED:
         return f"When {when}", [x.replace("?", "the new list") for x in
                                  describe_board_actions(rule.board, [{k: (None if v == "new" else v) for k, v in a.items()}
                                                                      for a in rule.actions])]
+    if isinstance(rule, _Alt):
+        return f"When {when}", []
     return f"When {when}", [describe_action(rule.board, a) for a in rule.actions]
 
 
@@ -415,8 +485,15 @@ def describe_filter(board, f):
     if t == "in_list":
         lst = List.objects.filter(pk=f.get("list"), board=board).first()
         return f"in list “{lst.title if lst else '?'}”"
+    if t == "field_is":
+        from .models import CustomField
+        fld = CustomField.objects.filter(pk=f.get("field"), board=board).first()
+        return f"where “{fld.name if fld else '?'}” is “{f.get('value', '')}”"
     return {"has_due": "with a due date", "no_due": "without a due date", "complete": "that is complete",
-            "incomplete": "that isn't complete"}.get(t, t)
+            "incomplete": "that isn't complete", "checklists_done": "with every checklist item done",
+            "checklists_open": "with checklist items still to do", "overdue": "that is overdue",
+            "signed_off": "that has been signed off", "awaiting_signoff": "still waiting for sign-off",
+            "no_member": "with nobody on it"}.get(t, t)
 
 
 def describe_action(board, a):
@@ -431,6 +508,9 @@ def describe_action(board, a):
     if t == "add_member":
         m = BoardMember.objects.filter(board=board, user_id=a.get("user")).select_related("user").first()
         return f"add {m.user.display_name if m else '(removed member)'}"
+    if t == "request_signoff":
+        m = BoardMember.objects.filter(board=board, user_id=a.get("user")).select_related("user").first()
+        return f"ask {m.user.display_name if m else '(removed member)'} to sign it off"
     if t == "set_due":
         return f"set due date to {a.get('days', 0)} day(s) from now, 17:00"
     if t == "set_due_workdays":

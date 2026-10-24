@@ -1,0 +1,11 @@
+<div class="ff-q{% if r.error %} bad{% endif %}">
+  <label for="a{{ r.i }}">{{ r.q.label }}{% if r.q.required %} <span class="ff-req">*</span>{% endif %}</label>
+  {% if r.q.help %}<p class="ff-help">{{ r.q.help }}</p>{% endif %}
+  {% if r.q.kind == "long" %}<textarea id="a{{ r.i }}" name="a{{ r.i }}" rows="4" maxlength="5000">{{ r.value }}</textarea>
+  {% elif r.q.kind == "number" %}<input id="a{{ r.i }}" name="a{{ r.i }}" inputmode="decimal" value="{{ r.value }}">
+  {% elif r.q.kind == "date" %}<input id="a{{ r.i }}" name="a{{ r.i }}" type="date" value="{{ r.value }}">
+  {% elif r.q.kind == "choice" %}<select id="a{{ r.i }}" name="a{{ r.i }}"><option value="">Choose…</option>{% for o in r.q.options %}<option {% if o == r.value %}selected{% endif %}>{{ o }}</option>{% endfor %}</select>
+  {% elif r.q.kind == "yesno" %}<div class="ff-yesno" id="a{{ r.i }}"><label><input type="radio" name="a{{ r.i }}" value="yes" {% if r.value == "yes" %}checked{% endif %}> Yes</label><label><input type="radio" name="a{{ r.i }}" value="no" {% if r.value == "no" %}checked{% endif %}> No</label></div>
+  {% else %}<input id="a{{ r.i }}" name="a{{ r.i }}" maxlength="500" value="{{ r.value }}">{% endif %}
+  {% if r.error %}<p class="ff-msg">{{ r.error }}</p>{% endif %}
+</div>

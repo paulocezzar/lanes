@@ -212,12 +212,30 @@ class Card(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Cards inside cards: a big job holds child cards (on any board) and shows their combined progress.
+    parent = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="children")
 
     class Meta:
         ordering = ["position", "id"]
 
     def __str__(self):
         return self.title
+
+    def child_progress(self):
+        """(done, total, pct) over live child cards, or None when it has none."""
+        kids = [c for c in self.children.all() if not c.is_archived]
+        if not kids:
+            return None
+        done = sum(1 for c in kids if c.is_complete)
+        return {"done": done, "total": len(kids), "pct": round(100 * done / len(kids))}
+
+    def open_signoffs(self):
+        return [s for s in self.signoffs.all() if s.status != SignOff.APPROVED]
+
+    def risk(self, now=None):
+        """Why this card looks likely to miss its due date, or "" — see boards/risk.py."""
+        from .risk import reason
+        return reason(self, now)
 
     @property
     def board(self):
@@ -323,6 +341,8 @@ class ChecklistItem(models.Model):
     qty_done = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     qty_unit = models.CharField(max_length=20, blank=True)
     per_unit = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
+    # Set when the item was turned into its own card; the item ticks itself when that card is complete.
+    linked_card = models.ForeignKey(Card, on_delete=models.SET_NULL, null=True, blank=True, related_name="from_items")
 
     @property
     def has_qty(self):
@@ -534,6 +554,16 @@ class Activity(models.Model):
             "list_archived": f"archived list {d.get('title', '')}",
             "list_restored": f"restored list {d.get('title', '')}",
             "button": f"pressed {d.get('name', 'a button')}: {d.get('summary', '')}",
+            "signoff_requested": f"asked {d.get('name', '')} to sign off this card",
+            "signoff_approved": f"signed off this card{(': ' + d['note']) if d.get('note') else ''}",
+            "signoff_rejected": f"asked for changes before signing off{(': ' + d['note']) if d.get('note') else ''}",
+            "signoff_cancelled": f"cancelled the sign-off from {d.get('name', '')}",
+            "children_done": f"— every part ({d.get('n', '')}) of this card is done",
+            "item_to_card": f"turned “{d.get('text', '')}” into its own card in {d.get('list', '')}",
+            "parent_set": f"made this card part of {d.get('name', '')}",
+            "parent_removed": f"took this card out of {d.get('name', '')}",
+            "child_added": f"added {d.get('name', '')} as a part of this card",
+            "form_request": f"sent this in through the form “{d.get('form', '')}”",
         }.get(self.verb, self.verb.replace("_", " "))
 
 
@@ -568,7 +598,13 @@ class Rule(models.Model):
     BOARD_ADDED, ARCHIVED, DUE_SET, DUE_REMOVED = "board_added", "card_archived", "due_set", "due_removed"
     ATTACHMENT, COMMENT, MENTIONED, FIELD_SET = "attachment_added", "comment_added", "mentioned", "field_set"
     LIST_COUNT, LIST_CREATED, DUE_WEEKDAY = "list_count", "list_created", "due_weekday"
-    FILTERS = ["label", "no_label", "has_due", "no_due", "member", "complete", "incomplete", "in_list"]
+    FILTERS = ["label", "no_label", "has_due", "no_due", "member", "complete", "incomplete", "in_list",
+               "checklists_done", "checklists_open", "field_is", "overdue", "signed_off", "awaiting_signoff",
+               "no_member"]
+    # Triggers that can be added as "or when…" alongside the main one (event triggers on a card).
+    ALSO_OK = ["card_added", "card_moved", "card_completed", "checklist_done", "label_added", "member_added",
+               "board_added", "card_archived", "due_set", "due_removed", "attachment_added", "comment_added",
+               "mentioned", "field_set"]
     BY_WHOM = [("anyone", "by anyone"), ("me", "by me"), ("others", "by anyone except me")]
     TIME_TRIGGERS = (DUE_SOON, OVERDUE, "due_weekday")
     AFTER = [(0, "the moment it's due"), (1, "1 hour after"), (3, "3 hours after"), (24, "1 day after"),
@@ -602,6 +638,7 @@ class Rule(models.Model):
         ("rename", "rename it to…"),
         ("set_description", "set its description to…"),
         ("set_start", "set start date to … days from now"),
+        ("request_signoff", "ask … to sign it off"),
     ]
 
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="rules")
@@ -619,6 +656,8 @@ class Rule(models.Model):
     is_enabled = models.BooleanField(default=True)
     # Department-wide: this rule is copied to every board in its department (lists/labels matched by name).
     everywhere = models.BooleanField(default=False)
+    # Extra "or when…" triggers: [{"trigger": "card_completed"}, {"trigger": "card_moved", "trigger_list": 4}]
+    also = models.JSONField(default=list, blank=True)
     source = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True, related_name="copies")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -734,7 +773,8 @@ class Notification(models.Model):
              (MENTIONED, "Mentioned"), (COMMENTED, "Comment on your card"), (DUE_SOON, "Card due soon"),
              (ITEM_DUE_SOON, "Checklist item due soon"), (ADDED_TO_BOARD, "Added to a board"),
              (WATCHED, "Something you watch changed"), (AUTOMATION, "From a board rule"),
-             ("budget", "Project budget warning")]
+             ("budget", "Project budget warning"), ("signoff", "Sign-off"), ("risk", "Card at risk"),
+             ("form", "New request from a form"), ("system", "Lanes needs attention")]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
@@ -1047,3 +1087,63 @@ class CostItem(models.Model):
 
     class Meta:
         ordering = ["-day", "-created_at"]
+
+
+class SignOff(models.Model):
+    """Someone has to approve a card before it can be marked complete."""
+    PENDING, APPROVED, REJECTED = "pending", "approved", "rejected"
+    STATUSES = [(PENDING, "Waiting"), (APPROVED, "Approved"), (REJECTED, "Changes needed")]
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="signoffs")
+    approver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="signoffs")
+    requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    status = models.CharField(max_length=10, choices=STATUSES, default=PENDING)
+    note = models.CharField(max_length=500, blank=True)          # the approver's reason / comment
+    ask = models.CharField(max_length=300, blank=True)           # what the requester wants checked
+    requested_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["requested_at", "id"]
+
+
+class RequestForm(models.Model):
+    """A form link that makes cards on a board — for people who aren't on the board."""
+    STAFF, ANYONE = "staff", "anyone"
+    WHO = [(STAFF, "Anyone signed in to Lanes"), (ANYONE, "Anyone with the link (no sign-in)")]
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="forms")
+    list = models.ForeignKey(List, on_delete=models.CASCADE, related_name="+")
+    title = models.CharField(max_length=120)
+    intro = models.TextField(blank=True)
+    # [{"label": "What do you need?", "kind": "text", "to": "title", "required": true, "options": []}]
+    questions = models.JSONField(default=empty_list)
+    label = models.ForeignKey(Label, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    who = models.CharField(max_length=10, choices=WHO, default=STAFF)
+    token = models.CharField(max_length=40, unique=True)
+    is_open = models.BooleanField(default=True)
+    thanks = models.CharField(max_length=300, blank=True)
+    submissions = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["title", "id"]
+
+    def __str__(self):
+        return self.title
+
+
+class ErrorReport(models.Model):
+    """A server error, grouped by where it happened, so admins hear about it once — not once per hit."""
+    signature = models.CharField(max_length=200, unique=True)
+    message = models.CharField(max_length=500)
+    path = models.CharField(max_length=300, blank=True)
+    detail = models.TextField(blank=True)
+    count = models.PositiveIntegerField(default=1)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now_add=True)
+    notified_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_seen"]

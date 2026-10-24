@@ -19,7 +19,7 @@ MAX_ACTIONS = 8
 NEEDS = {"move": "list", "add_label": "label", "remove_label": "label", "add_member": "user",
          "set_due": "days", "set_due_workdays": "days", "comment": "text", "add_sticker": "sticker",
          "notify": "message", "add_checklist": "checklist", "copy": "list", "cascade": "list",
-         "remove_member": "anyuser", "set_start": "days", "rename": "text", "set_description": "message"}
+         "remove_member": "anyuser", "request_signoff": "user", "set_start": "days", "rename": "text", "set_description": "message"}
 SECTIONS = [("rules", "Rules"), ("due", "Due date"), ("scheduled", "Scheduled"),
             ("card-buttons", "Card buttons"), ("board-buttons", "Board buttons"), ("suggestions", "Suggestions"),
             ("activity", "Activity"), ("reports", "Reports")]
@@ -180,7 +180,7 @@ def rule_json(r):
     return {"id": r.pk, "trigger": r.trigger, "trigger_list": r.trigger_list_id, "trigger_label": r.trigger_label_id,
             "trigger_hours": r.trigger_hours, "by_whom": r.by_whom, "member_who": "me" if r.trigger_me else "anyone",
             "trigger_count": r.trigger_count, "trigger_weekday": r.trigger_weekday, "trigger_field": r.trigger_field_id,
-            "filters": r.filters or [], "actions": r.actions}
+            "filters": r.filters or [], "also": r.also or [], "actions": r.actions}
 
 
 def schedule_json(s):
@@ -363,6 +363,10 @@ def rule_create(request, board_id):
         rule.filters = clean_filters(_json.loads(p.get("filters") or "[]"), board) if trigger != Rule.LIST_CREATED else []
     except (ValueError, TypeError):
         rule.filters = []
+    try:
+        rule.also = clean_also(_json.loads(p.get("also") or "[]"), board) if trigger in Rule.ALSO_OK else []
+    except (ValueError, TypeError):
+        rule.also = []
 
     if trigger == Rule.LIST_CREATED:
         actions, error = parse_actions(p, board, extra=Button.BOARD_ACTIONS, allow_new_list=True)
@@ -404,6 +408,37 @@ def _sync_message(rule):
     return msg
 
 
+def clean_also(raw, board):
+    """Extra "or when…" triggers: up to 3, each checked like the main trigger."""
+    from .models import CustomField
+    out = []
+    for a in raw if isinstance(raw, list) else []:
+        t = a.get("trigger") if isinstance(a, dict) else None
+        if t not in Rule.ALSO_OK:
+            continue
+        item = {"trigger": t}
+        if t in (Rule.ADDED, Rule.MOVED):
+            lst = List.objects.filter(pk=a.get("trigger_list") or 0, board=board).first()
+            if not lst:
+                continue
+            item["trigger_list"] = lst.pk
+        if t == Rule.LABEL_ADDED:
+            lab = Label.objects.filter(pk=a.get("trigger_label") or 0, board=board).first()
+            if not lab:
+                continue
+            item["trigger_label"] = lab.pk
+        if t == Rule.FIELD_SET:
+            fld = CustomField.objects.filter(pk=a.get("trigger_field") or 0, board=board).first()
+            if not fld:
+                continue
+            item["trigger_field"] = fld.pk
+        if t in (Rule.MEMBER_ADDED, Rule.MENTIONED):
+            item["member_who"] = "me" if a.get("member_who") == "me" else "anyone"
+        if item not in out:
+            out.append(item)
+    return out[:3]
+
+
 def clean_filters(raw, board):
     from django.contrib.auth import get_user_model
     out = []
@@ -422,6 +457,11 @@ def clean_filters(raw, board):
             lst = List.objects.filter(pk=f.get("list") or 0, board=board).first()
             if lst:
                 out.append({"type": t, "list": lst.pk})
+        elif t == "field_is":
+            from .models import CustomField
+            fld = CustomField.objects.filter(pk=f.get("field") or 0, board=board).first()
+            if fld:
+                out.append({"type": t, "field": fld.pk, "value": str(f.get("value", ""))[:200]})
         else:
             out.append({"type": t})
     return out[:6]

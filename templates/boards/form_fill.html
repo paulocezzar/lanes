@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ form.title }} · Lanes{% endblock %}
+{% block body_class %}form-page{% endblock %}
+{% block head %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block content %}
+<main class="form-fill">
+  <div class="ff-card">
+    <p class="ff-where">{{ form.board.title }}</p>
+    <h1>{{ form.title }}</h1>
+    {% if closed %}
+      <p class="ff-intro">This form isn't taking requests at the moment. Please get in touch with the team another way.</p>
+    {% elif done %}
+      <div class="ff-done" role="status">
+        <p class="ff-tick" aria-hidden="true">✓</p>
+        <h2>Sent</h2>
+        <p>{{ form.thanks|default:"Thanks — your request has reached the team." }}</p>
+        {% if card and can_see %}<p><a class="btn light" href="{% url 'board' form.board_id %}?card={{ card.pk }}">See your request on the board</a></p>{% endif %}
+        <p><a href="{% url 'form_fill' form.token %}">Send another</a></p>
+      </div>
+    {% else %}
+      {% if form.intro %}<p class="ff-intro">{{ form.intro|linebreaksbr }}</p>{% endif %}
+      {% if errors.general %}<p class="ff-error" role="alert">{{ errors.general }}</p>{% elif errors %}<p class="ff-error" role="alert">Please check the answers marked below.</p>{% endif %}
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="ff-hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+        {% if not user.is_authenticated %}
+        <div class="ff-q{% if errors.your_name %} bad{% endif %}">
+          <label for="your_name">Your name <span class="ff-req">*</span></label>
+          <input id="your_name" name="your_name" maxlength="120" value="{{ values.your_name|default:'' }}" autocomplete="name" required>
+          {% if errors.your_name %}<p class="ff-msg">{{ errors.your_name }}</p>{% endif %}
+        </div>
+        <div class="ff-q">
+          <label for="your_email">Your email <span class="muted">(so they can reply)</span></label>
+          <input id="your_email" name="your_email" type="email" maxlength="200" value="{{ values.your_email|default:'' }}" autocomplete="email">
+        </div>
+        {% else %}<p class="muted small">Sending as {{ user.display_name }}.</p>{% endif %}
+        {% for r in rows %}{% include "boards/_form_answer.html" %}{% endfor %}
+        <button class="btn primary ff-send">Send</button>
+      </form>
+    {% endif %}
+  </div>
+  <p class="ff-foot">Made with Lanes</p>
+</main>
+{% endblock %}

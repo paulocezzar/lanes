@@ -15,12 +15,12 @@
   </aside>
   <section class="search-main">
     <form method="get" class="search-form">
-      <input type="search" name="q" value="{{ q }}" placeholder="Search cards… try @me is:overdue label:urgent board:planning" autofocus>
+      <input type="search" name="q" value="{{ q }}" placeholder="Search cards… try “my cards due this week” or @me is:overdue label:urgent" autofocus>
       <button class="btn primary">Search</button>
     </form>
     {% if searched %}
     <div class="row search-meta">
-      <span class="muted">{{ results|length }}{% if results|length == 200 %}+{% endif %} card{{ results|length|pluralize }}</span>
+      <span class="muted">{{ results|length }}{% if results|length == 200 %}+{% endif %} card{{ results|length|pluralize }}{% if understood %} · searched for <code>{{ understood }}</code>{% endif %}</span>
       <form method="post" action="{% url 'search_save' %}" class="row">
         {% csrf_token %}<input type="hidden" name="q" value="{{ q }}">
         <input name="name" placeholder="Name this search" maxlength="60" class="save-name">
@@ -28,12 +28,12 @@
       </form>
     </div>
     <div class="mine-cards">
-      {% for card in results %}
+      {% for row in rows %}{% with card=row.card %}
       <a class="mine-link" href="{% url 'board' card.list.board_id %}?card={{ card.pk }}">
-        <span class="mine-list">{{ card.list.board.title }} › {{ card.list.title }}</span>
+        <span class="mine-list">{{ card.list.board.title }} › {{ card.list.title }}{% if row.hint %} · <em>found in {{ row.hint }}</em>{% endif %}</span>
         {% include "boards/_card_tile.html" %}
       </a>
-      {% empty %}<p class="muted">No cards match.</p>{% endfor %}
+      {% endwith %}{% empty %}<p class="muted">No cards match.</p>{% endfor %}
     </div>
     {% else %}
     <div class="panel search-help">

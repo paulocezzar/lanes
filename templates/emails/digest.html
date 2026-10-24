@@ -1,6 +1,10 @@
 {% extends "emails/_base.html" %}
 {% block body %}
 <p>Good morning {{ user.first_name|default:"" }} — here's your day on Lanes.</p>
+{% if signoffs %}<h3 style="font-size:15px;margin:16px 0 6px">Waiting for your sign-off</h3>
+{% for c in signoffs %}<div style="padding:6px 0"><a href="{{ c.link }}" style="color:#172b4d"><b>{{ c.title }}</b></a>{% if c.who %} <span style="font-size:12px;color:#626f86">asked by {{ c.who }}</span>{% endif %}{% if c.ask %}<div style="font-size:12px;color:#626f86">“{{ c.ask }}”</div>{% endif %}</div>{% endfor %}{% endif %}
+{% if risky %}<h3 style="font-size:15px;margin:16px 0 6px">May miss their date</h3>
+{% for c in risky %}<div style="padding:6px 0"><a href="{{ c.link }}" style="color:#172b4d"><b>{{ c.title }}</b></a> <span style="font-size:12px;color:#a54800">due {{ c.when }}</span><div style="font-size:12px;color:#626f86">{{ c.why }}</div></div>{% endfor %}{% endif %}
 {% if due %}<h3 style="font-size:15px;margin:16px 0 6px">Due today or overdue</h3>
 {% for c in due %}<div style="padding:6px 0"><a href="{{ c.link }}" style="color:#172b4d"><b>{{ c.title }}</b></a> <span style="font-size:12px;color:{% if c.overdue %}#c9372c{% else %}#626f86{% endif %}">{% if c.overdue %}overdue · {% endif %}{{ c.when }}</span><div style="font-size:12px;color:#626f86">{{ c.where }}</div></div>{% endfor %}{% endif %}
 {% if items %}<h3 style="font-size:15px;margin:16px 0 6px">New since yesterday</h3>

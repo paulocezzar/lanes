@@ -8,7 +8,7 @@ from . import ai, permissions
 from django.contrib.auth import get_user_model
 
 from .models import (COLOURS, REACTIONS, STICKERS, Activity, BoardMember, Card, CardFieldValue, CardMirror, Checklist,
-                     ChecklistItem, CustomField, Label, List)
+                     ChecklistItem, CustomField, Dependency, Label, List, SignOff)
 
 User = get_user_model()
 
@@ -31,6 +31,9 @@ def cards_qs():
         Prefetch("field_values", queryset=CardFieldValue.objects.select_related("field")),
         "comments",
         "votes",
+        "children",
+        Prefetch("signoffs", queryset=SignOff.objects.select_related("approver")),
+        Prefetch("dependencies", queryset=Dependency.objects.select_related("depends_on")),
     )
 
 
@@ -117,11 +120,32 @@ def render_modal(card, request):
         "dep_choices": (Card.objects.filter(list__board=board, is_archived=False, is_template=False, list__is_archived=False)
                         .exclude(pk=card.pk).order_by("list__position", "position").select_related("list")[:300]
                         if can_edit else []),
+        **_parts_ctx(card, user, can_edit),
         "copyable_checklists": (Checklist.objects.filter(card__list__board=board, card__is_archived=False)
                                 .exclude(card=card).select_related("card").order_by("card__title", "title")[:60]
                                 if can_edit else []),
     }
     return render_to_string("boards/_card_modal.html", ctx, request=request)
+
+
+def _parts_ctx(card, user, can_edit):
+    """Sign-offs, the card this one is part of, and its own parts."""
+    from .api_more import approver_choices
+    from .views_planner import editable_lists
+    signoffs = list(card.signoffs.select_related("approver", "requested_by"))
+    children = list(card.children.filter(is_archived=False).select_related("list__board")
+                    .order_by("is_complete", "list__board__title", "position"))
+    parent = Card.objects.select_related("list__board").filter(pk=card.parent_id).first() if card.parent_id else None
+    return {
+        "signoffs": signoffs,
+        "my_signoff": next((s for s in signoffs if s.approver_id == user.pk and s.status == "pending"), None),
+        "signoff_block": any(s.status != "approved" for s in signoffs),
+        "approvers": approver_choices(card) if can_edit else [],
+        "children": children,
+        "child_progress": card.child_progress() if children else None,
+        "parent_card": parent,
+        "part_lists": editable_lists(user) if can_edit else [],
+    }
 
 
 def _time_ctx(card, user):

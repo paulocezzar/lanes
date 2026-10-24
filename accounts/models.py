@@ -48,7 +48,7 @@ class User(AbstractUser):
     colourblind = models.BooleanField(default=False)       # patterns on labels as well as colour
     welcomed = models.BooleanField(default=False)          # has dismissed the first-time welcome
     only_unread = models.BooleanField(default=False)       # notifications panel: hide read ones
-    email_notifications = models.CharField(max_length=10, choices=EMAIL_PREFS, default="instant")
+    email_notifications = models.CharField(max_length=10, choices=EMAIL_PREFS, default="daily")
     last_digest_on = models.DateField(null=True, blank=True)
     ms_oid = models.CharField(max_length=64, blank=True, db_index=True)   # Microsoft account id, once linked
 

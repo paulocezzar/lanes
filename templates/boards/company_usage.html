@@ -20,15 +20,45 @@
     </div>
   </section>
 
+  <div class="dash-grid two">
   <section class="dash-card">
-    <h3>By department</h3>
+    <h3>People making changes, week by week</h3>
+    <div class="day-bars weeks">
+      {% for w in weeks %}<div class="day-bar" title="Week of {{ w.start|date:'j M' }}: {{ w.n }} {{ w.n|pluralize:'person,people' }}"><i style="height:{{ w.pct }}%"></i><span>{{ w.start|date:"j M" }}</span><b class="wk-n">{{ w.n }}</b></div>{% endfor %}
+    </div>
+  </section>
+  <section class="dash-card">
+    <h3>Tools in use</h3>
+    {% for name, n in feature_use %}<div class="co-row"><span>{{ name }}</span><b>{{ n }}</b></div>{% endfor %}
+    <p class="muted small">Low numbers are a hint of what to show people next.</p>
+  </section>
+  </div>
+
+  {% if dept %}
+  <section class="dash-card" id="dept">
+    <h3>{{ dept.ws.name }} — who's using Lanes <a class="btn sm ghost" href="{% url 'company_usage' %}">Close</a></h3>
+    <p class="muted small">{{ dept.quiet }} of {{ dept.rows|length }} {{ dept.rows|length|pluralize:"person hasn't,people haven't" }} changed anything in the last 30 days. They're listed first.</p>
+    <div class="table-scroll"><table class="company-table">
+      <thead><tr><th>Person</th><th>Role</th><th>Last signed in</th><th>Last change</th><th>Changes (30 days)</th></tr></thead>
+      <tbody>{% for r in dept.rows %}<tr class="{% if not r.n30 %}quiet-row{% endif %}">
+        <td>{{ r.u.display_name }} <small class="muted">{{ r.u.email }}</small></td><td>{{ r.role }}</td>
+        <td>{% if r.last_login %}{{ r.last_login|date:"j M Y" }}{% else %}<span class="bad">Never</span>{% endif %}</td>
+        <td>{% if r.last_change %}{{ r.last_change|date:"j M Y" }}{% else %}—{% endif %}</td><td>{{ r.n30 }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <h4>Boards in {{ dept.ws.name }}</h4>
+    {% for b in dept.boards %}<div class="co-row"><a href="{% url 'board' b.pk %}">{{ b.title }}</a><b class="{% if not b.n %}muted{% endif %}">{{ b.n }} change{{ b.n|pluralize }}</b></div>{% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="dash-card">
+    <h3>By department <small class="muted">— click one to see who is and isn't using it</small></h3>
     <div class="table-scroll">
     <table class="company-table">
       <thead><tr><th>Department</th><th>People</th><th>Active (30 days)</th><th>Boards</th><th>Open cards</th><th>Overdue</th><th>Completed (30 days)</th></tr></thead>
       <tbody>
       {% for d in depts %}
       <tr>
-        <td><a href="{% url 'workspace_members' d.ws.pk %}">{{ d.ws.name }}</a></td>
+        <td><a href="?dept={{ d.ws.pk }}#dept">{{ d.ws.name }}</a></td>
         <td>{{ d.people }}</td>
         <td><span class="mini-bar"><i style="width:{{ d.pct_active }}%"></i></span> {{ d.active }} <small class="muted">({{ d.pct_active }}%)</small></td>
         <td>{{ d.boards }}</td>

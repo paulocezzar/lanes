@@ -255,6 +255,11 @@ def card_update(request, card_id):
                            {"conflict": True, "current": card.description})
         card.description = new_desc
     if "is_complete" in d and bool(d["is_complete"]) != card.is_complete:
+        if d["is_complete"]:
+            from .features import blocked_message
+            why = blocked_message(card)
+            if why:
+                raise ApiError(why, 409, {"signoff": True})
         card.is_complete = bool(d["is_complete"])
         log(board, user, "card_completed" if card.is_complete else "card_reopened", card=card)
     if "due_at" in d:
@@ -326,6 +331,9 @@ def card_update(request, card_id):
             log(board, user, "due_set", card=c, due=timezone.localtime(c.due_at).strftime("%-d %b %Y, %H:%M"))
     for trig in fire_after:
         automation.fire(card, trig, actor=user)
+    if "is_complete" in d and bool(was_complete) != card.is_complete:
+        from .features import after_completion_change
+        after_completion_change(card, user)
     if "is_complete" in d and was_complete and not card.is_complete:
         from .recurring import undo_spawn
         undo_spawn(card)

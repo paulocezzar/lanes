@@ -27,6 +27,8 @@
         <button class="complete-toggle{% if card.is_complete %} on{% endif %}" {% if can_edit %}data-toggle-complete{% else %}disabled{% endif %} title="{% if card.is_complete %}Mark incomplete{% else %}Mark complete{% endif %}">✓</button>
         <h2 class="cm-title" {% if can_edit %}contenteditable="plaintext-only" spellcheck="false" data-card-title{% endif %}>{{ card.title }}</h2>
       </div>
+      {% if parent_card %}<p class="cm-parent">Part of <a href="{% url 'board' parent_card.list.board_id %}?card={{ parent_card.pk }}"{% if parent_card.list.board_id == board.pk %} data-card-open="{{ parent_card.pk }}"{% endif %}><b>{{ parent_card.title }}</b></a>{% if parent_card.list.board_id != board.pk %} <span class="muted small">on {{ parent_card.list.board.title }}</span>{% endif %}
+        {% if can_edit %}<button type="button" class="link-btn" data-parent-set="" title="Take this card out of {{ parent_card.title }}">Remove</button>{% endif %}</p>{% endif %}
       {% with am=card.amount per=card.per_one_lines %}
       {% if am or per or can_edit %}
       <form class="cm-amount" data-amount-form {% if not am and not per %}hidden{% endif %}>
@@ -97,6 +99,25 @@
             {% endfor %}
           </div>
         </div>
+        <div class="pop-wrap"><button class="chip-btn" data-pop="signoff" title="Ask someone to approve this card before it can be completed">✔ Sign-off</button>
+          <div class="pop" data-pop-panel="signoff" hidden>
+            <div class="pop-head">Ask for sign-off</div>
+            <form data-signoff-new class="stack">
+              <label>Who signs it off?<select name="approver_id" required><option value="">Choose a person…</option>{% for u in approvers %}<option value="{{ u.pk }}">{{ u.display_name }}</option>{% endfor %}</select></label>
+              <label>What should they check? <span class="muted">(optional)</span><textarea name="ask" rows="2" maxlength="300" placeholder="e.g. Taste and label check before it goes out"></textarea></label>
+              <p class="muted small">They're notified straight away. The card can't be marked complete until they approve it.</p>
+              <button class="btn primary sm">Ask for sign-off</button>
+            </form>
+          </div>
+        </div>
+        <div class="pop-wrap"><button class="chip-btn" data-pop="partof" title="Put this card inside a bigger job">⊂ Part of…</button>
+          <div class="pop" data-pop-panel="partof" hidden>
+            <div class="pop-head">Part of a bigger card</div>
+            <input type="search" class="pop-search" placeholder="Search cards on any board…" data-parent-search aria-label="Search cards">
+            <div class="parent-results" data-parent-results><p class="muted small">Type to find the card this one belongs to.</p></div>
+          </div>
+        </div>
+        {% if not children %}<button class="chip-btn" type="button" data-reveal="parts" title="Split this card into smaller cards, on this board or others">▦ Parts</button>{% endif %}
         <div class="pop-wrap"><button class="chip-btn" data-pop="attach">{% include "boards/_icon.html" with i="clip" %}Attach</button>
           <div class="pop" data-pop-panel="attach" hidden>
             <div class="pop-head">Attach</div>
@@ -202,6 +223,53 @@
           </label>
           {% endwith %}{% endfor %}
         </div>
+      </section>
+      {% endif %}
+
+      {% if signoffs %}
+      <section class="cm-section signoffs">
+        <h4 class="cm-h">✔ Sign-off</h4>
+        {% for so in signoffs %}
+        <div class="so-row so-{{ so.status }}">
+          {% include "boards/_avatar.html" with u=so.approver %}
+          <div class="so-main">
+            <div><b>{{ so.approver.display_name }}</b> <span class="so-pill">{% if so.status == "approved" %}✓ Approved{% elif so.status == "rejected" %}Changes needed{% else %}Waiting{% endif %}</span>
+              <span class="muted small">{% if so.decided_at %}{{ so.decided_at|ago }}{% else %}asked {{ so.requested_at|ago }}{% if so.requested_by %} by {{ so.requested_by.display_name }}{% endif %}{% endif %}</span></div>
+            {% if so.ask %}<div class="so-ask">“{{ so.ask }}”</div>{% endif %}
+            {% if so.note %}<div class="so-note">{{ so.note }}</div>{% endif %}
+            {% if so.approver_id == user.pk and so.status != "approved" %}
+            <form class="so-decide" data-signoff-decide="{{ so.pk }}">
+              <input name="note" maxlength="500" placeholder="Note (needed if you ask for changes)" aria-label="Note">
+              <div class="row"><button class="btn primary sm" name="action" value="approve">✓ Approve</button><button class="btn sm" name="action" value="reject">Ask for changes</button></div>
+            </form>
+            {% endif %}
+          </div>
+          {% if can_edit %}<div class="so-tools">{% if so.status == "pending" and so.approver_id != user.pk %}<button type="button" class="link-btn" data-signoff-act="remind" data-signoff="{{ so.pk }}">Remind</button>{% endif %}
+            {% if so.status == "rejected" %}<button type="button" class="link-btn" data-signoff-again="{{ so.approver_id }}">Ask again</button>{% endif %}
+            <button type="button" class="link-btn" data-signoff-act="cancel" data-signoff="{{ so.pk }}">Cancel</button></div>{% endif %}
+        </div>
+        {% endfor %}
+        {% if signoff_block %}<p class="muted small">This card can't be marked complete until everyone has approved it.</p>{% endif %}
+      </section>
+      {% endif %}
+
+      {% if children or can_edit %}
+      <section class="cm-section parts" data-opt="parts" {% if not children %}hidden{% endif %}>
+        <h4 class="cm-h">▦ Parts{% if child_progress %} <span class="muted small">{{ child_progress.done }} of {{ child_progress.total }} done</span>{% endif %}</h4>
+        {% if child_progress %}<div class="progress"><span>{{ child_progress.pct }}%</span><div class="bar"><i style="width:{{ child_progress.pct }}%" class="{% if child_progress.pct == 100 %}full{% endif %}"></i></div></div>{% endif %}
+        <ul class="part-list">
+          {% for c in children %}<li class="part{% if c.is_complete %} done{% endif %}">
+            <span class="part-tick" aria-hidden="true">{% if c.is_complete %}✓{% endif %}</span>
+            <a href="{% url 'board' c.list.board_id %}?card={{ c.pk }}"{% if c.list.board_id == board.pk %} data-card-open="{{ c.pk }}"{% endif %}>{{ c.title }}</a>
+            <span class="muted small">{% if c.list.board_id != board.pk %}{{ c.list.board.title }} › {% endif %}{{ c.list.title }}{% if c.due_at %} · {{ c.due_at|date:"j M" }}{% endif %}</span>
+          </li>{% endfor %}
+        </ul>
+        {% if can_edit %}<form class="part-add" data-child-new>
+          <input name="title" maxlength="250" placeholder="Add a part…" required aria-label="New part">
+          <select name="list_id" aria-label="Which list">{% for b, ls in part_lists %}<optgroup label="{{ b.title }}">{% for l in ls %}<option value="{{ l.pk }}" {% if l.pk == card.list_id %}selected{% endif %}>{{ l.title }}</option>{% endfor %}</optgroup>{% endfor %}</select>
+          <button class="btn sm">Add</button>
+        </form>
+        <p class="muted small">Each part is a card of its own, on any board. Use “⊂ Part of…” on an existing card to add it here.</p>{% endif %}
       </section>
       {% endif %}
 
@@ -324,7 +392,8 @@
                 <span class="iq-bar{% if item.qty_pct >= 100 %} full{% endif %}"><i style="width: {{ item.qty_pct }}%"></i></span>
                 <b>{{ item.qty_done_txt }}</b> / {{ item.qty_target_txt }}{% if item.qty_unit %} {{ item.qty_unit }}{% endif %}
                 {% if can_edit and item.qty_pct < 100 %}<form class="iq-add" data-item-qty="{{ item.pk }}"><input name="n" type="number" step="any" placeholder="+ done" aria-label="Add how many were done"><button class="btn sm">Add</button></form>{% endif %}
-              </span>{% elif item.per_unit is not None %}<span class="item-qty muted">{{ item.per_unit_txt }} {{ item.qty_unit }} per one — set the card's Amount to count it</span>{% endif %}</span>
+              </span>{% elif item.per_unit is not None %}<span class="item-qty muted">{{ item.per_unit_txt }} {{ item.qty_unit }} per one — set the card's Amount to count it</span>{% endif %}{% if item.linked_card_id %}
+              <a class="item-card-link" href="{% url 'board' item.linked_card.list.board_id %}?card={{ item.linked_card_id }}"{% if item.linked_card.list.board_id == board.pk %} data-card-open="{{ item.linked_card_id }}"{% endif %} title="This item is its own card — it ticks itself when that card is complete">↗ card</a>{% endif %}</span>
             {% if item.due_at %}<span class="badge sm due-{{ item.due_state|default:'none' }}" title="Due {{ item.due_at|date:'D j M, H:i' }}">{% include "boards/_icon.html" with i="clock" %}{{ item.due_at|date:"j M, H:i" }}</span>{% endif %}
             {% if item.assignee %}{% include "boards/_avatar.html" with u=item.assignee size="sm" %}{% endif %}
             {% if can_edit %}
@@ -350,6 +419,7 @@
                 </div>
                 <p class="muted small">Leave “Needed” empty for a plain tick. “Per product” works out Needed from the card's Planned field and keeps it in step.</p>
                 <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-item-clear="{{ item.pk }}">Remove date</button></div>
+                {% if not item.linked_card_id %}<hr class="pop-rule"><button type="button" class="btn sm block" data-item-to-card="{{ item.pk }}" title="Keeps the due date, person and amount — and ticks this item when the card is done">↗ Make this item a card</button>{% endif %}
               </form>
             </details>
             <button class="icon-btn xs item-del" data-delete-item="{{ item.pk }}" title="Delete item">{% include "boards/_icon.html" with i="close" %}</button>

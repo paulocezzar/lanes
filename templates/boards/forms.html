@@ -1,0 +1,91 @@
+{% extends "boards/board_base.html" %}{% load lanes_extras %}
+{% block board_body %}
+<div class="view-wrap forms-view">
+ <div class="forms-shell">
+  <header class="forms-head">
+    <div><h2>📝 Request forms</h2>
+      <p class="muted">Share a link. Whatever people fill in becomes a card on this board — they don't need to be on the board or know how it works. You're told about each new request.</p></div>
+    {% if can_edit and forms and not new and not editing %}<a class="btn primary" href="?new=1">New form</a>{% endif %}
+  </header>
+
+  {% if new or editing %}
+  <form method="post" class="form-builder" data-form-builder>
+    {% csrf_token %}
+    {% if editing %}<input type="hidden" name="form_id" value="{{ editing.pk }}">{% endif %}
+    <h3>{% if editing %}Edit “{{ editing.title }}”{% else %}New request form{% endif %}</h3>
+    <div class="fb-grid">
+      <label>Form name<input name="title" required maxlength="120" value="{{ editing.title|default:'' }}" placeholder="e.g. Maintenance request"></label>
+      <label>New cards go to<select name="list">{% for l in lists %}<option value="{{ l.pk }}" {% if editing and editing.list_id == l.pk or not editing and forloop.first %}selected{% endif %}>{{ l.title }}</option>{% endfor %}</select></label>
+      <label>Add the label<select name="label"><option value="">No label</option>{% for l in board_labels %}<option value="{{ l.pk }}" {% if editing.label_id == l.pk %}selected{% endif %}>{{ l.name|default:l.get_colour_display }}</option>{% endfor %}</select></label>
+      <label>Put on the card<select name="assignee"><option value="">Nobody</option>{% for u in people %}<option value="{{ u.pk }}" {% if editing.assignee_id == u.pk %}selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select></label>
+      <label class="span2">Who can fill it in<select name="who">{% for k, v in who_choices %}<option value="{{ k }}" {% if editing and editing.who == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+      <label class="span2">Introduction <span class="muted">(optional — shown at the top)</span><textarea name="intro" rows="2" maxlength="2000" placeholder="e.g. Tell us what's broken and where. We'll pick it up within a day.">{{ editing.intro|default:'' }}</textarea></label>
+    </div>
+
+    <h4>Questions</h4>
+    <p class="muted small">Each answer goes onto the card: the card's title, its description, its due date or one of the board's fields.</p>
+    <ol class="fb-questions" data-fb-questions>
+      {% for q in questions %}{% include "boards/_form_question.html" with i=forloop.counter0 %}{% endfor %}
+    </ol>
+    <template data-fb-template>{% include "boards/_form_question.html" with i="__i__" q=None %}</template>
+    <button type="button" class="btn sm" data-fb-add>+ Add a question</button>
+
+    <label class="fb-thanks">Message after sending <span class="muted">(optional)</span><input name="thanks" maxlength="300" value="{{ editing.thanks|default:'' }}" placeholder="Thanks — we've got it and will be in touch."></label>
+    <div class="row"><button class="btn primary">Save form</button><a class="btn ghost" href="{% url 'board_forms' board.pk %}">Cancel</a></div>
+  </form>
+  {% endif %}
+
+  {% if forms %}
+  <div class="form-cards">
+    {% for row in forms %}{% with f=row.f %}
+    <article class="form-card{% if not f.is_open %} closed{% endif %}" id="form-{{ f.pk }}">
+      <div class="fc-main">
+        <h3>{{ f.title }}{% if not f.is_open %} <span class="fc-pill">Closed</span>{% endif %}</h3>
+        <p class="muted small">Makes cards in <b>{{ f.list.title }}</b>{% if f.label %} with the {{ f.label.name|default:f.label.get_colour_display }} label{% endif %}{% if f.assignee %}, for {{ f.assignee.display_name }}{% endif %} · {{ f.questions|length }} question{{ f.questions|length|pluralize }} · {{ f.get_who_display }} · {{ f.submissions }} request{{ f.submissions|pluralize }} so far</p>
+        <div class="fc-link"><input readonly value="{{ row.url }}" aria-label="Form link" data-select-all><button type="button" class="btn sm" data-copy="{{ row.url }}">Copy link</button><a class="btn sm light" href="{{ row.url }}" target="_blank" rel="noopener">Open ↗</a></div>
+      </div>
+      {% if can_edit %}<div class="fc-tools">
+        <a class="btn sm" href="?edit={{ f.pk }}">Edit</a>
+        <form method="post">{% csrf_token %}<input type="hidden" name="toggle" value="{{ f.pk }}"><button class="btn sm ghost">{% if f.is_open %}Close{% else %}Re-open{% endif %}</button></form>
+        <form method="post" data-confirm="Delete the form “{{ f.title }}”? Its link stops working. Cards it made stay.">{% csrf_token %}<input type="hidden" name="delete" value="{{ f.pk }}"><button class="btn sm ghost danger-text">Delete</button></form>
+      </div>{% endif %}
+    </article>
+    {% endwith %}{% endfor %}
+  </div>
+  {% elif not new %}
+  <p class="muted">No forms yet.{% if not can_edit %} Board members can make one.{% endif %}</p>
+  {% endif %}
+ </div>
+</div>
+<script>
+(() => {
+  const list = document.querySelector('[data-fb-questions]'), tpl = document.querySelector('[data-fb-template]');
+  if (list && tpl) {
+    const renumber = () => [...list.children].forEach((li, i) => li.querySelectorAll('[name]').forEach(el => { el.name = el.name.replace(/_(\d+|__i__)$/, '_' + i); }));
+    const sync = li => { const k = li.querySelector('[name^=q_kind_]').value; li.querySelector('[data-q-options]').hidden = k !== 'choice'; };
+    list.querySelectorAll('li').forEach(sync);
+    document.querySelector('[data-fb-add]').addEventListener('click', () => {
+      if (list.children.length >= {{ max_questions }}) return;
+      list.insertAdjacentHTML('beforeend', tpl.innerHTML.replaceAll('__i__', list.children.length));
+      const li = list.lastElementChild; sync(li); li.querySelector('input').focus();
+    });
+    list.addEventListener('change', e => { if (e.target.matches('[name^=q_kind_]')) sync(e.target.closest('li')); });
+    list.addEventListener('click', e => {
+      const b = e.target.closest('[data-q-del],[data-q-up]'); if (!b) return;
+      const li = b.closest('li');
+      if (b.matches('[data-q-del]')) li.remove(); else if (li.previousElementSibling) li.previousElementSibling.before(li);
+      renumber();
+    });
+  }
+  document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied ✓'; }
+    catch { b.closest('.fc-link').querySelector('input').select(); }
+  }));
+  document.querySelectorAll('[data-select-all]').forEach(i => i.addEventListener('focus', () => i.select()));
+  document.querySelectorAll('form[data-confirm]').forEach(f => f.addEventListener('submit', async e => {
+    if (f.dataset.ok) return; e.preventDefault();
+    if (await LanesUI.confirm(f.dataset.confirm, { ok: 'Delete', danger: true })) { f.dataset.ok = 1; f.submit(); }
+  }));
+})();
+</script>
+{% endblock %}

@@ -10,8 +10,9 @@
   const listsEl = document.getElementById('lists') || document.createElement('div');  // other views have no lists
   const dialog = document.getElementById('card-dialog');
   const dialogBody = document.getElementById('card-dialog-body');
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+  // A missing root (e.g. the Set up dialog, which only the Board view has) finds nothing rather than throwing.
+  const $ = (sel, root = document) => (root ? root.querySelector(sel) : null);
+  const $$ = (sel, root = document) => (root ? [...root.querySelectorAll(sel)] : []);
 
   // ---------- helpers ----------
   const toastEl = document.getElementById('toast');
@@ -610,7 +611,29 @@ Invite the press`,
     }
   }
 
-  const cardPost = (path, payload) => post(`/api/cards/${openCardId}/${path}/`, payload).then(applyCard);
+  const cardPost = (path, payload) => post(`/api/cards/${openCardId}/${path}/`, payload).then(d => { addNewTile(d.new_card); applyCard(d); return d; });
+
+  // A card made from inside another (a part, or a checklist item turned into a card): show its tile.
+  function addNewTile(nc) {
+    if (!nc || !nc.tile) return;
+    const target = $(`.list[data-list-id="${nc.list_id}"] [data-list-cards]`, listsEl);
+    if (target && !$(`.card-tile[data-card-id="${nc.id}"]`, listsEl)) { target.appendChild(fromHTML(nc.tile)); refreshCounts(); }
+  }
+
+  // "⊂ Part of…": find the bigger card this one belongs to.
+  let parentTimer;
+  dialogBody.addEventListener('input', e => {
+    if (!e.target.matches('[data-parent-search]')) return;
+    clearTimeout(parentTimer);
+    const q = e.target.value.trim(), box = $('[data-parent-results]', dialogBody);
+    parentTimer = setTimeout(async () => {
+      const res = await fetch(`/api/cards/lookup/?q=${encodeURIComponent(q)}&exclude=${openCardId}`, { credentials: 'same-origin' });
+      const { cards = [] } = await res.json().catch(() => ({}));
+      const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      box.innerHTML = cards.length ? cards.map(c => `<button type="button" class="parent-opt" data-parent-set="${c.id}"><b>${esc(c.title)}</b><small>${esc(c.where)}</small></button>`).join('')
+        : '<p class="muted small">No cards match.</p>';
+    }, 200);
+  });
 
   function showPop(name) {
     $$('[data-pop-panel]', dialogBody).forEach(p => (p.hidden = p.dataset.popPanel !== name));
@@ -822,6 +845,30 @@ Invite the press`,
     if (tDel) return cardPost('time', { action: 'delete', id: +tDel.dataset.timeDel }).catch(err => toast(err.message));
     const depX = t.closest('[data-dep-remove]');
     if (depX) return cardPost('dependencies', { remove: +depX.dataset.depRemove });
+    const toCard = t.closest('[data-item-to-card]');
+    if (toCard) {
+      toCard.disabled = true;
+      return post(`/api/items/${toCard.dataset.itemToCard}/to-card/`, {}).then(data => {
+        addNewTile(data.new_card); applyCard(data);
+        toast('Made it a card. The item ticks itself when that card is done.');
+      }).catch(err => toast(err.message || 'Could not do that.')).finally(() => (toCard.disabled = false));
+    }
+    const pSet = t.closest('[data-parent-set]');
+    if (pSet) {
+      hidePops();
+      return cardPost('parent', { parent_id: pSet.dataset.parentSet ? +pSet.dataset.parentSet : null })
+        .then(() => toast(pSet.dataset.parentSet ? 'Added as a part.' : 'Taken out of that card.')).catch(() => {});
+    }
+    const soAct = t.closest('[data-signoff-act]');
+    if (soAct) {
+      const act = soAct.dataset.signoffAct;
+      if (act === 'cancel' && !await LanesUI.confirm('Cancel this sign-off?', { ok: 'Cancel sign-off', cancel: 'Keep it', danger: true })) return;
+      return post(`/api/signoffs/${soAct.dataset.signoff}/`, { action: act }).then(d => {
+        applyCard(d); if (act === 'remind') toast('Reminder sent.');
+      }).catch(() => {});
+    }
+    const soAgain = t.closest('[data-signoff-again]');
+    if (soAgain) return cardPost('signoffs', { approver_id: +soAgain.dataset.signoffAgain }).then(() => toast('Asked again.')).catch(() => {});
     const attC = t.closest('[data-att-comment]');
     if (attC) {
       hidePops();
@@ -874,6 +921,28 @@ Invite the press`,
       e.preventDefault();
       return cardPost('time', { action: 'add', time: f.time.value, day: f.day.value, note: f.note.value })
         .catch(err => toast(err.message || 'Could not log that.'));
+    }
+    if (f.matches('[data-signoff-new]')) {
+      e.preventDefault();
+      if (!f.approver_id.value) return toast('Choose who signs it off.');
+      hidePops();
+      return cardPost('signoffs', { approver_id: +f.approver_id.value, ask: f.ask.value })
+        .then(() => toast('Asked — they\'ve been notified.')).catch(() => {});
+    }
+    if (f.matches('[data-signoff-decide]')) {
+      e.preventDefault();
+      const action = e.submitter?.value || 'approve';
+      return post(`/api/signoffs/${f.dataset.signoffDecide}/`, { action, note: f.note.value }).then(d => {
+        applyCard(d); toast(action === 'approve' ? 'Signed off.' : 'Sent back with your note.');
+      }).catch(() => {});
+    }
+    if (f.matches('[data-child-new]')) {
+      e.preventDefault();
+      const title = f.title.value.trim();
+      if (!title) return;
+      return cardPost('children', { title, list_id: +f.list_id.value }).then(() => {
+        $('[data-child-new] input[name=title]', dialogBody)?.focus();
+      }).catch(() => {});
     }
     if (f.matches('[data-dep-add]')) {
       e.preventDefault();

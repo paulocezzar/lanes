@@ -9,6 +9,9 @@ from . import search
 from .models import SavedSearch
 
 EXAMPLES = [
+    ("my cards due this week", "Plain words work too"),
+    ("waiting for sign-off", "Cards still to be signed off"),
+    ("at risk", "Cards that may miss their date"),
     ("@me is:open", "My open cards"),
     ("is:overdue", "Everything overdue"),
     ("is:due-week board:planning", "Planning cards due this week"),
@@ -19,10 +22,12 @@ EXAMPLES = [
 @login_required
 def search_page(request):
     q = (request.GET.get("q") or "").strip()
-    results, terms, ops = search.run(request.user, q) if q else ([], [], [])
+    understood = search.from_words(q)
+    results, terms, ops = search.run(request.user, understood) if q else ([], [], [])
+    rows = [{"card": c, "hint": search.where_matched(c, terms)} for c in results]
     return render(request, "boards/search.html", {
-        "q": q, "results": results, "saved": SavedSearch.objects.filter(owner=request.user),
-        "examples": EXAMPLES, "searched": bool(q),
+        "q": q, "results": results, "rows": rows, "saved": SavedSearch.objects.filter(owner=request.user),
+        "examples": EXAMPLES, "searched": bool(q), "understood": understood if understood != q else "",
     })
 
 

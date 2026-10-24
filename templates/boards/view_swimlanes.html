@@ -1,0 +1,78 @@
+{% extends base_template %}
+{% block board_body %}
+<div class="view-wrap sl-view" data-swimlanes data-by="{{ by }}">
+  <div class="view-toolbar">
+    {% include "boards/_view_add.html" %}
+    <div class="sl-seg" role="group" aria-label="Rows">
+      <a class="sl-seg-btn{% if by == 'member' %} on{% endif %}" href="?by=member">By person</a>
+      <a class="sl-seg-btn{% if by == 'label' %} on{% endif %}" href="?by=label">By label</a>
+    </div>
+    {% if hidden_lanes %}<a class="btn light sm" href="?by={{ by }}&amp;all=1">Show {{ hidden_lanes }} empty row{{ hidden_lanes|pluralize }}</a>{% elif request.GET.all %}<a class="btn light sm" href="?by={{ by }}">Hide empty rows</a>{% endif %}
+    <span class="view-hint">{% if can_edit %}Drag a card across to change its list, or up and down to give it to {% if by == "member" %}someone else{% else %}another label{% endif %}.{% endif %}</span>
+  </div>
+  <div class="sl-scroll">
+    <div class="sl-grid" style="--cols: {{ lists|length }}">
+      <div class="sl-corner"></div>
+      {% for l in lists %}<div class="sl-col-head{% if l.colour %} lc-{{ l.colour }}{% endif %}">{{ l.title }}</div>{% endfor %}
+      {% for row in rows %}
+        <div class="sl-lane-head">
+          {% if by == "member" and row.obj %}{% include "boards/_avatar.html" with u=row.obj %}{% elif by == "label" and row.obj %}<span class="label-swatch lc-{{ row.obj.colour }}"></span>{% endif %}
+          <b>{{ row.name }}</b><span class="muted small">{{ row.count }}</span>
+        </div>
+        {% for cell in row.cells %}
+        <div class="sl-cell" data-sl-cell data-list="{{ cell.list.pk }}" data-lane="{{ row.key }}">
+          {% for card in cell.cards %}{% include "boards/_card_tile.html" %}{% endfor %}
+        </div>
+        {% endfor %}
+      {% empty %}
+        <p class="muted sl-empty">No cards on this board yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  const root = document.querySelector('[data-swimlanes]');
+  const csrf = document.querySelector('meta[name=csrf-token]').content;
+  const by = root.dataset.by;
+  const post = (url, data) => fetch(url, { method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf }, body: JSON.stringify(data) })
+    .then(async r => { const b = await r.json().catch(() => ({})); if (!r.ok) throw new Error(b.error || 'Could not move it.'); return b; });
+  const reload = async () => {
+    const html = await (await fetch(location.href, { credentials: 'same-origin' })).text();
+    const fresh = new DOMParser().parseFromString(html, 'text/html').querySelector('.sl-grid');
+    if (fresh) { root.querySelector('.sl-grid').replaceWith(fresh); wire(); }
+  };
+  // click a tile → open the card (the dialog lives in the board page)
+  root.addEventListener('click', e => {
+    const tile = e.target.closest('.card-tile');
+    if (!tile) return;
+    e.preventDefault();
+    const a = document.createElement('a'); a.dataset.cardOpen = tile.dataset.cardId; a.hidden = true;
+    document.body.appendChild(a); a.click(); a.remove();
+  }, true);
+  document.getElementById('card-dialog')?.addEventListener('close', reload);
+  function wire() {
+    if (!window.Sortable || root.dataset.canEdit === '0') return;
+    root.querySelectorAll('[data-sl-cell]').forEach(cell => Sortable.create(cell, {
+      group: 'sl', animation: 150, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag',
+      onEnd: async ev => {
+        const from = ev.from, to = ev.to, tile = ev.item;
+        if (from === to && ev.oldIndex === ev.newIndex) return;
+        const prev = tile.previousElementSibling, next = tile.nextElementSibling;
+        try {
+          await post(`/api/cards/${tile.dataset.cardId}/move/`, { list_id: +to.dataset.list,
+            before: prev?.dataset.token || null, after: next?.dataset.token || null });
+          if (from.dataset.lane !== to.dataset.lane) {
+            await post(`/api/cards/${tile.dataset.cardId}/lane/`, { by, from: from.dataset.lane, to: to.dataset.lane });
+          }
+        } catch (err) { const t = document.getElementById('toast'); if (t) { t.textContent = err.message; t.hidden = false; setTimeout(() => (t.hidden = true), 3500); } }
+        reload();
+      },
+    }));
+  }
+  {% if not can_edit %}root.dataset.canEdit = '0';{% endif %}
+  window.addEventListener('load', wire);       // the drag library loads after this page's content
+})();
+</script>
+{% endblock %}
