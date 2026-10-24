@@ -21,7 +21,7 @@
     <summary><span class="ws-badge sm">{{ d.ws.initial }}</span><span class="side-dept-name">{{ d.ws.name }}</span><span class="side-chev" aria-hidden="true">⌃</span></summary>
     <a class="side-link sm{% if n == 'home' and side_dept == d.ws.pk %} on{% endif %}" href="{% url 'home' %}?dept={{ d.ws.pk }}">{% include "boards/_icon.html" with i="board" %}Boards</a>
     <div class="side-row"><a class="side-link sm{% if n == 'workspace_members' and side_ws == d.ws.pk %} on{% endif %}" href="{% url 'workspace_members' d.ws.pk %}">{% include "boards/_icon.html" with i="people" %}Members</a>{% if d.admin %}<a class="side-plus" href="{% url 'workspace_members' d.ws.pk %}#add" title="Add someone to {{ d.ws.name }}" aria-label="Add someone to {{ d.ws.name }}">{% include "boards/_icon.html" with i="plus" %}</a>{% endif %}</div>
-    {% if d.admin %}<a class="side-link sm" href="{% url 'workspace_members' d.ws.pk %}#settings">{% include "boards/_icon.html" with i="gear" %}Settings</a>
+    {% if d.admin %}<a class="side-link sm{% if n == 'workspace_settings' and side_ws == d.ws.pk %} on{% endif %}" href="{% url 'workspace_settings' d.ws.pk %}">{% include "boards/_icon.html" with i="gear" %}Settings</a>
     <a class="side-link sm{% if n == 'department_export' and side_ws == d.ws.pk %} on{% endif %}" href="{% url 'department_export' d.ws.pk %}">{% include "boards/_icon.html" with i="download" %}Export</a>{% endif %}
   </details>
   {% empty %}<p class="muted small side-empty">You're not in a department yet.</p>{% endfor %}

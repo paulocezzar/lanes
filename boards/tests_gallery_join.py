@@ -205,6 +205,18 @@ class AccountTests(Base):
         self.assertIn("watched", self.u.email_muted)
         self.assertNotIn("commented", self.u.email_muted)
 
+    def test_department_settings_page(self):
+        url = f"/departments/{self.ws.pk}/settings/"
+        self.assertEqual(self.client.get(url).status_code, 404)  # plain member
+        self.client.force_login(self.admin)
+        r = self.client.get(url)
+        self.assertContains(r, "Delete department")
+        self.assertContains(r, 'side-link sm on" href="' + url)
+        r = self.client.post(url, {"name": "Renamed"})
+        self.assertRedirects(r, url, fetch_redirect_response=False)
+        self.ws.refresh_from_db()
+        self.assertEqual(self.ws.name, "Renamed")
+
     def test_department_tabs_and_export(self):
         import io
         import zipfile

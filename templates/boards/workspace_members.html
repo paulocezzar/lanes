@@ -95,27 +95,6 @@
     <p class="muted">Nobody yet.</p>
     {% endfor %}
   </section>
-  {% if can_manage %}
-  <section id="settings" class="panel dept-settings">
-    <h2>Department</h2>
-    <form method="post" action="{% url 'workspace_settings' workspace.pk %}" class="row-form">
-      {% csrf_token %}
-      <label>Name<input name="name" value="{{ workspace.name }}" maxlength="80" required></label>
-      <button class="btn sm">Rename</button>
-    </form>
-    <details class="danger-zone">
-      <summary>Delete this department…</summary>
-      {% with n=workspace.boards.count %}
-      <p class="muted small">This removes the department and everyone's membership of it. It must have no boards — move each one to another department (board ⋯ menu → Settings → Department) or archive it first.</p>
-      <form method="post" action="{% url 'workspace_settings' workspace.pk %}" class="row-form">
-        {% csrf_token %}<input type="hidden" name="action" value="delete">
-        <label>Type <b>{{ workspace.name }}</b> to confirm<input name="confirm" autocomplete="off" required></label>
-        <button class="btn danger sm">Delete department</button>
-      </form>
-      {% endwith %}
-    </details>
-  </section>
-  {% endif %}
   </div>
 </main>
 <script>

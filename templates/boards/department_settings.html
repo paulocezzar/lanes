@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ workspace.name }} settings · Lanes{% endblock %}
+{% block content %}
+<main class="home narrow">
+  <h1 class="page-title"><span class="ws-badge">{{ workspace.initial }}</span>{{ workspace.name }} <span class="muted">· settings</span></h1>
+
+  <section class="panel">
+    <h2>Name</h2>
+    <form method="post" action="{% url 'workspace_settings' workspace.pk %}" class="row-form">
+      {% csrf_token %}
+      <label>Department name<input name="name" value="{{ workspace.name }}" maxlength="80" required></label>
+      <button class="btn primary sm">Save</button>
+    </form>
+    <p class="muted small">{{ people }} {{ people|pluralize:"person,people" }} · {{ live_boards }} board{{ live_boards|pluralize }}</p>
+  </section>
+
+  <section class="panel">
+    <h2>People and boards</h2>
+    <p class="muted small">Add people, change roles and see guests or join requests on <a href="{% url 'workspace_members' workspace.pk %}">Members</a>. Download every board on <a href="{% url 'department_export' workspace.pk %}">Export</a>.{% if user.is_superuser %} Company-wide rules (allowed email addresses, who can archive boards) are in <a href="{% url 'company_settings' %}">Company → Settings</a>.{% endif %}</p>
+  </section>
+
+  <section class="panel dept-settings">
+    <h2>Delete department</h2>
+    {% if live_boards %}
+    <p class="muted small">{{ workspace.name }} still has {{ live_boards }} board{{ live_boards|pluralize }}. Move each one to another department (board ⋯ menu → Settings → Department) or archive it before deleting.</p>
+    {% else %}
+    <p class="muted small">This removes the department and everyone's membership of it. Their accounts and other departments aren't touched.</p>
+    <form method="post" action="{% url 'workspace_settings' workspace.pk %}" class="row-form">
+      {% csrf_token %}<input type="hidden" name="action" value="delete">
+      <label>Type <b>{{ workspace.name }}</b> to confirm<input name="confirm" autocomplete="off" required></label>
+      <button class="btn danger sm">Delete department</button>
+    </form>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

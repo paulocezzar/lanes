@@ -5,7 +5,7 @@
   {% if dept %}
   <header class="dept-head">
     <span class="dept-badge">{{ dept.workspace.initial }}</span>
-    <div><h1>{{ dept.workspace.name }}{% if dept.admin %} <a class="icon-btn xs" href="{% url 'workspace_members' dept.workspace.pk %}#settings" title="Rename or change the department" aria-label="Department settings">✎</a>{% endif %}</h1>
+    <div><h1>{{ dept.workspace.name }}{% if dept.admin %} <a class="icon-btn xs" href="{% url 'workspace_settings' dept.workspace.pk %}" title="Rename or change the department" aria-label="Department settings">✎</a>{% endif %}</h1>
       <p class="muted">{{ dept.n_people }} {{ dept.n_people|pluralize:"person,people" }} · {{ dept.boards|length }} board{{ dept.boards|length|pluralize }} · <a href="{% url 'workspace_members' dept.workspace.pk %}">Members</a></p></div>
   </header>
   {% endif %}

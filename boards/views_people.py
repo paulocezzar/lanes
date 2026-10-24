@@ -182,21 +182,24 @@ def workspace_member_reset_password(request, workspace_id, user_id):
 
 
 @login_required
-@require_POST
 def workspace_settings(request, workspace_id):
     """Rename or delete a department (its admins, or a Lanes admin). Deleting needs it to have no boards."""
     ws = get_object_or_404(Workspace, pk=workspace_id)
     if not _can_manage_workspace(ws, request.user):
         raise Http404
+    if request.method != "POST":
+        return render(request, "boards/department_settings.html", {
+            "workspace": ws, "live_boards": ws.boards.filter(is_archived=False).count(),
+            "people": ws.memberships.count()})
     if request.POST.get("action") == "delete":
         live = ws.boards.filter(is_archived=False).count()
         if live:
             messages.error(request, f"{ws.name} still has {live} board{'s' if live != 1 else ''}. "
                                     "Move each board to another department (board ⋯ menu → Settings → Department) or archive it first.")
-            return redirect("workspace_members", workspace_id=ws.pk)
+            return redirect("workspace_settings", workspace_id=ws.pk)
         if (request.POST.get("confirm") or "").strip().lower() != ws.name.strip().lower():
             messages.error(request, "Type the department's name to confirm.")
-            return redirect("workspace_members", workspace_id=ws.pk)
+            return redirect("workspace_settings", workspace_id=ws.pk)
         name = ws.name
         audit.record(request, "dept_deleted", dept=name)
         ws.delete()
@@ -213,4 +216,4 @@ def workspace_settings(request, workspace_id):
         ws.save(update_fields=["name"])
         audit.record(request, "dept_renamed", workspace=ws, old=old)
         messages.success(request, f"Renamed to {name}.")
-    return redirect("workspace_members", workspace_id=ws.pk)
+    return redirect("workspace_settings", workspace_id=ws.pk)
