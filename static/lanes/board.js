@@ -707,9 +707,11 @@ Invite the press`,
     // drag checklist items to reorder them (or onto another checklist on this card)
     $$('[data-cl-items]', root).forEach(ul => Sortable.create(ul, {
       group: `cl-items-${openCardId}`, animation: 150, forceFallback: true, handle: '.item-grip, .item', draggable: '.item[data-item-id]',
-      filter: 'input, button, details, a, .item-label, .iq-add', preventOnFilter: false,
+      filter: 'input, button, details, .iq-add', preventOnFilter: false,
       delay: 150, delayOnTouchOnly: true, fallbackTolerance: 4, ghostClass: 'item-ghost',
+      onStart: () => (window.__itemDragAt = Date.now()),
       onEnd: evt => {
+        window.__itemDragAt = Date.now();
         if (evt.from === evt.to && evt.oldIndex === evt.newIndex) return;
         const el = evt.item, prev = el.previousElementSibling, next = el.nextElementSibling;
         post(`/api/items/${el.dataset.itemId}/`, { move: { checklist_id: +evt.to.dataset.clItems,
@@ -855,6 +857,7 @@ Invite the press`,
       if (lbl) { const s2 = document.createElement('span'); s2.className = 'item-label'; s2.dataset.itemEdit = editBtn.dataset.itemEditBtn; s2.textContent = lbl.textContent; lbl.replaceWith(s2); return editItemText(s2); }
       return;
     }
+    if (t.closest('.item') && Date.now() - (window.__itemDragAt || 0) < 300) { e.preventDefault(); return; }
     const edit = t.closest('[data-item-edit]');
     if (edit && !edit.querySelector('input')) return editItemText(edit);
     const finish = t.closest('[data-finish-card]');

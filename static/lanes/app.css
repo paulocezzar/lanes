@@ -2215,3 +2215,16 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .cm .item-hint { margin-left: var(--cm-g); }
 .cm-top .side-toggle { margin-left: auto; padding: 4px 10px; }
 .cm-top .side-toggle + .watch-btn { margin-left: 0; }
+
+/* checklist rows: compact and lined up */
+.checklist .item { padding: 5px 4px 5px 0; cursor: grab; }
+.checklist .item .item-text { cursor: auto; }
+.checklist .item .item-qty { margin-top: 4px; gap: 8px; flex-wrap: nowrap; }
+.iq-num { min-width: 92px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cm .iq-add input { width: 74px !important; height: 26px; padding: 2px 8px; font-size: 13px; }
+.cm .iq-add .btn { height: 26px; padding: 0 10px; font-size: 13px; }
+.checklist .item:not(:hover):not(:focus-within) .iq-add { visibility: hidden; }
+@media (hover: none) { .checklist .item .iq-add { visibility: visible; } }
+.item-card-link { margin-left: 8px; font-size: 12px; vertical-align: 1px; }
+.checklist .item .item-grip { left: -14px; top: 7px; padding: 2px; font-size: 13px; }
+.sortable-chosen.item { background: var(--surface-2); }
