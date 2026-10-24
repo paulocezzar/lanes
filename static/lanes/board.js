@@ -689,6 +689,21 @@ Invite the press`,
   function wireModal() {
     const root = $('.cm', dialogBody);
     if (!root) return;
+    // comments & activity panel: hidden by default, remembered per person
+    let sideOn = false;
+    try { sideOn = localStorage.getItem('lanes-card-side') === '1'; } catch {}
+    const applySide = () => {
+      dialog.classList.toggle('side-off', !sideOn);
+      const b = $('[data-side-toggle]', root);
+      if (b) { b.setAttribute('aria-pressed', String(sideOn)); $('[data-side-word]', b).textContent = sideOn ? 'Hide comments' : 'Comments'; }
+    };
+    applySide();
+    $('[data-side-toggle]', root)?.addEventListener('click', () => {
+      sideOn = !sideOn;
+      try { localStorage.setItem('lanes-card-side', sideOn ? '1' : '0'); } catch {}
+      applySide();
+      if (sideOn) $('.cm-side textarea', root)?.focus();
+    });
     // drag checklist items to reorder them (or onto another checklist on this card)
     $$('[data-cl-items]', root).forEach(ul => Sortable.create(ul, {
       group: `cl-items-${openCardId}`, animation: 150, forceFallback: true, handle: '.item-grip, .item', draggable: '.item[data-item-id]',

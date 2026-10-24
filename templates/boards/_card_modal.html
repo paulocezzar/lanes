@@ -17,6 +17,7 @@
     </div>
     {% else %}<span class="list-picker static">{{ board.title }} › {{ card.list.title }}</span>{% endif %}
     {% if card.is_archived %}<span class="archived-flag">Archived{% if not card.delete_blockers %} — Restore it, or Delete it for good{% endif %}</span>{% endif %}
+    <button type="button" class="chip-btn side-toggle" data-side-toggle aria-pressed="false" title="Show or hide comments and activity">{% include "boards/_icon.html" with i="comment" %}<span data-side-word>Comments</span>{% with n=card.comments.count %}{% if n %} <b class="side-count">{{ n }}</b>{% endif %}{% endwith %}</button>
     <button class="chip-btn watch-btn{% if watching %} on{% endif %}" data-watch-card title="{% if watching_board %}You're watching the whole board{% elif watching %}You'll be notified about changes to this card{% else %}Get notified about changes to this card{% endif %}">👁 {% if watching %}Watching{% else %}Watch{% endif %}{% if watching_board and not watching %} <small>(board)</small>{% endif %}</button>
     <button class="icon-btn" data-close-card title="Close">{% include "boards/_icon.html" with i="close" %}</button>
   </header>
@@ -228,7 +229,7 @@
 
       {% if signoffs %}
       <section class="cm-section signoffs">
-        <h4 class="cm-h">✔ Sign-off</h4>
+        <h4 class="cm-h"><span class="cm-ico" aria-hidden="true">✔</span>Sign-off</h4>
         {% for so in signoffs %}
         <div class="so-row so-{{ so.status }}">
           {% include "boards/_avatar.html" with u=so.approver %}
@@ -255,7 +256,7 @@
 
       {% if children or can_edit %}
       <section class="cm-section parts" data-opt="parts" {% if not children %}hidden{% endif %}>
-        <h4 class="cm-h">▦ Parts{% if child_progress %} <span class="muted small">{{ child_progress.done }} of {{ child_progress.total }} done</span>{% endif %}</h4>
+        <h4 class="cm-h"><span class="cm-ico" aria-hidden="true">▦</span>Parts{% if child_progress %} <span class="muted small">{{ child_progress.done }} of {{ child_progress.total }} done</span>{% endif %}</h4>
         {% if child_progress %}<div class="progress"><span>{{ child_progress.pct }}%</span><div class="bar"><i style="width:{{ child_progress.pct }}%" class="{% if child_progress.pct == 100 %}full{% endif %}"></i></div></div>{% endif %}
         <ul class="part-list">
           {% for c in children %}<li class="part{% if c.is_complete %} done{% endif %}">
@@ -286,7 +287,7 @@
 
       {% if mirrors %}
       <section class="cm-section">
-        <h4 class="cm-h">🔗 Also on</h4>
+        <h4 class="cm-h"><span class="cm-ico" aria-hidden="true">🔗</span>Also on</h4>
         <div class="mirror-list">
           <div class="mirror-row"><b>{{ board.title }}</b> › {{ card.list.title }} <span class="muted small">(original)</span></div>
           {% for m in mirrors %}
@@ -301,7 +302,7 @@
 
       {% if waits_for or needed_by or can_edit and dep_choices %}
       <section class="cm-section deps" data-opt="deps" {% if not waits_for and not needed_by %}hidden{% endif %}>
-        <h4 class="cm-h">⛓ Dependencies</h4>
+        <h4 class="cm-h"><span class="cm-ico" aria-hidden="true">⛓</span>Dependencies</h4>
         {% if waits_for %}<div class="dep-row"><span class="dep-k">Waits for</span>{% for d in waits_for %}<span class="dep-chip{% if not d.depends_on.is_complete %} open{% endif %}"><a href="?card={{ d.depends_on.pk }}" data-card-open="{{ d.depends_on.pk }}">{% if d.depends_on.is_complete %}✓ {% endif %}{{ d.depends_on.title }}</a>{% if d.depends_on.due_at %}<small>{{ d.depends_on.due_at|date:"j M" }}</small>{% endif %}{% if d.lag_days %}<small>+{{ d.lag_days }}d</small>{% endif %}{% if can_edit %}<button type="button" class="x" data-dep-remove="{{ d.depends_on.pk }}" title="Stop waiting for this" aria-label="Remove">×</button>{% endif %}</span>{% endfor %}</div>{% endif %}
         {% if needed_by %}<div class="dep-row"><span class="dep-k">Needed by</span>{% for d in needed_by %}<span class="dep-chip"><a href="?card={{ d.card.pk }}" data-card-open="{{ d.card.pk }}">{{ d.card.title }}</a>{% if d.card.due_at %}<small>{{ d.card.due_at|date:"j M" }}</small>{% endif %}</span>{% endfor %}</div>{% endif %}
         {% if waits_for %}{% with blocked=waits_for|dictsort:"depends_on.is_complete"|first %}{% if blocked and not blocked.depends_on.is_complete %}<p class="dep-blocked">⏳ Blocked — waiting for {{ blocked.depends_on.title }}.</p>{% endif %}{% endwith %}{% endif %}

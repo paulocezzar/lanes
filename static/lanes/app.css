@@ -231,7 +231,7 @@ body.board-page { overflow: hidden; }
 .complete-toggle.on { background: var(--ok); border-color: var(--ok); color: #10141a; }
 .cm-title { margin: 0; font-size: 22px; flex: 1; padding: 2px 6px; border-radius: 6px; outline: none; overflow-wrap: anywhere; }
 .cm-title:focus { box-shadow: inset 0 0 0 2px var(--accent); }
-.cm-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 6px 34px; }
+.cm-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 6px var(--cm-g); }
 .chip-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: transparent; border-radius: 6px;
   padding: 6px 10px; cursor: pointer; font-weight: 600; color: var(--text); }
 .chip-btn:hover { background: var(--surface-2); }
@@ -264,7 +264,7 @@ body.board-page { overflow: hidden; }
 .cm-h { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 15px; }
 .cm-h-row { display: flex; align-items: center; gap: 6px; }
 .cm-h-row .cm-h { flex: 1; margin: 0; }
-.cm-section form[data-description], .checklist .progress, .checklist .items, .item-new, .desc-read { margin-left: 26px; }
+.cm-section form[data-description], .item-new, .desc-read { margin-left: var(--cm-g); }
 .cm-section textarea { resize: vertical; background: var(--surface-2); border-color: transparent; }
 .cm-section textarea:focus { background: var(--surface); }
 .save-row { margin-top: 8px; }
@@ -484,7 +484,7 @@ a.menu-item { text-decoration: none; }
 .tile-fields { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .field-badge { font-size: 11px; background: var(--surface-3); color: var(--text); border-radius: 4px; padding: 1px 6px; }
 .field-badge b { color: var(--text-2); font-weight: 600; }
-.field-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-left: 26px; }
+.field-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-left: var(--cm-g); }
 .field-cell input, .field-cell select { background: var(--surface-2); border-color: transparent; }
 .check-inline.dark { color: var(--text); font-weight: 400; padding: 8px 0; }
 .badge.sm { font-size: 11px; color: var(--text-2); }
@@ -531,7 +531,7 @@ a.icon-btn { text-decoration: none; }
 .foot-row .add-card-btn { flex: 1; }
 .chip-btn.on { border-color: var(--accent); color: var(--accent); }
 .file-btn { cursor: pointer; display: inline-flex; flex-direction: row; font-size: 14px; color: var(--text); }
-.attachments { display: grid; gap: 10px; margin-left: 26px; }
+.attachments { display: grid; gap: 10px; margin-left: var(--cm-g); }
 .att { display: flex; gap: 12px; align-items: flex-start; }
 .att-thumb { width: 112px; height: 76px; border-radius: 6px; background: var(--surface-3); display: grid; place-items: center; overflow: hidden;
   flex: none; text-decoration: none; font-weight: 800; color: var(--text-2); }
@@ -652,7 +652,7 @@ a.icon-btn { text-decoration: none; }
 /* ---------- mirrors ---------- */
 .card-tile.is-mirror { border: 1px solid rgb(159 143 239 / .6); }
 .mirror-flag { display: block; font-size: 11px; color: #c9bfff; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mirror-list { display: grid; gap: 6px; margin-left: 26px; }
+.mirror-list { display: grid; gap: 6px; margin-left: var(--cm-g); }
 .mirror-row { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border-radius: 6px; padding: 7px 10px; font-size: 13px; }
 .mirror-row a { text-decoration: none; flex: 1; }
 .mirror-row .link-btn { margin-left: auto; }
@@ -1933,7 +1933,7 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .day-bars.weeks .day-bar span { left: 50%; transform: translateX(-50%); }
 .wk-n { position: absolute; top: -16px; left: 0; right: 0; text-align: center; font-size: 11px; color: var(--text-2); }
 .quiet-row td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
-.parts .progress, .parts .part-list, .parts .part-add, .parts > p.muted, .signoffs .so-row, .signoffs > p.muted { margin-left: 26px; }
+.parts .progress, .parts .part-list, .parts .part-add, .parts > p.muted, .signoffs .so-row, .signoffs > p.muted { margin-left: var(--cm-g); }
 @media (max-width: 1400px) { .view-tabs a { padding: 5px 8px; } }
 .fb-q-row > select, .fb-q-row > input, .fb-q-row > label { width: auto; margin: 0; }
 .fb-q-row > select { flex: 0 1 190px; min-width: 0; }
@@ -2180,7 +2180,7 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .item-acts-pop .menu-item:hover { background: var(--surface-2); }
 .item-acts-pop .menu-item small { display: block; color: var(--text-2); font-size: 12px; }
 .item-acts-pop .menu-item.danger { color: var(--danger, #dc2626); }
-.cl-tools { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: -2px 0 8px 32px; font-size: 13px; }
+.cl-tools { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: -2px 0 8px var(--cm-g); font-size: 13px; }
 .cl-tools .link-btn { font-size: 13px; }
 .item-acts-pop.up { top: auto; bottom: calc(100% + 4px); }
 .chip-btn.danger { color: var(--danger, #dc2626); }
@@ -2189,3 +2189,29 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .item:hover .item-grip { visibility: visible; }
 @media (hover: none) { .item-grip { visibility: visible; } }
 .item-ghost { opacity: .4; background: var(--surface-2); }
+
+/* ---- card window: one left edge. Icons, ticks and % sit in a 24px gutter; everything else lines up after it ---- */
+.cm { --cm-g: 34px; }
+.cm-h { gap: 10px; }
+.cm-h > .ic, .cm-h > .cm-ico { flex: 0 0 24px; width: 24px; text-align: center; display: inline-flex; justify-content: center; }
+.cm-h > .ic { height: 18px; }
+.cm-meta { margin-left: var(--cm-g); }
+.cm .progress { margin-left: 0; }
+.cm .progress span { width: 24px; margin-left: 0; flex: none; text-align: center; }
+.checklist .items { margin-left: 0; }
+.checklist .item { position: relative; align-items: flex-start; gap: 10px; padding: 6px 4px 6px 0; }
+.checklist .item > input[type=checkbox] { flex: 0 0 24px; width: 16px; height: 16px; margin: 3px 0 0; }
+.checklist .item .item-grip { position: absolute; left: -12px; top: 8px; margin: 0; }
+.checklist .item > .badge, .checklist .item > .avatar, .checklist .item > details, .checklist .item > .icon-btn { margin-top: 0; align-self: flex-start; }
+.checklist .item .item-qty { margin-top: 6px; }
+.item-card-link { display: inline-block; margin-left: 8px; font-size: 12px; }
+/* comments & activity: hidden until asked for */
+.card-dialog.side-off .cm-body { grid-template-columns: minmax(0, 1fr); }
+.card-dialog.side-off .cm-side { display: none; }
+@media (min-width: 761px) { .card-dialog.side-off { width: min(860px, calc(100vw - 48px)); } }
+.side-toggle .ic { width: 15px; height: 15px; }
+.side-toggle[aria-pressed="true"] { background: var(--surface-2); }
+.side-count { background: var(--accent); color: #fff; border-radius: 99px; padding: 0 6px; font-size: 11px; line-height: 16px; }
+.cm .item-hint { margin-left: var(--cm-g); }
+.cm-top .side-toggle { margin-left: auto; padding: 4px 10px; }
+.cm-top .side-toggle + .watch-btn { margin-left: 0; }
