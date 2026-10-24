@@ -104,6 +104,8 @@ class Board(models.Model):
     covers_enabled = models.BooleanField(default=True)   # show image/colour covers on card fronts
     complete_to_done = models.BooleanField(default=True)  # completing a card moves it to the Done list (and back)
     progress_to_doing = models.BooleanField(default=True)  # first progress on a card moves it to the Doing list
+    stockup_plan_id = models.PositiveIntegerField(null=True, blank=True)   # a board made from a StockUp plan
+    stockup_synced_at = models.DateTimeField(null=True, blank=True)
     # project management
     RAG = [("auto", "Automatic"), ("green", "On track"), ("amber", "At risk"), ("red", "Off track")]
     is_project = models.BooleanField(default=False)      # shows on the Portfolio page
@@ -611,6 +613,11 @@ class Activity(models.Model):
             "signoff_rejected": f"asked for changes before signing off{(': ' + d['note']) if d.get('note') else ''}",
             "signoff_cancelled": f"cancelled the sign-off from {d.get('name', '')}",
             "children_done": f"— every part ({d.get('n', '')}) of this card is done",
+            "stockup_linked": f"scheduled {d.get('text', '')} in StockUp for {d.get('day', '')}",
+            "stockup_unlinked": f"took “{d.get('text', '')}” off StockUp",
+            "stockup_batch": f"StockUp batch confirmed: {d.get('codes', '')}",
+            "stockup_moved": f"StockUp moved the run to {d.get('day', '')}",
+            "stockup_job_done": f"{d.get('name', 'Someone')} ticked the StockUp job",
             "item_to_card": f"turned “{d.get('text', '')}” into its own card in {d.get('list', '')}",
             "parent_set": f"made this card part of {d.get('name', '')}",
             "parent_removed": f"took this card out of {d.get('name', '')}",
@@ -991,6 +998,7 @@ class AuditEvent(models.Model):
         "board_moved": "moved the board {board} from {old} to {new}",
         "dept_renamed": "renamed the department {old} to {dept}",
         "dept_exported": "downloaded every board in {dept} ({n} boards)",
+        "stockup_board": "made a board from StockUp plan {plan}",
         "dept_deleted": "deleted the department {dept}",
         "dept_member_added": "added {name} to {dept}",
         "dept_account_created": "created an account for {name} in {dept}",
@@ -1227,3 +1235,49 @@ class JoinRequest(models.Model):
     @property
     def target(self):
         return self.board or self.workspace
+
+
+class StockUpLink(models.Model):
+    """A card tied to StockUp: a run Lanes scheduled (or one from a plan board), or a
+    plan's product / component. StockUp owns quantities, recipes and batches; Lanes
+    owns the day, the people and the conversation."""
+    RUN, PRODUCT, COMPONENT = "run", "product", "component"
+    KINDS = [(RUN, "Run"), (PRODUCT, "Product"), (COMPONENT, "Component")]
+    card = models.OneToOneField(Card, on_delete=models.CASCADE, related_name="stockup")
+    kind = models.CharField(max_length=10, choices=KINDS, default=RUN)
+    plan_id = models.PositiveIntegerField()
+    plan_name = models.CharField(max_length=200, blank=True)
+    owner = models.CharField(max_length=12, blank=True)          # requirement / plan_line
+    owner_id = models.PositiveIntegerField(null=True, blank=True)
+    item_name = models.CharField(max_length=250, blank=True)
+    item_code = models.CharField(max_length=60, blank=True)
+    unit = models.CharField(max_length=8, blank=True)
+    run_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    planned_qty = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    planned_date = models.DateField(null=True, blank=True)
+    made_qty = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    state = models.CharField(max_length=12, blank=True)
+    batch_codes = models.JSONField(default=list, blank=True)
+    job_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    job_person = models.CharField(max_length=120, blank=True)
+    job_status = models.CharField(max_length=12, blank=True)
+    job_done_by = models.CharField(max_length=120, blank=True)
+    error = models.CharField(max_length=300, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
+
+    UNIT_WORDS = {"kg": "kg", "each": "each", "singles": "singles", "packs": "packs"}
+
+    def __str__(self):
+        return f"{self.item_name} ({self.kind})"
+
+    @property
+    def done(self):
+        return self.state == "confirmed"
+
+
+class StockUpPerson(models.Model):
+    """Which StockUp person a Lanes user is, for giving jobs from Lanes."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="stockup_person")
+    person_id = models.PositiveIntegerField()
+    person_name = models.CharField(max_length=120)
+    department = models.CharField(max_length=120, blank=True)

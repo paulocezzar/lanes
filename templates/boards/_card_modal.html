@@ -111,6 +111,21 @@
             </form>
           </div>
         </div>
+        {% if stockup_on and not su %}<div class="pop-wrap"><button class="chip-btn su-chip" data-pop="stockup" title="Schedule this in StockUp — it shows on the floor, counts up as batches are made and completes this card">🏭 StockUp</button>
+          <div class="pop su-pop" data-pop-panel="stockup" hidden>
+            <div class="pop-head">Schedule in StockUp</div>
+            <form data-su-form class="stack">
+              <label>Plan<select name="plan_id" data-su-plan required><option value="">Loading plans…</option></select></label>
+              <label>What to make<input type="search" class="pop-search" placeholder="Search the plan…" data-su-search aria-label="Search items" disabled></label>
+              <div class="su-items" data-su-items><p class="muted small">Choose a plan first.</p></div>
+              <input type="hidden" name="owner"><input type="hidden" name="owner_id"><input type="hidden" name="unit">
+              <div class="su-row"><label>How many<input name="qty" type="number" step="any" min="0" required placeholder="e.g. 2000"></label>
+                <label>On<input name="date" type="date" value="{% if card.due_at %}{{ card.due_at|date:'Y-m-d' }}{% endif %}"></label></div>
+              <p class="muted small" data-su-hint>The card's person gets it as a job on that day. When StockUp confirms the batch, this card fills up and completes itself.</p>
+              <button class="btn primary sm" disabled data-su-go>Schedule in StockUp</button>
+            </form>
+          </div>
+        </div>{% endif %}
         <div class="pop-wrap"><button class="chip-btn" data-pop="partof" title="Put this card inside a bigger job">⊂ Part of…</button>
           <div class="pop" data-pop-panel="partof" hidden>
             <div class="pop-head">Part of a bigger card</div>
@@ -223,6 +238,25 @@
             {% endif %}
           </label>
           {% endwith %}{% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {% if su %}
+      <section class="cm-section stockup-sec">
+        <h4 class="cm-h"><span class="cm-ico" aria-hidden="true">🏭</span>StockUp <span class="su-state su-{{ su.state|default:'none' }}">{% if su.state == "confirmed" %}✓ made{% elif su.state == "scheduled" %}scheduled{% elif su.state == "target" %}not on a day yet{% elif su.state == "cancelled" %}cancelled{% else %}{{ su.state|default:"linked" }}{% endif %}</span></h4>
+        <div class="su-box">
+          <div class="su-line"><b>{{ su.item_name }}</b>{% if su.item_code %} <span class="muted">{{ su.item_code }}</span>{% endif %} <span class="muted">· {{ su.plan_name }}</span></div>
+          {% if su.kind == "run" %}
+          <div class="su-line">{% if su.planned_qty %}{{ su.made_qty|floatformat:"-3" }} of {{ su.planned_qty|floatformat:"-3" }} {% if su.unit != "each" %}{{ su.unit }}{% endif %} made{% endif %}{% if su.planned_date %} · on {{ su.planned_date|date:"D j M" }}{% else %} · no day yet{% endif %}</div>
+          {% if su.batch_codes %}<div class="su-line">Batch {% for c in su.batch_codes %}<code class="su-code">{{ c }}</code> {% endfor %}</div>{% endif %}
+          <div class="su-line muted small">{% if su.job_id %}Job: {{ su.job_person|default:"nobody" }} · {% if su.job_status == "done" %}✓ done{% if su.job_done_by %} by {{ su.job_done_by }}{% endif %}{% else %}{{ su.job_status|default:"open" }}{% endif %}{% else %}No job yet — add someone to this card to give it to them in StockUp.{% endif %}</div>
+          {% elif su.kind == "component" %}
+          <div class="su-line">{{ su.made_qty|floatformat:"-1" }} of {{ su.planned_qty|floatformat:"-1" }} {% if su.unit != "each" %}{{ su.unit }}{% endif %} made for this plan</div>
+          {% else %}<div class="su-line">{{ su.planned_qty|floatformat:"-1" }} planned</div>{% endif %}
+          {% if su.error %}<div class="su-line su-err">⚠ {{ su.error }}</div>{% endif %}
+          <div class="su-line muted small">{% if su.synced_at %}Checked {{ su.synced_at|timesince }} ago · {% endif %}<button type="button" class="link-btn" data-su-refresh>Check now</button>{% if su.kind == "run" and can_edit and su.state != "confirmed" and su.state != "cancelled" %} · <button type="button" class="link-btn" data-su-qty="{{ su.planned_qty|floatformat:'-3' }}">Change amount</button> · <button type="button" class="link-btn danger-text" data-su-unlink>Cancel in StockUp</button>{% endif %}</div>
+          <p class="muted small">The day follows this card's due date. Quantities, recipes and batches live in StockUp.</p>
         </div>
       </section>
       {% endif %}

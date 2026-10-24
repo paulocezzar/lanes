@@ -644,6 +644,66 @@ Invite the press`,
     openPop = null;
   }
 
+  // ---------- StockUp: schedule this card as a run on a StockUp plan ----------
+  const suEsc = v => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const suNum = v => { const n = parseFloat(v); return isNaN(n) ? '' : (Math.round(n * 10) / 10).toLocaleString(); };
+  function wireStockup(root) {
+    const form = $('[data-su-form]', root);
+    if (!form) return;
+    const planSel = $('[data-su-plan]', form), search = $('[data-su-search]', form), box = $('[data-su-items]', form);
+    let items = [], loaded = false;
+    const draw = () => {
+      const q = search.value.trim().toLowerCase();
+      const rows = items.filter(i => !q || `${i.name} ${i.code}`.toLowerCase().includes(q)).slice(0, 40);
+      box.innerHTML = rows.length ? rows.map((i, n) => `<button type="button" class="su-item${form.owner_id.value == i.owner_id && form.owner.value === i.owner ? ' on' : ''}" data-su-pick="${items.indexOf(i)}">
+          <b>${suEsc(i.name)}</b>${i.code ? ` <span class="muted">${suEsc(i.code)}</span>` : ''}
+          <small>${i.still != null ? `${suNum(i.still)} ${i.unit === 'each' ? '' : suEsc(i.unit)} still to make` : ''}${i.scheduled && parseFloat(i.scheduled) ? ` · ${suNum(i.scheduled)} scheduled` : ''}</small></button>`).join('')
+        : '<p class="muted small">Nothing matches.</p>';
+    };
+    const loadItems = async () => {
+      form.owner.value = ''; form.owner_id.value = ''; $('[data-su-go]', form).disabled = true;
+      if (!planSel.value) { box.innerHTML = '<p class="muted small">Choose a plan first.</p>'; search.disabled = true; return; }
+      box.innerHTML = '<p class="muted small">Loading…</p>';
+      try {
+        const d = await (await fetch(`/api/stockup/?plan=${planSel.value}`, { credentials: 'same-origin' })).json();
+        if (d.error) throw new Error(d.error);
+        items = d.items; search.disabled = false; draw();
+        const words = (dialogBody.querySelector('[data-card-title]')?.textContent || '').toLowerCase();
+        const guess = items.find(i => words.includes(i.name.toLowerCase()));
+        if (guess) box.querySelector(`[data-su-pick="${items.indexOf(guess)}"]`)?.click();
+      } catch (err) { box.innerHTML = `<p class="small su-err">${suEsc(err.message || 'Couldn\'t reach StockUp.')}</p>`; }
+    };
+    $('[data-pop="stockup"]', root)?.addEventListener('click', async () => {
+      if (loaded) return; loaded = true;
+      try {
+        const d = await (await fetch('/api/stockup/', { credentials: 'same-origin' })).json();
+        if (d.error) throw new Error(d.error);
+        planSel.innerHTML = '<option value="">Choose a plan…</option>' + d.plans.map(p => `<option value="${p.id}">${suEsc(p.name)} (${suEsc(p.status)})</option>`).join('');
+        if (d.plans.length === 1) { planSel.value = d.plans[0].id; loadItems(); }
+      } catch (err) { planSel.innerHTML = `<option value="">${suEsc(err.message || 'Couldn\'t reach StockUp')}</option>`; loaded = false; }
+    });
+    planSel.addEventListener('change', loadItems);
+    search.addEventListener('input', draw);
+    box.addEventListener('click', e => {
+      const b = e.target.closest('[data-su-pick]'); if (!b) return;
+      const i = items[+b.dataset.suPick];
+      form.owner.value = i.owner; form.owner_id.value = i.owner_id; form.unit.value = i.unit;
+      $('[data-su-go]', form).disabled = false;
+      $('[data-su-hint]', form).textContent = `${i.name} is counted in ${i.unit === 'each' ? 'units' : i.unit}. The card's person gets it as a job on that day; when StockUp confirms the batch this card fills up and completes itself.`;
+      if (!form.qty.value && i.still && parseFloat(i.still) > 0) form.qty.placeholder = suNum(i.still);
+      $$('.su-item', box).forEach(x => x.classList.toggle('on', x === b));   // no redraw: the click is still bubbling
+    });
+    form.addEventListener('submit', async e => {
+      e.preventDefault(); e.stopPropagation();
+      const btn = $('[data-su-go]', form); btn.disabled = true; btn.textContent = 'Scheduling…';
+      try {
+        await cardPost('stockup', { plan_id: +planSel.value, owner: form.owner.value, owner_id: +form.owner_id.value,
+          unit: form.unit.value, qty: form.qty.value, date: form.date.value });
+        hidePops(); toast('Scheduled in StockUp.');
+      } catch (err) { btn.disabled = false; btn.textContent = 'Schedule in StockUp'; }
+    });
+  }
+
   // "List ▾" chip at the top of a card → Move card: Board, List, Position (like Trello)
   function wireMoveForm(root) {
     const form = $('[data-move-form]', root);
@@ -689,6 +749,7 @@ Invite the press`,
   function wireModal() {
     const root = $('.cm', dialogBody);
     if (!root) return;
+    wireStockup(root);
     // comments & activity panel: hidden by default, remembered per person
     let sideOn = false;
     try { sideOn = localStorage.getItem('lanes-card-side') === '1'; } catch {}
@@ -819,6 +880,17 @@ Invite the press`,
     const person = t.closest('[data-member]');
     if (person) return cardPost('members', { user_id: +person.dataset.member });
     if (t.closest('[data-clear-dates]')) return cardPost('update', { due_at: '', start_date: '' });
+    if (t.closest('[data-su-refresh]')) return cardPost('stockup', { refresh: true }).then(() => toast('Checked StockUp.')).catch(() => {});
+    if (t.closest('[data-su-unlink]')) {
+      if (!await LanesUI.confirm('Cancel this run in StockUp?', { text: 'The run comes off the StockUp schedule and its job is withdrawn. The card stays here.', ok: 'Cancel the run', cancel: 'Keep it', danger: true })) return;
+      return cardPost('stockup', { unlink: true }).then(() => toast('Cancelled in StockUp.')).catch(() => {});
+    }
+    const suQty = t.closest('[data-su-qty]');
+    if (suQty) {
+      const v = await LanesUI.ask('How many should StockUp make?', { value: suQty.dataset.suQty, type: 'number', ok: 'Change' });
+      if (v) return cardPost('stockup', { qty: v }).then(() => toast('Changed in StockUp.')).catch(() => {});
+      return;
+    }
     const readAmt = t.closest('[data-read-amounts]');
     if (readAmt) return post(`/api/checklists/${readAmt.dataset.readAmounts}/read-amounts/`).then(d => {
       applyCard(d); toast(d.converted ? `${d.converted} item${d.converted === 1 ? '' : 's'} now count up — type how many are done next to each.` : 'Nothing to change.');

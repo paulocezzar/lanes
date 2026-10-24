@@ -200,6 +200,13 @@ def run_automations_hook(request):
     result["notification_emails"] = mailer.notification_emails()
     result["digests"] = mailer.daily_digests()
     result["status_reports"] = mailer.weekly_status_reports()
+    from . import stockup
+    if stockup.enabled():
+        try:
+            result["stockup"] = stockup.sync()
+            result["stockup_boards"] = stockup.refresh_plan_boards()
+        except stockup.StockUpError as e:
+            result["stockup"] = {"error": str(e)}
     result["sent"] = mailer.flush(limit=80, budget=40 - (time.monotonic() - started))
     return JsonResponse(result)
 

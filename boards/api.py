@@ -338,6 +338,9 @@ def card_update(request, card_id):
     was_complete = Card.objects.filter(pk=card.pk).values_list("is_complete", flat=True).first()
     just_completed = "is_complete" in d and card.is_complete and not was_complete
     card.save()
+    if hasattr(card, "stockup") and ({"due_at", "archive"} & set(d)):
+        from . import stockup as _su
+        _su.after_card_change(card, user, set(d))
     pushed = []
     if "due_at" in d or "start_date" in d or "is_milestone" in d:
         from .schedule import push_dependants
@@ -421,6 +424,9 @@ def card_toggle_member(request, card_id):
         notify.send(person, Notification.ASSIGNED, actor=request.user, card=card,
                     text=f"assigned you to {card.title}")
         automation.fire(card, Rule.MEMBER_ADDED, actor=request.user, member=person)
+    if hasattr(card, "stockup"):
+        from . import stockup as _su
+        _su.after_card_change(card, request.user, {"members"})
     return card_response(card.pk, request)
 
 

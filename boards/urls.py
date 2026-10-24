@@ -1,11 +1,18 @@
 from django.urls import path
 
-from . import (api, api_more, views, views_account, views_describe, views_forms, views_gallery, views_join, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio,
+from . import (views_stockup, api, api_more, views, views_account, views_describe, views_forms, views_gallery, views_join, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio,
                views_company, views_export, views_public, views_search)
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("internal/run-automations/", views.run_automations_hook),
+    path("internal/stockup-ping/", views_stockup.ping),
+    path("stockup/", views_stockup.stockup_page, name="stockup"),
+    path("stockup/plans/<int:plan_id>/board/", views_stockup.make_plan_board, name="stockup_plan_board"),
+    path("stockup/people/", views_stockup.people_link, name="stockup_people"),
+    path("b/<int:board_id>/stockup-refresh/", views_stockup.refresh_board, name="stockup_refresh"),
+    path("api/stockup/", views_stockup.items_json),
+    path("api/cards/<int:card_id>/stockup/", views_stockup.card_link),
     path("api/parse-date/", views.parse_date),
     path("p/<str:token>/", views_public.public_board, name="public_board"),
     path("p/<str:token>/c/<int:card_id>/", views_public.public_card, name="public_card"),

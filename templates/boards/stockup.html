@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load lanes_extras %}
+{% block title %}StockUp plans · Lanes{% endblock %}
+{% block content %}
+<main class="home narrow">
+  <h1 class="page-title">🏭 StockUp plans</h1>
+  <p class="muted">Plans from StockUp, and the boards made from them. On any card you can also use <b>🏭 StockUp</b> to schedule a run — it shows on the floor in StockUp, counts up as batches are made, and completes the card when the batch code is generated.</p>
+
+  {% if not enabled %}
+  <section class="panel"><h2>Not connected</h2><p class="muted">StockUp isn't connected yet. An admin sets <code>STOCKUP_URL</code> and <code>STOCKUP_TOKEN</code> on Lanes, and the same token as <code>LANES_API_TOKEN</code> on StockUp.</p></section>
+  {% elif error %}
+  <section class="panel"><h2>Can't reach StockUp</h2><p class="su-err">{{ error }}</p></section>
+  {% else %}
+  <section class="panel">
+    <h2>Plans</h2>
+    {% for p in plans %}
+    <div class="su-plan">
+      <div><b>{{ p.name }}</b> <span class="role-pill">{{ p.status }}</span><small class="muted">{{ p.department }}{% if p.start %} · {{ p.start }} → {{ p.end }}{% endif %}</small></div>
+      {% if p.board %}<a class="btn sm" href="{% url 'board' p.board.pk %}">Open board</a>
+      {% elif depts %}<form method="post" action="{% url 'stockup_plan_board' p.id %}" class="su-make">{% csrf_token %}
+        {% if depts|length > 1 %}<select name="workspace" aria-label="Department">{% for d in depts %}<option value="{{ d.pk }}">{{ d.name }}</option>{% endfor %}</select>{% else %}<input type="hidden" name="workspace" value="{{ depts.0.pk }}">{% endif %}
+        <button class="btn primary sm">Make a board</button></form>
+      {% else %}<span class="muted small">Ask a department admin to make its board.</span>{% endif %}
+    </div>
+    {% empty %}<p class="muted">No plans in StockUp yet.</p>{% endfor %}
+    <p class="muted small">A plan's board has a card for each product and component, and every run as a part of its component — kept in step with StockUp every half hour (or press “Check StockUp now” on the board). Add your own desk work, people and comments; Lanes never deletes your cards.</p>
+  </section>
+
+  {% if user.is_superuser %}
+  <section class="panel" id="people">
+    <h2>People</h2>
+    <p class="muted small">Who each Lanes person is in StockUp, so adding someone to a StockUp card gives them the job on the floor. {{ linked_count }} linked.</p>
+    <form method="post" action="{% url 'stockup_people' %}">{% csrf_token %}<input type="hidden" name="action" value="match"><button class="btn sm">Match automatically by email and name</button></form>
+    <div class="su-people">
+    {% for u in users %}{% with l=links|get_item:u.pk %}
+      <form method="post" action="{% url 'stockup_people' %}" class="su-person">{% csrf_token %}<input type="hidden" name="user_id" value="{{ u.pk }}">
+        <span>{{ u.display_name }} <small class="muted">{{ u.email }}</small></span>
+        <select name="person_id" onchange="this.form.submit()" aria-label="StockUp person for {{ u.display_name }}"><option value="">— not linked —</option>{% for p in people %}<option value="{{ p.id }}" {% if l and l.person_id == p.id %}selected{% endif %}>{{ p.name }}{% if p.department %} · {{ p.department }}{% endif %}</option>{% endfor %}</select>
+      </form>
+    {% endwith %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+  {% endif %}
+</main>
+{% endblock %}

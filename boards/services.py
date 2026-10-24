@@ -22,7 +22,7 @@ def log(board, actor, verb, card=None, **data):
 
 def cards_qs():
     """Everything a card tile needs, in a fixed number of queries."""
-    return Card.objects.select_related("list__board", "cover").prefetch_related(
+    return Card.objects.select_related("list__board", "cover", "stockup").prefetch_related(
         "attachments",
         "labels",
         "members",
@@ -104,6 +104,8 @@ def render_modal(card, request):
         "field_kinds": CustomField.KINDS,
         "colours": COLOURS,
         "ai_enabled": ai.enabled(),
+        "stockup_on": _stockup_on(),
+        "su": getattr(card, "stockup", None) if hasattr(card, "stockup") else None,
         "sticker_choices": STICKERS,
         "card_buttons": [b for b in board.buttons.all() if b.kind == "card" and b.is_enabled],
         "reaction_choices": REACTIONS,
@@ -170,6 +172,11 @@ def _feed(card, user):
                 for c in card.comments.select_related("author").prefetch_related("reactions__user")]
     acts = [{"kind": "activity", "at": a.created_at, "obj": a} for a in card.activity.select_related("actor")]
     return sorted(comments + acts, key=lambda x: x["at"], reverse=True)
+
+
+def _stockup_on():
+    from . import stockup
+    return stockup.enabled()
 
 
 def card_response(card_id, request):

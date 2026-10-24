@@ -16,6 +16,7 @@
   {% with votes=card.votes.all|length %}
   {% if card.children.all or card.signoffs.all or card.due_at or card.description or card.comments.all or counts.1 or card.members.all or card.attachments.all or votes and card.list.board.voting %}
   <div class="tile-badges">
+    {% if card.stockup %}{% with su=card.stockup %}<span class="badge su-badge{% if su.state == 'confirmed' %} all-done{% endif %}" title="StockUp: {{ su.item_name }}{% if su.batch_codes %} · batch {{ su.batch_codes|join:', ' }}{% endif %}">🏭{% if su.state == 'confirmed' %} ✓{% endif %}</span>{% endwith %}{% endif %}
     {% if votes and card.list.board.voting %}<span class="badge vote-badge" title="{{ votes }} vote{{ votes|pluralize }}">👍{{ votes }}</span>{% endif %}
     {% if card.due_at %}<span class="badge due-{{ card.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ card.due_at|date:"j M" }}</span>{% endif %}
     {% with kp=card.child_progress %}{% if kp %}<span class="badge{% if kp.done == kp.total %} all-done{% endif %}" title="{{ kp.done }} of {{ kp.total }} parts done">▦ {{ kp.done }}/{{ kp.total }}</span>{% endif %}{% endwith %}

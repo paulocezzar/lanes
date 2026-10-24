@@ -132,6 +132,9 @@ ANTHROPIC_DRAFT_MODEL = os.environ.get("ANTHROPIC_DRAFT_MODEL", "claude-sonnet-5
 
 # Shared secret the Render cron job sends to /internal/run-automations/.
 CRON_TOKEN = os.environ.get("CRON_TOKEN", "")
+# The StockUp link: where StockUp is and the shared key both sides use. Unset = off.
+STOCKUP_URL = os.environ.get("STOCKUP_URL", "").rstrip("/")
+STOCKUP_TOKEN = os.environ.get("STOCKUP_TOKEN", "")
 
 # Public address of Lanes, used for links in emails (the cron job has no request to read it from).
 SITE_URL = (os.environ.get("SITE_URL") or (f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}"

@@ -2270,3 +2270,27 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .pf-cards li > small.pf-late { grid-column: 1 / -1; }
 .pf-bar.sm { height: 6px; margin: 0; }
 @media (max-width: 760px) { .pf-tl-head, .pf-tl-row { grid-template-columns: 110px minmax(0, 1fr); } .pf-cards li { grid-template-columns: 1fr 60px 40px; } .pf-cards li > :nth-child(n+4) { grid-column: 1 / -1; } }
+
+/* StockUp link */
+.su-pop { width: 340px; }
+.su-items { max-height: 220px; overflow-y: auto; display: grid; gap: 2px; }
+.su-item { text-align: left; border: 1px solid transparent; background: none; color: var(--text); padding: 6px 8px; border-radius: 6px; cursor: pointer; font: inherit; }
+.su-item:hover { background: var(--surface-3, var(--surface)); }
+.su-item.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.su-item small { display: block; color: var(--text-2); font-size: 12px; }
+.su-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.su-err { color: var(--danger, #dc2626); }
+.su-box { margin-left: var(--cm-g); display: grid; gap: 4px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
+.su-code { font-size: 12px; padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, #1f845a 18%, transparent); color: inherit; }
+.su-state { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--text-2); margin-left: 6px; }
+.su-state.su-confirmed { background: #1f845a; color: #fff; }
+.su-state.su-scheduled { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--text); }
+.su-badge { font-size: 11px; font-weight: 700; }
+.side-emoji { width: 18px; display: inline-block; text-align: center; margin-right: 10px; font-size: 14px; }
+.su-banner form { margin: 0; }
+.su-plan { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.su-plan small { display: block; }
+.su-make { display: flex; gap: 6px; margin: 0; }
+.su-people { display: grid; gap: 4px; margin-top: 10px; }
+.su-person { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 10px; align-items: center; margin: 0; }
+@media (max-width: 600px) { .su-person { grid-template-columns: 1fr; } }

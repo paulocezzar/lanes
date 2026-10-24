@@ -18,7 +18,7 @@ SIDEBAR_PAGES = {
     "home", "gallery", "gallery_template", "my_cards", "notifications", "search", "join_requests", "portfolio",
     "workload", "timesheets", "workspace_members", "workspace_settings", "company_usage", "company_people",
     "company_settings", "company_audit", "company_health", "people_import", "email_prefs", "password_change",
-    "two_step_setup", "my_profile", "my_activity", "person", "department_export",
+    "two_step_setup", "my_profile", "my_activity", "person", "department_export", "stockup",
 }
 
 
@@ -42,5 +42,10 @@ def sidebar(request):
     ws_id = (match.kwargs or {}).get("workspace_id")
     return {"show_sidebar": True, "side_depts": depts, "side_join_count": pending.count(),
             "side_categories": CATEGORIES if name in ("gallery", "gallery_template") else [],
-            "side_ws": int(ws_id) if ws_id else None, "side_name": name,
+            "side_ws": int(ws_id) if ws_id else None, "side_name": name, "side_stockup": _stockup_on(),
             "side_dept": int(request.GET["dept"]) if name == "home" and request.GET.get("dept", "").isdigit() else None}
+
+
+def _stockup_on():
+    from django.conf import settings
+    return bool(settings.STOCKUP_URL and settings.STOCKUP_TOKEN)
