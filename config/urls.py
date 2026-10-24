@@ -7,6 +7,7 @@ from django.urls import include, path
 from accounts import ms_login, twofactor
 from accounts import views as accounts_views
 from accounts.views import set_theme
+from boards import views_app
 
 def _admin_login(request, extra_context=None):
     """The admin has its own sign-in form, which would skip two-step codes —
@@ -22,6 +23,9 @@ admin.site.site_title = "Lanes"
 
 urlpatterns = [
     path("favicon.ico", lambda request: redirect(static("lanes/favicon.svg"), permanent=True)),
+    path("sw.js", views_app.service_worker, name="service_worker"),
+    path("manifest.webmanifest", views_app.manifest, name="manifest"),
+    path("offline/", views_app.offline, name="offline"),
     path("admin/", admin.site.urls),
     path("login/", twofactor.LoginView.as_view(), name="login"),
     path("login/code/", twofactor.login_code, name="login_code"),

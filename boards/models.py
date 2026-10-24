@@ -610,6 +610,9 @@ class Rule(models.Model):
     filters = models.JSONField(default=list, blank=True)   # [{"type": "label", "label": 3}, {"type": "has_due"}]
     actions = models.JSONField(default=list)   # [{"type": "move", "list": 3}, {"type": "complete"}]
     is_enabled = models.BooleanField(default=True)
+    # Department-wide: this rule is copied to every board in its department (lists/labels matched by name).
+    everywhere = models.BooleanField(default=False)
+    source = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True, related_name="copies")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
     run_count = models.PositiveIntegerField(default=0)
@@ -883,6 +886,8 @@ class AuditEvent(models.Model):
         "login": "signed in",
         "login_failed": "failed to sign in as {email}",
         "dept_created": "created the department {dept}",
+        "board_imported": "imported the board {board} from Trello",
+        "board_moved": "moved the board {board} from {old} to {new}",
         "dept_renamed": "renamed the department {old} to {dept}",
         "dept_deleted": "deleted the department {dept}",
         "dept_member_added": "added {name} to {dept}",

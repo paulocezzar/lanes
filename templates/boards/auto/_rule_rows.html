@@ -4,9 +4,16 @@
   <div class="auto-desc">
     <b>{{ r.when }}</b>
     <ul>{% for t in r.then %}<li>{{ t }}</li>{% endfor %}</ul>
+    {% if r.rule.source_id %}<span class="shared-badge">🏢 Shared from “{{ r.rule.source.board.title }}” — change it there</span>
+    {% elif r.rule.everywhere %}<span class="shared-badge on">🏢 On every board in {{ board.workspace.name }} ({{ r.rule.copies.count }} other{{ r.rule.copies.count|pluralize }})</span>{% endif %}
     <small class="muted">Ran {{ r.rule.run_count }} time{{ r.rule.run_count|pluralize }}{% if r.rule.last_run_at %}, last {{ r.rule.last_run_at|ago }}{% endif %}{% if r.rule.created_by %} · made by {{ r.rule.created_by.display_name }}{% endif %}</small>
   </div>
-  {% if can_edit %}
+  {% if can_edit and r.rule.source_id %}
+  <a class="btn ghost sm" href="{% url 'board_automation' r.rule.source.board_id %}">Open source</a>
+  {% elif can_edit %}
+  {% if can_share_rules %}<form method="post" action="{% url 'rule_update' board.pk r.rule.pk %}" {% if not r.rule.everywhere %}data-confirm="Use this rule on every board in {{ board.workspace.name }}?" data-confirm-ok="Share"{% endif %}>{% csrf_token %}<input type="hidden" name="section" value="{{ section }}"><input type="hidden" name="action" value="everywhere">
+    <button class="btn ghost sm" title="{% if r.rule.everywhere %}Stop using it on the department's other boards{% else %}Copy it to every board in {{ board.workspace.name }} — lists and labels are matched by name, and new boards get it too{% endif %}">{% if r.rule.everywhere %}Stop sharing{% else %}🏢 Whole department{% endif %}</button>
+  </form>{% endif %}
   <button type="button" class="btn ghost sm" data-edit="{{ r.edit }}">Edit</button>
   <form method="post" action="{% url 'rule_update' board.pk r.rule.pk %}">{% csrf_token %}<input type="hidden" name="section" value="{{ section }}">
     <button class="btn sm {% if r.rule.is_enabled %}ghost{% else %}primary{% endif %}">{% if r.rule.is_enabled %}Pause{% else %}Turn on{% endif %}</button>

@@ -102,7 +102,7 @@ def automation_page(request, board_id):
     if section not in dict(SECTIONS):
         section = "rules"
     rules, due_rules = [], []
-    for r in board.rules.select_related("trigger_list", "trigger_label", "trigger_field", "created_by"):
+    for r in board.rules.select_related("trigger_list", "trigger_label", "trigger_field", "created_by", "source__board"):
         when, then = automation.describe_rule(r)
         (due_rules if r.trigger in Rule.TIME_TRIGGERS else rules).append(
             {"rule": r, "when": when, "then": then, "edit": json.dumps(rule_json(r))})
@@ -117,6 +117,7 @@ def automation_page(request, board_id):
               "board-buttons": sum(1 for b in buttons if b["b"].kind == Button.BOARD)}
     ctx.update({
         "section": section,
+        "can_share_rules": request.user.is_superuser or permissions.is_workspace_admin(board.workspace, request.user),
         "sections": [(k, v, counts.get(k)) for k, v in SECTIONS],
         "examples": [(mark_safe(text), json.dumps(data)) for text, data in EXAMPLES.get(section, [])],
         "rules": rules,
@@ -307,6 +308,9 @@ def rule_create(request, board_id):
         messages.error(request, "Pick when the rule should run.")
         return back
     existing = Rule.objects.filter(pk=p.get("edit_id") or 0, board=board).first()
+    if existing and existing.source_id:
+        messages.error(request, f"This rule is shared across the department — change it on “{existing.source.board.title}”.")
+        return back
     rule = Rule(board=board, trigger=trigger, created_by=existing.created_by if existing else request.user)
     if trigger not in Rule.TIME_TRIGGERS and p.get("by_whom") in dict(Rule.BY_WHOM):
         rule.by_whom = p["by_whom"]
@@ -380,9 +384,24 @@ def rule_create(request, board_id):
     if existing:
         rule.pk, rule.created_at, rule.is_enabled = existing.pk, existing.created_at, existing.is_enabled
         rule.run_count, rule.last_run_at = existing.run_count, existing.last_run_at
+        rule.everywhere = existing.everywhere
     rule.save()
-    messages.success(request, "Rule saved." if existing else "Rule added.")
+    msg = "Rule saved." if existing else "Rule added."
+    if rule.everywhere:
+        msg += " " + _sync_message(rule)
+    messages.success(request, msg)
     return back
+
+
+def _sync_message(rule):
+    from . import shared_rules
+    done, skipped = shared_rules.sync(rule)
+    msg = f"Updated on {done} other board{'s' if done != 1 else ''} in {rule.board.workspace.name}."
+    if skipped:
+        msg += " Not added to " + "; ".join(f"{b.title} ({why})" for b, why in skipped[:5]) + \
+               (f" and {len(skipped) - 5} more" if len(skipped) > 5 else "") + \
+               " — add the list or label there with the same name and save the rule again."
+    return msg
 
 
 def clean_filters(raw, board):
@@ -593,12 +612,31 @@ def rule_update(request, board_id, rule_id):
     board, ok = _editable_board(request, board_id)
     if ok:
         rule = get_object_or_404(Rule, pk=rule_id, board=board)
-        if request.POST.get("action") == "delete":
+        action = request.POST.get("action")
+        if rule.source_id:
+            messages.error(request, f"This rule is shared across the department — change it on “{rule.source.board.title}”.")
+        elif action == "delete":
+            n = rule.copies.count()
             rule.delete()
-            messages.success(request, "Rule deleted.")
+            messages.success(request, "Rule deleted." + (f" Removed from {n} other board{'s' if n != 1 else ''} too." if n else ""))
+        elif action == "everywhere":
+            if not (request.user.is_superuser or permissions.is_workspace_admin(board.workspace, request.user)):
+                messages.error(request, f"Only admins of {board.workspace.name} can share a rule across the department.")
+            else:
+                rule.everywhere = not rule.everywhere
+                rule.save(update_fields=["everywhere"])
+                if rule.everywhere:
+                    messages.success(request, "Shared with the whole department. " + _sync_message(rule))
+                else:
+                    n = rule.copies.count()
+                    rule.copies.all().delete()
+                    messages.success(request, f"No longer shared — removed from {n} other board{'s' if n != 1 else ''}.")
         else:
             rule.is_enabled = not rule.is_enabled
             rule.save(update_fields=["is_enabled"])
+            if rule.everywhere:
+                from . import shared_rules
+                shared_rules.sync(rule)
     return _back(board, request)
 
 

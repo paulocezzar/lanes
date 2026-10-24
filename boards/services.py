@@ -95,6 +95,7 @@ def render_modal(card, request):
         "feed": _feed(card, user),
         "label_colours": Label.COLOURS,
         "fields": _field_rows(card, board),
+        "fields_used": any(r["value"] not in (None, "", False) for r in _field_rows(card, board)),
         "attachments_persistent": settings.ATTACHMENTS_PERSISTENT,
         "max_mb": settings.ATTACHMENT_MAX_MB,
         "field_kinds": CustomField.KINDS,

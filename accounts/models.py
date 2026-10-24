@@ -46,6 +46,7 @@ class User(AbstractUser):
     capacity_hours = models.DecimalField(max_digits=5, decimal_places=2, default=37.5)   # working hours a week
     hourly_rate = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)  # for labour cost
     colourblind = models.BooleanField(default=False)       # patterns on labels as well as colour
+    welcomed = models.BooleanField(default=False)          # has dismissed the first-time welcome
     only_unread = models.BooleanField(default=False)       # notifications panel: hide read ones
     email_notifications = models.CharField(max_length=10, choices=EMAIL_PREFS, default="instant")
     last_digest_on = models.DateField(null=True, blank=True)

@@ -14,7 +14,7 @@ def set_theme(request):
     if theme in dict(User.THEMES):
         u.theme = theme
         changed.append("theme")
-    for flag in ("colourblind", "only_unread"):
+    for flag in ("colourblind", "only_unread", "welcomed"):
         if flag in request.POST:
             setattr(u, flag, request.POST[flag] in ("1", "true", "on"))
             changed.append(flag)

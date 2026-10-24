@@ -87,8 +87,9 @@ def board_create(request):
     for i, t in enumerate(["To do", "Doing", "Done"], start=1):
         List.objects.create(board=board, title=t, position=i * positions.GAP)
     log(board, request.user, "board_created")
-    from . import audit
+    from . import audit, shared_rules
     audit.record(request, "board_created", board=board)
+    shared_rules.apply_to_new_board(board)      # the department's shared rules (where its lists match)
     return redirect("board", board_id=board.pk)
 
 
@@ -196,3 +197,47 @@ def parse_date(request):
     local = timezone.localtime(due)
     return JsonResponse({"due": local.isoformat(), "words": words,
                          "label": local.strftime("%a %-d %b") + ("" if local.strftime("%H:%M") == "17:00" else local.strftime(", %H:%M"))})
+
+
+@login_required
+@require_POST
+def board_import(request):
+    """Create a board from a Trello JSON export."""
+    import json as _json
+    from . import audit, shared_rules, trello_import
+    ws = get_object_or_404(Workspace, pk=request.POST.get("workspace"))
+    if not permissions.can_create_board(ws, request.user):
+        messages.error(request, "You can only create boards in your own departments.")
+        return redirect("home")
+    f = request.FILES.get("file")
+    if not f:
+        messages.error(request, "Choose the .json file you exported from Trello.")
+        return redirect("home")
+    if f.size > trello_import.MAX_BYTES:
+        messages.error(request, "That file is too big (over 30 MB).")
+        return redirect("home")
+    try:
+        data = _json.loads(f.read().decode("utf-8-sig"))
+        visibility = request.POST.get("visibility") if request.POST.get("visibility") in dict(Board.VISIBILITY) else Board.WORKSPACE
+        board, n, unmatched = trello_import.import_board(data, workspace=ws, user=request.user,
+                                                         title=(request.POST.get("title") or "").strip() or None,
+                                                         visibility=visibility)
+    except (ValueError, UnicodeDecodeError) as e:
+        messages.error(request, str(e) if isinstance(e, trello_import.ImportError_) else
+                       "That file couldn't be read. Upload the .json file from Trello's “Export as JSON”.")
+        return redirect("home")
+    if board.visibility == Board.PRIVATE and not permissions.can_make_private(board, request.user):
+        board.visibility = Board.WORKSPACE
+        board.save(update_fields=["visibility"])
+    log(board, request.user, "board_created")
+    audit.record(request, "board_imported", board=board)
+    shared_rules.apply_to_new_board(board)
+    msg = (f"Imported “{board.title}”: {n['cards']} cards, {n['checklists']} checklists, {n['comments']} comments"
+           f"{', ' + str(n['links']) + ' links' if n['links'] else ''}.")
+    if n["archived"]:
+        msg += f" {n['archived']} archived card{'s' if n['archived'] != 1 else ''} are under Menu → Archived."
+    if unmatched:
+        msg += (" Not found in " + ws.name + ": " + ", ".join(unmatched[:8]) + (" and others" if len(unmatched) > 8 else "")
+                + " — add them to the department and share the board with them.")
+    messages.success(request, msg)
+    return redirect("board", board_id=board.pk)

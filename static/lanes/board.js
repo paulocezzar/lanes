@@ -33,7 +33,13 @@
         credentials: 'same-origin',
       });
     } catch {
-      toast('Connection lost — your change was not saved.');
+      if (window.LanesOffline?.canQueue(url)) {      // keep it on this device; it's sent when we're back online
+        window.LanesOffline.queue(url, data);
+        const msg = 'Saved on this device — it will be sent when you\'re back online.';
+        toast(msg);
+        const err = new Error(msg); err.queued = true; throw err;
+      }
+      toast(navigator.onLine ? 'Connection lost — your change was not saved.' : 'You\'re offline — this needs a connection.');
       throw new Error('network');
     }
     const body = await res.json().catch(() => ({}));
@@ -335,6 +341,20 @@
   let openPop = null;
 
   window.LanesOpenCard = id => openCard(id);
+  // the bottom bar can be tucked away (remembered on this device)
+  const dock = $('.dock');
+  function setDockMini(mini) {
+    if (!dock) return;
+    dock.classList.toggle('mini', mini);
+    document.body.classList.toggle('dock-mini', mini);
+    const show = $('[data-dock-show]', dock); if (show) show.hidden = !mini;
+    try { localStorage.setItem('lanes-dock-mini', mini ? '1' : ''); } catch { /* private mode */ }
+  }
+  try { if (localStorage.getItem('lanes-dock-mini')) setDockMini(true); } catch { /* ignore */ }
+  dock?.addEventListener('click', e => {
+    if (e.target.closest('[data-dock-hide]')) setDockMini(true);
+    else if (e.target.closest('[data-dock-show]')) setDockMini(false);
+  });
   let hintTimer = null;
   dialogBody.addEventListener('input', e => {
     const input = e.target.closest('[data-item-new] input');
@@ -522,9 +542,19 @@ Invite the press`,
   });
 
   window.addEventListener('lanes:timer-stopped', () => { if (openCardId) openCard(openCardId); });
+  window.addEventListener('lanes:synced', () => { forceRefresh(); if (openCardId) openCard(openCardId); });
+  // keep this board's cards on the device so they open offline too
+  (async () => {
+    if (!navigator.serviceWorker || !navigator.onLine) return;
+    const reg = await navigator.serviceWorker.ready.catch(() => null);
+    const ids = $$('.card-tile[data-card-id]', listsEl).map(t => `/cards/${t.dataset.cardId}/`);
+    setTimeout(() => reg?.active?.postMessage({ type: 'keep', urls: [...new Set(ids)] }), 3000);
+  })();
   async function openCard(id) {
-    const res = await fetch(`/cards/${id}/`, { credentials: 'same-origin' });
-    if (!res.ok) { toast('That card could not be opened.'); return; }
+    let res;
+    try { res = await fetch(`/cards/${id}/`, { credentials: 'same-origin' }); }
+    catch { res = { ok: false, status: 503 }; }
+    if (!res.ok) { toast(res.status === 503 ? 'This card isn\'t saved for offline use yet — open it once while you have signal.' : 'That card could not be opened.'); return; }
     openCardId = String(id);
     openPop = null;
     dialogBody.innerHTML = await res.text();
@@ -766,6 +796,13 @@ Invite the press`,
     if (tplBtn) return cardPost('update', { is_template: tplBtn.dataset.templateToggle === '1' });
     const cover = t.closest('[data-cover]');
     if (cover) return post(`/api/attachments/${cover.dataset.cover}/`, { cover: cover.dataset.on === '1' }).then(applyCard);
+    const rev = t.closest('[data-reveal]');
+    if (rev) {
+      const sec = $(`[data-opt="${rev.dataset.reveal}"]`, dialogBody);
+      if (sec) { sec.hidden = false; rev.hidden = true; sec.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        $('input:not([type=hidden]), select, textarea', sec)?.focus(); }
+      return;
+    }
     if (t.closest('[data-amount-show]')) {
       const f = $('[data-amount-form]', dialogBody);
       if (f) { f.hidden = false; f.amount.focus(); }
@@ -811,7 +848,8 @@ Invite the press`,
   dialogBody.addEventListener('change', async e => {
     const t = e.target;
     if (t.matches('[data-label]')) return cardPost('labels', { label_id: +t.dataset.label });
-    if (t.matches('[data-item]')) return post(`/api/items/${t.dataset.item}/`, { is_done: t.checked }).then(d => { applyCard(d); if (d.refresh_board && typeof forceRefresh === 'function') forceRefresh(); });
+    if (t.matches('[data-item]')) return post(`/api/items/${t.dataset.item}/`, { is_done: t.checked }).then(d => { applyCard(d); if (d.refresh_board && typeof forceRefresh === 'function') forceRefresh(); })
+      .catch(err => { if (err.queued) t.closest('.item')?.classList.toggle('done', t.checked); else t.checked = !t.checked; });
     if (t.matches('[data-move-list]')) return cardPost('move', { list_id: +t.value });
     if (t.matches('[data-move-board]')) {
       const opt = t.selectedOptions[0];
@@ -925,7 +963,12 @@ Invite the press`,
       const n = f.n.value.trim();
       if (!n) return;
       return post(`/api/items/${f.dataset.itemQty}/`, { qty_add: n }).then(applyCard)
-        .catch(err => toast(err.message || 'Could not record that.'));
+        .catch(err => {
+          if (!err.queued) return toast(err.message || 'Could not record that.');
+          const b = f.closest('.item-qty')?.querySelector('b');    // show it straight away; the server catches up later
+          if (b) b.textContent = (parseFloat(b.textContent.replace(/,/g, '')) + parseFloat(n)).toLocaleString('en-GB');
+          f.n.value = '';
+        });
     }
     if (f.matches('[data-label-new]')) {
       e.preventDefault();
@@ -1147,6 +1190,12 @@ Invite the press`,
     del.closest('[data-field-row]').remove();
   });
 
+  $('[data-board-workspace]', drawer)?.addEventListener('change', async e => {
+    const name = e.target.selectedOptions[0].textContent;
+    if (!await LanesUI.confirm(`Move this board to ${name}?`, { text: 'Everything on it moves too. People in that department can then see it (unless the board is private).', ok: 'Move' })) { location.reload(); return; }
+    try { await post(`/api/boards/${boardId}/update/`, { workspace: e.target.value }); location.reload(); }
+    catch (err) { toast(err.message); location.reload(); }
+  });
   $('[data-board-collection]', drawer)?.addEventListener('change', async e => {
     let value = e.target.value;
     if (value === '__new') {
@@ -1303,18 +1352,19 @@ Invite the press`,
   listsEl.addEventListener('click', async e => {
     const btn = e.target.closest('[data-from-template]');
     if (!btn) return;
-    const templates = $$('.card-tile.is-template', listsEl);
+    const res = await fetch(`/api/boards/${boardId}/templates/`, { credentials: 'same-origin' });
+    const { templates = [], department = '' } = res.ok ? await res.json() : {};
     if (!templates.length) {
-      toast('No templates yet. Open a card and click “Make template” to create one.');
+      toast(`No templates yet in ${department || 'this department'}. Open a card and click “Make template” — it can then be used on any board in the department.`);
       return;
     }
     const pick = await LanesUI.choose('Create a card from which template?',
-      templates.map((t, i) => ({ label: t.dataset.title, value: i })));
+      templates.map((t, i) => ({ label: t.here ? t.title : `${t.title} · from ${t.board}`, value: i })));
     const tpl = pick === null ? null : templates[pick];
     if (!tpl) return;
     const listEl = btn.closest('.list');
-    const body = { template_id: +tpl.dataset.cardId };
-    if (tpl.dataset.perOne) {                 // the template scales: ask how many
+    const body = { template_id: tpl.id };
+    if (tpl.per_one) {                 // the template scales: ask how many
       const n = await LanesUI.ask('How many?', { type: 'number', ok: 'Create', hint: 'Every “per one” line is worked out from this. Leave empty to keep the template’s amount.' });
       if (n === null) return;
       if (n.trim()) body.amount = n.trim();

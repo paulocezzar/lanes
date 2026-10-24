@@ -794,10 +794,24 @@ def board_update(request, board_id):
             board.collection, _ = Collection.objects.get_or_create(workspace=board.workspace, name=name)
         else:
             board.collection = get_object_or_404(Collection, pk=value, workspace=board.workspace)
+    moved = False
+    if d.get("workspace") and str(d["workspace"]) != str(board.workspace_id):
+        from .models import Workspace
+        ws = get_object_or_404(Workspace, pk=d["workspace"])
+        if not permissions.can_create_board(ws, request.user):
+            raise ApiError("You can only move boards into departments where you can create boards.", 403)
+        audit.record(request, "board_moved", board=board, old=board.workspace.name, new=ws.name)
+        board.workspace, board.collection, moved = ws, None, True
     if "archive" in d and bool(d["archive"]) != board.is_archived:
         board.is_archived = bool(d["archive"])
         audit.record(request, "board_archived" if board.is_archived else "board_restored", board=board)
     board.save()
+    if moved:                                # department-wide rules: leave the old department's, take the new one's
+        from . import shared_rules
+        Rule.objects.filter(board=board, source__isnull=False).delete()
+        for r in Rule.objects.filter(board=board, everywhere=True, source__isnull=True):
+            shared_rules.sync(r)
+        shared_rules.apply_to_new_board(board)
     return {"ok": True, "public_token": board.public_token}
 
 
@@ -888,9 +902,17 @@ def card_copy(request, card_id):
 def card_from_template(request, list_id):
     lst = get_object_or_404(List.objects.select_related("board"), pk=list_id, is_archived=False)
     _edit(lst.board, request.user)
-    tpl = get_object_or_404(Card, pk=request.data.get("template_id"), list__board=lst.board, is_template=True)
-    from .copying import copy_card
-    new = copy_card(tpl, lst, user=request.user, keep_members=True, keep_dates=False)
+    tpl = get_object_or_404(Card.objects.select_related("list__board"), pk=request.data.get("template_id"),
+                            is_template=True, is_archived=False, list__board__workspace=lst.board.workspace)
+    if not permissions.can_view(tpl.list.board, request.user):
+        raise Http404
+    from .copying import copy_card, cross_board_maps
+    if tpl.list.board_id == lst.board_id:
+        new = copy_card(tpl, lst, user=request.user, keep_members=True, keep_dates=False)
+    else:                                    # a template from another board in the department
+        label_map, field_map = cross_board_maps(tpl.list.board, lst.board)
+        new = copy_card(tpl, lst, user=request.user, keep_members=False, keep_dates=False,
+                        label_map=label_map, field_map=field_map)
     raw = str(request.data.get("amount") or "").strip()
     if raw:                                  # "How many?" — every per-one line scales to it
         from . import products
@@ -1631,3 +1653,21 @@ def board_setup_draft(request, board_id):
     except ai.AIUnavailable as e:
         raise ApiError(str(e), 503)
     return {"text": draft}
+
+
+
+def board_templates(request, board_id):
+    """Card templates for 'Create from template': this board's first, then the department's other boards."""
+    from django.http import JsonResponse
+    if not request.user.is_authenticated:
+        raise Http404
+    board = get_object_or_404(Board, pk=board_id, is_archived=False)
+    if not permissions.can_view(board, request.user):
+        raise Http404
+    visible = permissions.visible_boards(request.user).filter(workspace=board.workspace).values_list("pk", flat=True)
+    cards = (Card.objects.filter(is_template=True, is_archived=False, list__is_archived=False, list__board__in=list(visible))
+             .select_related("list__board").prefetch_related("checklists__items").order_by("list__board__title", "title"))
+    out = [{"id": c.pk, "title": c.title, "board": c.list.board.title, "here": c.list.board_id == board.pk,
+            "per_one": c.per_one_lines()} for c in cards[:200]]
+    out.sort(key=lambda t: (not t["here"], t["board"].lower(), t["title"].lower()))
+    return JsonResponse({"templates": out, "department": board.workspace.name})

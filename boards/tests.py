@@ -4023,3 +4023,193 @@ class DiscoverabilityTests(TestCase):
         self.assertContains(r, "list-empty-hint")
         self.assertContains(r, "data-su-example")
         self.assertContains(self.client.get(f"/cards/{self.c.pk}/"), "data-item-hint")
+
+
+class DepartmentWideTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user("dw@x.com", "pw")
+        self.ws = Workspace.objects.create(name="Production")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.admin, role="admin")
+        self.a = self._board("Bakery")
+        self.b = self._board("Creamery")
+        self.client.force_login(self.admin)
+
+    def _board(self, title, lists=("To do", "Done")):
+        b = Board.objects.create(workspace=self.ws, title=title)
+        BoardMember.objects.create(board=b, user=self.admin, role="admin")
+        for i, t in enumerate(lists):
+            List.objects.create(board=b, title=t, position=i)
+        Label.objects.create(board=b, name="Urgent", colour="red")
+        return b
+
+    def test_rule_shared_across_department_matched_by_name(self):
+        from .models import Rule
+        done_a = self.a.lists.get(title="Done")
+        r = Rule.objects.create(board=self.a, trigger="moved", trigger_list=done_a,
+                                actions=[{"type": "complete"}, {"type": "add_label", "label": self.a.labels.get().pk}])
+        url = f"/b/{self.a.pk}/automation/rules/{r.pk}/"
+        from django.urls import reverse
+        url = reverse("rule_update", args=[self.a.pk, r.pk])
+        self.client.post(url, {"action": "everywhere"})
+        copy = Rule.objects.get(board=self.b)
+        self.assertEqual(copy.source, r)
+        self.assertEqual(copy.trigger_list, self.b.lists.get(title="Done"))
+        self.assertEqual(copy.actions[1]["label"], self.b.labels.get().pk)
+        # a board without a "Done" list is skipped, not given one
+        c = self._board("Butchery", lists=("Prep", "Out"))
+        from . import shared_rules
+        r.refresh_from_db()
+        done, skipped = shared_rules.sync(r)
+        self.assertEqual(done, 1)
+        self.assertEqual(skipped[0][0], c)
+        self.assertIn("Done", skipped[0][1])
+        # copies can't be edited where they are; pausing the source pauses them
+        self.client.post(reverse("rule_update", args=[self.b.pk, copy.pk]), {"action": "delete"})
+        self.assertTrue(Rule.objects.filter(pk=copy.pk).exists())
+        self.client.post(url, {})
+        copy.refresh_from_db()
+        self.assertFalse(copy.is_enabled)
+        # a new board in the department gets it; stopping sharing removes the copies
+        self.client.post(reverse("board_create"), {"workspace": self.ws.pk, "title": "Pastry"})
+        self.assertTrue(Rule.objects.filter(board__title="Pastry", source=r).exists())
+        self.client.post(url, {"action": "everywhere"})
+        self.assertFalse(Rule.objects.filter(source=r).exists())
+
+    def test_only_department_admins_share(self):
+        from django.urls import reverse
+        from .models import Rule
+        member = User.objects.create_user("dm@x.com", "pw")
+        WorkspaceMember.objects.create(workspace=self.ws, user=member)
+        BoardMember.objects.create(board=self.a, user=member, role="admin")
+        r = Rule.objects.create(board=self.a, trigger="added", actions=[{"type": "complete"}])
+        self.client.force_login(member)
+        self.client.post(reverse("rule_update", args=[self.a.pk, r.pk]), {"action": "everywhere"})
+        r.refresh_from_db()
+        self.assertFalse(r.everywhere)
+
+    def test_templates_from_other_boards_in_department(self):
+        from .models import ChecklistItem, Checklist
+        from decimal import Decimal
+        tpl = Card.objects.create(list=self.a.lists.first(), title="Cake order", is_template=True)
+        tpl.labels.add(self.a.labels.get())
+        cl = Checklist.objects.create(card=tpl, title="Make")
+        ChecklistItem.objects.create(checklist=cl, text="Tin", per_unit=Decimal("1"))
+        t = self.client.get(f"/api/boards/{self.b.pk}/templates/").json()["templates"]
+        self.assertEqual([(x["title"], x["here"], x["per_one"]) for x in t], [("Cake order", False, True)])
+        r = self.client.post(f"/api/lists/{self.b.lists.first().pk}/from-template/",
+                             json.dumps({"template_id": tpl.pk, "amount": "30"}), content_type="application/json")
+        new = Card.objects.get(pk=r.json()["card_id"])
+        self.assertEqual(new.list.board, self.b)
+        self.assertEqual(list(new.labels.values_list("name", flat=True)), ["Urgent"])
+        self.assertEqual(int(ChecklistItem.objects.get(checklist__card=new).qty_target), 30)
+        # a board in another department can't use it
+        other = Workspace.objects.create(name="Other")
+        WorkspaceMember.objects.create(workspace=other, user=self.admin, role="admin")
+        ob = Board.objects.create(workspace=other, title="X")
+        BoardMember.objects.create(board=ob, user=self.admin, role="admin")
+        ol = List.objects.create(board=ob, title="L")
+        r = self.client.post(f"/api/lists/{ol.pk}/from-template/", json.dumps({"template_id": tpl.pk}),
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 404)
+
+    def test_move_board_to_another_department(self):
+        other = Workspace.objects.create(name="Kitchen")
+        WorkspaceMember.objects.create(workspace=other, user=self.admin, role="admin")
+        r = self.client.post(f"/api/boards/{self.b.pk}/update/", json.dumps({"workspace": other.pk}),
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.b.refresh_from_db()
+        self.assertEqual(self.b.workspace, other)
+        nope = Workspace.objects.create(name="Not mine")
+        r = self.client.post(f"/api/boards/{self.b.pk}/update/", json.dumps({"workspace": nope.pk}),
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 403)
+
+
+class TrelloImportTests(TestCase):
+    EXPORT = {
+        "name": "Shop fit-out", "desc": "From Trello",
+        "labels": [{"id": "l1", "name": "Urgent", "color": "red_dark"}, {"id": "l2", "name": "", "color": "lime"}],
+        "lists": [{"id": "a", "name": "To do", "pos": 1}, {"id": "b", "name": "Done", "pos": 2},
+                  {"id": "z", "name": "Old", "pos": 3, "closed": True}],
+        "members": [{"id": "m1", "fullName": "Wendy Ward", "username": "wendyw"}, {"id": "m2", "fullName": "Stranger", "username": "s"}],
+        "customFields": [{"id": "f1", "name": "Priority", "type": "list", "options": [{"id": "o1", "value": {"text": "High"}}]},
+                         {"id": "f2", "name": "Cost", "type": "number"}],
+        "cards": [
+            {"id": "c1", "name": "Order counters", "desc": "Oak", "idList": "a", "pos": 1, "due": "2026-11-05T17:00:00.000Z",
+             "idLabels": ["l1"], "idMembers": ["m1", "m2"], "dueComplete": False,
+             "customFieldItems": [{"idCustomField": "f1", "idValue": "o1"}, {"idCustomField": "f2", "value": {"number": "1200"}}],
+             "attachments": [{"name": "Quote", "url": "https://example.com/quote.pdf"}]},
+            {"id": "c2", "name": "Paint", "idList": "b", "pos": 2, "closed": True},
+        ],
+        "checklists": [{"id": "k1", "idCard": "c1", "name": "Steps", "pos": 1,
+                        "checkItems": [{"name": "Measure", "state": "complete", "pos": 1}, {"name": "Book fitter", "state": "incomplete", "pos": 2, "idMember": "m1"}]}],
+        "actions": [{"type": "commentCard", "idMemberCreator": "m2", "memberCreator": {"fullName": "Stranger"},
+                     "date": "2026-10-01T09:00:00.000Z", "data": {"text": "Use the oak", "card": {"id": "c1"}}}],
+    }
+
+    def setUp(self):
+        self.u = User.objects.create_user("ti@x.com", "pw")
+        self.w = User.objects.create_user("wendy@x.com", "pw", first_name="Wendy", last_name="Ward")
+        self.ws = Workspace.objects.create(name="Shops")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u, role="admin")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.w)
+        self.client.force_login(self.u)
+
+    def upload(self, data, **extra):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        f = SimpleUploadedFile("board.json", json.dumps(data).encode(), content_type="application/json")
+        return self.client.post("/boards/import/", {"workspace": self.ws.pk, "file": f, **extra}, follow=True)
+
+    def test_import_everything(self):
+        from .models import Attachment, ChecklistItem, Comment
+        r = self.upload(self.EXPORT)
+        b = Board.objects.get(title="Shop fit-out")
+        self.assertContains(r, "Imported")
+        self.assertContains(r, "Stranger")                       # told who wasn't found
+        self.assertEqual(list(b.lists.order_by("position").values_list("title", "is_archived")),
+                         [("To do", False), ("Done", False), ("Old", True)])
+        c = Card.objects.get(title="Order counters")
+        self.assertEqual(list(c.labels.values_list("name", "colour")), [("Urgent", "red")])
+        self.assertEqual(list(c.members.all()), [self.w])
+        self.assertTrue(BoardMember.objects.filter(board=b, user=self.w).exists())
+        vals = {v.field.name: v.value for v in c.field_values.select_related("field")}
+        self.assertEqual(vals, {"Priority": "High", "Cost": 1200})
+        items = list(ChecklistItem.objects.filter(checklist__card=c).values_list("text", "is_done", "assignee"))
+        self.assertEqual(items, [("Measure", True, None), ("Book fitter", False, self.w.pk)])
+        self.assertIn("Stranger", Comment.objects.get(card=c).body)
+        self.assertEqual(Attachment.objects.get(card=c).url, "https://example.com/quote.pdf")
+        self.assertTrue(Card.objects.get(title="Paint").is_archived)
+        self.assertEqual(b.labels.get(name="").colour, "green")   # lime → green
+
+    def test_rejects_other_files(self):
+        r = self.upload({"hello": 1})
+        self.assertContains(r, "Export as JSON")
+        self.assertFalse(Board.objects.exists())
+
+
+class InstallableAppTests(TestCase):
+    def test_service_worker_manifest_and_offline_page(self):
+        r = self.client.get("/sw.js")
+        self.assertEqual(r["Content-Type"], "application/javascript")
+        self.assertEqual(r["Service-Worker-Allowed"], "/")
+        self.assertNotIn("__VERSION__", r.content.decode())
+        m = self.client.get("/manifest.webmanifest").json()
+        self.assertEqual((m["name"], m["display"]), ("Lanes", "standalone"))
+        self.assertEqual(len(m["icons"]), 4)
+        self.assertContains(self.client.get("/offline/"), "You're offline")
+        u = User.objects.create_user("app@x.com", "pw")
+        self.client.force_login(u)
+        page = self.client.get("/").content.decode()
+        self.assertIn('rel="manifest"', page)
+        self.assertIn('data-sw="1"', page)
+        self.assertIn("offline.js", page)
+
+
+class WelcomeTests(TestCase):
+    def test_welcome_shows_until_dismissed(self):
+        u = User.objects.create_user("new@x.com", "pw", first_name="Nia")
+        self.client.force_login(u)
+        self.assertContains(self.client.get("/"), "Welcome to Lanes, Nia")
+        self.client.post("/account/theme/", {"welcomed": "1"})
+        self.assertNotContains(self.client.get("/"), "Welcome to Lanes")

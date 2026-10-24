@@ -9,6 +9,26 @@ from .models import (Board, BoardMember, Card, CardFieldValue, Checklist, Checkl
 from .services import log
 
 
+def cross_board_maps(src_board, dst_board):
+    """Labels and fields of src_board matched on dst_board by name — made there if missing — so a card
+    (e.g. a department template) can be copied across boards with its labels and amounts intact."""
+    labels = {}
+    for lab in src_board.labels.all():
+        match = (dst_board.labels.filter(name__iexact=lab.name, colour=lab.colour).first()
+                 or (dst_board.labels.filter(name__iexact=lab.name).first() if lab.name else None))
+        labels[lab.pk] = match or Label.objects.create(board=dst_board, name=lab.name, colour=lab.colour)
+    fields = {}
+    top = (dst_board.custom_fields.order_by("-position").first() or CustomField(position=0)).position
+    for f in src_board.custom_fields.all():
+        match = dst_board.custom_fields.filter(name__iexact=f.name).first()
+        if not match:
+            top += 1
+            match = CustomField.objects.create(board=dst_board, name=f.name, kind=f.kind, options=f.options,
+                                               show_on_card=f.show_on_card, position=top)
+        fields[f.pk] = match.pk
+    return labels, fields
+
+
 @transaction.atomic
 def copy_card(card, target_list, *, user, title=None, keep_labels=True, keep_members=True,
               keep_checklists=True, keep_dates=True, label_map=None, field_map=None, position=None):
@@ -38,6 +58,7 @@ def copy_card(card, target_list, *, user, title=None, keep_labels=True, keep_mem
                 for i in cl.items.all()])
     for v in card.field_values.all():
         fid = v.field_id if same_board else (field_map or {}).get(v.field_id)
+        fid = getattr(fid, "pk", fid)
         if fid:
             CardFieldValue.objects.create(card=new, field_id=fid, value=v.value)
     log(target_list.board, user, "card_created", card=new, list=target_list.title)
@@ -73,7 +94,7 @@ def copy_board(board, *, workspace, title, user, keep_cards=True, visibility=Non
                 c.is_template = True
                 c.save(update_fields=["is_template"])
     # Rules come across with their lists and labels translated
-    for rule in board.rules.all():
+    for rule in board.rules.filter(source__isnull=True):   # shared copies come back via the department
         actions = []
         for a in rule.actions:
             a = dict(a)
@@ -95,6 +116,8 @@ def copy_board(board, *, workspace, title, user, keep_cards=True, visibility=Non
         Rule.objects.create(board=new, trigger=rule.trigger, trigger_list=trig_list, trigger_label=trig_label,
                             actions=actions, is_enabled=rule.is_enabled, created_by=user)
     log(new, user, "board_created")
+    from .shared_rules import apply_to_new_board
+    apply_to_new_board(new)
     return new
 
 

@@ -6,10 +6,14 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}Lanes{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'lanes/favicon.svg' %}">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="{% static 'lanes/icon-192.png' %}">
+  <meta name="theme-color" content="#ff8c50">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="stylesheet" href="{% static 'lanes/app.css' %}">
   {% block head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}"{% if user.is_authenticated %} data-sw="1"{% endif %}>
   {% if user.is_authenticated %}
   <header class="topbar">
     <a class="brand" href="{% url 'home' %}">
@@ -108,6 +112,7 @@
   <script src="{% static 'lanes/ui.js' %}"></script>
   {% if user.is_authenticated %}<script src="{% static 'lanes/notify.js' %}"></script>
   <script src="{% static 'lanes/timer.js' %}"></script>
+  <script src="{% static 'lanes/offline.js' %}"></script>
   <dialog id="shortcuts-dialog" class="dialog wide" aria-label="Keyboard shortcuts">
     <div class="dialog-head"><h3>Keyboard shortcuts</h3><button class="icon-btn" data-close aria-label="Close">×</button></div>
     <div class="keys-grid">

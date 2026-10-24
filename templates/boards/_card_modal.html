@@ -154,7 +154,10 @@
             <div class="sticker-grid">{% for s in sticker_choices %}<button class="sticker{% if s in card.stickers %} on{% endif %}" data-sticker="{{ s }}">{{ s }}</button>{% endfor %}</div>
           </div>
         </div>
-        <button class="chip-btn{% if card.is_template %} on{% endif %}" data-template-toggle="{{ card.is_template|yesno:'0,1' }}" title="Templates can be stamped out from any list's copy button">{% include "boards/_icon.html" with i="copy" %}{% if card.is_template %}Template ✓{% else %}Make template{% endif %}</button>
+        <button class="chip-btn{% if card.is_template %} on{% endif %}" data-template-toggle="{{ card.is_template|yesno:'0,1' }}" title="Use it from any list's copy button — on any board in this department">{% include "boards/_icon.html" with i="copy" %}{% if card.is_template %}Template ✓{% else %}Make template{% endif %}</button>
+        {% if fields and not fields_used %}<button class="chip-btn" type="button" data-reveal="fields" title="Fill in this board's fields">{% include "boards/_icon.html" with i="field" %}Fields</button>{% endif %}
+        {% if dep_choices and not waits_for and not needed_by %}<button class="chip-btn" type="button" data-reveal="deps" title="Make this card wait for another">⛓ Waits for</button>{% endif %}
+        {% if not time_entries and not my_timer and not card.estimate_hours %}<button class="chip-btn" type="button" data-reveal="time" title="Log time or start a timer">{% include "boards/_icon.html" with i="clock" %}Time</button>{% endif %}
         <button class="chip-btn" data-archive-card="{{ card.is_archived|yesno:'0,1' }}">{% include "boards/_icon.html" with i="archive" %}{% if card.is_archived %}Restore{% else %}Archive{% endif %}</button>
       </div>
       {% endif %}
@@ -177,7 +180,7 @@
       {% endif %}
 
       {% if fields %}
-      <section class="cm-section">
+      <section class="cm-section" data-opt="fields" {% if not fields_used %}hidden{% endif %}>
         <h4 class="cm-h">{% include "boards/_icon.html" with i="label" %}Custom fields</h4>
         <div class="field-grid">
           {% for row in fields %}{% with f=row.field v=row.value %}
@@ -229,7 +232,7 @@
       {% endif %}
 
       {% if waits_for or needed_by or can_edit and dep_choices %}
-      <section class="cm-section deps">
+      <section class="cm-section deps" data-opt="deps" {% if not waits_for and not needed_by %}hidden{% endif %}>
         <h4 class="cm-h">⛓ Dependencies</h4>
         {% if waits_for %}<div class="dep-row"><span class="dep-k">Waits for</span>{% for d in waits_for %}<span class="dep-chip{% if not d.depends_on.is_complete %} open{% endif %}"><a href="?card={{ d.depends_on.pk }}" data-card-open="{{ d.depends_on.pk }}">{% if d.depends_on.is_complete %}✓ {% endif %}{{ d.depends_on.title }}</a>{% if d.depends_on.due_at %}<small>{{ d.depends_on.due_at|date:"j M" }}</small>{% endif %}{% if d.lag_days %}<small>+{{ d.lag_days }}d</small>{% endif %}{% if can_edit %}<button type="button" class="x" data-dep-remove="{{ d.depends_on.pk }}" title="Stop waiting for this" aria-label="Remove">×</button>{% endif %}</span>{% endfor %}</div>{% endif %}
         {% if needed_by %}<div class="dep-row"><span class="dep-k">Needed by</span>{% for d in needed_by %}<span class="dep-chip"><a href="?card={{ d.card.pk }}" data-card-open="{{ d.card.pk }}">{{ d.card.title }}</a>{% if d.card.due_at %}<small>{{ d.card.due_at|date:"j M" }}</small>{% endif %}</span>{% endfor %}</div>{% endif %}
@@ -243,7 +246,7 @@
       {% endif %}
 
       {% if can_edit or time_entries %}
-      <section class="cm-section time" data-time-section>
+      <section class="cm-section time" data-time-section data-opt="time" {% if not time_entries and not my_timer and not card.estimate_hours %}hidden{% endif %}>
         <h4 class="cm-h">{% include "boards/_icon.html" with i="clock" %}Time</h4>
         <div class="tt-sum">
           <span><b>{{ time_total|hm|default:"0m" }}</b> logged{% if card.estimate_hours %} of {{ card.estimate_hours|hrs }}h estimate{% endif %}</span>

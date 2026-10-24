@@ -2,6 +2,21 @@
 {% block title %}Boards · Lanes{% endblock %}
 {% block content %}
 <main class="home">
+  {% if not user.welcomed %}
+  <section class="welcome" data-welcome>
+    <div class="welcome-head">
+      <h2>Welcome to Lanes{% if user.first_name %}, {{ user.first_name }}{% endif %} 👋</h2>
+      <form method="post" action="{% url 'set_theme' %}" data-welcome-done>{% csrf_token %}<input type="hidden" name="welcomed" value="1"><button class="btn sm">Got it</button></form>
+    </div>
+    <p class="muted">Boards hold lists, lists hold cards — move cards along as the work happens. Three things to try:</p>
+    <div class="welcome-steps">
+      <div><b>1 · Open a board</b><span>Boards are grouped by department below. {% if create_workspaces %}Click <b>Create new board</b> to start your own{% else %}Ask your manager to add you to one{% endif %}.</span></div>
+      <div><b>2 · Add cards</b><span>Click <b>+ Add a card</b>, or <b>＃ Set up several cards at once</b> on an empty list — pick an example and change the words.</span></div>
+      <div><b>3 · Tick things off</b><span>Open a card to tick checklists or record amounts (<b>120 / 430</b>). Everything you're on is in <b>My cards</b> and the <b>Planner</b>.</span></div>
+    </div>
+    <p class="muted small">📱 On your phone: open Lanes in the browser and choose <b>Add to Home Screen</b>. It then works like an app — and keeps working with no signal.</p>
+  </section>
+  {% endif %}
   {% if starred %}
   <section class="home-section">
     <h2>★ Starred boards</h2>
@@ -129,8 +144,37 @@
       </select>
     </label>
     <div class="dialog-actions">
+      <button type="button" class="link-btn" data-open-import>Moving from Trello? Import a board</button>
       <button type="button" class="btn ghost" data-close>Cancel</button>
       <button class="btn primary">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="import-board" class="dialog">
+  <form method="post" action="{% url 'board_import' %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <h3>Import a board from Trello</h3>
+    <ol class="import-steps muted small">
+      <li>In Trello, open the board → <b>⋯</b> menu → <b>Print, export and share</b> → <b>Export as JSON</b>.</li>
+      <li>Save the file it opens (in most browsers: File → Save Page As…, or right-click → Save As).</li>
+      <li>Choose that file below.</li>
+    </ol>
+    <label>Trello file (.json)<input type="file" name="file" accept=".json,application/json" required></label>
+    <label>Department
+      <select name="workspace">{% for ws in create_workspaces %}<option value="{{ ws.pk }}">{{ ws.name }}</option>{% endfor %}</select>
+    </label>
+    <label>Board title <span class="muted small">(optional — keeps Trello's name if empty)</span><input name="title" maxlength="120"></label>
+    <label>Visibility
+      <select name="visibility">
+        <option value="workspace">Department — everyone in the department can see it</option>
+        <option value="private">Private — only people you add</option>
+      </select>
+    </label>
+    <p class="muted small">Lists, cards, labels, dates, checklists, custom fields, comments and links come across. People are matched by name or email to accounts in the department. Files uploaded to Trello come across as links.</p>
+    <div class="dialog-actions">
+      <button type="button" class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary">Import</button>
     </div>
   </form>
 </dialog>
@@ -144,6 +188,17 @@
     dlg.querySelector('input[name=title]').focus();
   }));
   dlg.querySelector('[data-close]').addEventListener('click', () => dlg.close());
+  document.querySelector('[data-welcome-done]')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    await fetch(e.target.action, { method: 'POST', body: new FormData(e.target), credentials: 'same-origin' }).catch(() => {});
+    document.querySelector('[data-welcome]')?.remove();
+  });
+  const idlg = document.getElementById('import-board');
+  dlg.querySelector('[data-open-import]')?.addEventListener('click', () => {
+    idlg.querySelector('select[name=workspace]').value = dlg.querySelector('select[name=workspace]').value;
+    dlg.close(); idlg.showModal();
+  });
+  idlg?.querySelector('[data-close]').addEventListener('click', () => idlg.close());
   const tdlg = document.getElementById('use-template');
   document.querySelectorAll('[data-use-template]').forEach(b => b.addEventListener('click', () => {
     const f = tdlg.querySelector('form');

@@ -119,7 +119,9 @@
     <button class="dock-btn on" data-toggle-boardview aria-pressed="true" title="Show or hide the board">{% include "boards/_icon.html" with i="card" %}<span>Board</span></button>
     <i class="dock-sep"></i>
     <button class="dock-btn" data-dock-switch title="Switch boards (s)">{% include "boards/_icon.html" with i="copy" %}<span>Switch boards</span></button>
+    <button class="dock-btn dock-hide" data-dock-hide title="Hide this bar" aria-label="Hide this bar">⌄</button>
   </div>
+  <button class="dock-btn dock-show" data-dock-show title="Show the bottom bar" aria-label="Show the bottom bar" hidden>⌃</button>
   {% if can_edit %}<button class="dock-btn dock-voice" data-dock-voice hidden title="Say a to-do — it goes into your Inbox" aria-label="Voice capture to Inbox">
     <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg></button>{% endif %}
 </nav>
@@ -381,6 +383,11 @@ Setup:
   </div>
 
   <div class="drawer-pane" data-pane="settings" hidden>
+    {% if my_workspaces|length > 1 %}
+    <h4 class="section-label">Department</h4>
+    <select data-board-workspace aria-label="Department">{% for ws in my_workspaces %}<option value="{{ ws.pk }}" {% if ws.pk == board.workspace_id %}selected{% endif %}>{{ ws.name }}</option>{% endfor %}</select>
+    <p class="muted small">Moves the whole board, with its cards, to another department.</p>
+    {% endif %}
     <h4 class="section-label">Collection</h4>
     <select data-board-collection aria-label="Collection">
       <option value="">None</option>

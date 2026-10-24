@@ -1,0 +1,18 @@
+{% load static %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline · Lanes</title><link rel="icon" href="{% static 'lanes/favicon.svg' %}">
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px/1.5 system-ui, sans-serif; background: #1d2125; color: #dee4ea; padding: 16px; }
+  main { max-width: 420px; text-align: center; }
+  img { width: 64px; height: 64px; }
+  a { color: #85b8ff; }
+  @media (prefers-color-scheme: light) { body { background: #f7f8f9; color: #172b4d; } a { color: #0c66e4; } }
+</style></head>
+<body><main>
+  <img src="{% static 'lanes/icon-192.png' %}" alt="">
+  <h1>You're offline</h1>
+  <p>This page hasn't been saved on this device yet. Boards and cards you've opened before still work offline — go back and try one of those.</p>
+  <p>Anything you tick or record while offline is kept and sent when you're back online.</p>
+  <p><a href="javascript:history.back()">← Go back</a> · <a href="/">Try again</a></p>
+</main></body></html>
