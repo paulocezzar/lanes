@@ -1151,6 +1151,12 @@ def card_delete(request, card_id):
         raise ApiError("Only people on the card's own board can delete it.", 403)
     if not card.is_archived:
         raise ApiError("Archive the card first, then delete it from the board menu.")
+    blockers = card.delete_blockers()
+    if blockers:
+        raise ApiError(f"This card has {', '.join(blockers)} in it, so it can only be archived — "
+                       "nothing with work in it is deleted for good.", 409)
+    if (request.data.get("confirm") or "").strip().upper() != "DELETE CARD":
+        raise ApiError("Type DELETE CARD to confirm.")
     log(card.list.board, request.user, "card_deleted", title=card.title)
     from .models import Attachment
     for att in Attachment.objects.filter(card=card):

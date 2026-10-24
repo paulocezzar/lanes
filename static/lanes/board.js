@@ -798,6 +798,15 @@ Invite the press`,
       setTimeout(() => { if (det?.open) det.querySelector('input[name="qty_target"]')?.focus(); }, 30);
       return;
     }
+    const delCard = t.closest('[data-delete-open-card]');
+    if (delCard) {
+      if (!await LanesUI.confirm('Delete this card for good?', { text: 'It disappears from Lanes completely. This can\'t be undone.', ok: 'Delete for good', danger: true, typed: 'DELETE CARD' })) return;
+      const id = delCard.dataset.deleteOpenCard;
+      try { await post(`/api/cards/${id}/delete/`, { confirm: 'DELETE CARD' }); } catch { return; }
+      $$(`.card-tile[data-card-id="${id}"]`, listsEl).forEach(el => el.remove());
+      closeCard(); if (typeof refreshCounts === 'function') refreshCounts();
+      return toast('Card deleted.');
+    }
     const editBtn = t.closest('[data-item-edit-btn]');
     if (editBtn) {
       const li = editBtn.closest('.item');
@@ -1335,8 +1344,8 @@ Invite the press`,
     }
     const del = e.target.closest('[data-delete-card]');
     if (del) {
-      if (!await LanesUI.confirm('Delete this card for good?', { text: 'Its comments, checklists and attachments go too. This can\'t be undone.', ok: 'Delete for good', danger: true })) return;
-      await post(`/api/cards/${del.dataset.deleteCard}/delete/`);
+      if (!await LanesUI.confirm('Delete this card for good?', { text: 'It disappears from Lanes completely. This can\'t be undone.', ok: 'Delete for good', danger: true, typed: 'DELETE CARD' })) return;
+      try { await post(`/api/cards/${del.dataset.deleteCard}/delete/`, { confirm: 'DELETE CARD' }); } catch { return; }
       del.closest('.archived-row').remove();
       return toast('Card deleted.');
     }
@@ -1780,8 +1789,41 @@ Invite the press`,
   if (voiceBtn && SR) {
     voiceBtn.hidden = false;
     let rec = null;
-    voiceBtn.addEventListener('click', () => {
+    const typeInstead = async () => {
+      const text = await LanesUI.ask('Add to your Inbox', { placeholder: 'Type the to-do', ok: 'Add' });
+      if (!text || !text.trim()) return;
+      try {
+        await post('/api/inbox/add/', { text: text.trim() });
+        toast(`Added to your Inbox: “${text.trim()}”`);
+        await window.LanesInboxReload?.(); window.LanesOpenInbox?.();
+      } catch (err) { toast(err.message || 'Could not add that.'); }
+    };
+    const micHelp = async () => {
+      const mac = /Mac/.test(navigator.platform || navigator.userAgent);
+      const go = await LanesUI.confirm('The microphone is blocked', {
+        text: 'Your browser is not letting Lanes use the microphone, so it can\'t ask you.\n\n'
+          + '1. Click the icon at the left of the address bar (⚙ or 🔒) → Microphone → Allow, then reload the page.'
+          + (mac ? '\n2. On a Mac also check System Settings → Privacy & Security → Microphone → your browser is switched on.' : '')
+          + '\n\nOr type the to-do instead.',
+        ok: 'Type it instead', cancel: 'Close' });
+      if (go) typeInstead();
+    };
+    voiceBtn.addEventListener('click', async () => {
       if (rec) { rec.stop(); return; }
+      // Ask for the microphone first: this is what makes the browser show its "Allow" prompt.
+      try {
+        const st = await navigator.permissions?.query({ name: 'microphone' });
+        if (st?.state === 'denied') return micHelp();
+      } catch {}
+      if (navigator.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(t => t.stop());
+        } catch (err) {
+          if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) return micHelp();
+          if (err && err.name === 'NotFoundError') { toast('No microphone found on this device.'); return typeInstead(); }
+        }
+      }
       rec = new SR();
       rec.lang = document.documentElement.lang === 'en' ? 'en-GB' : (navigator.language || 'en-GB');
       rec.interimResults = false; rec.maxAlternatives = 1;
@@ -1797,7 +1839,11 @@ Invite the press`,
           window.LanesOpenInbox?.();
         } catch (err) { toast(err.message || 'Could not add that.'); }
       };
-      rec.onerror = ev => toast(ev.error === 'not-allowed' ? 'Allow the microphone to use voice capture.' : 'Didn\'t catch that — try again.');
+      rec.onerror = ev => {
+        if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') micHelp();
+        else if (ev.error === 'network') { toast('Voice needs an internet connection to your browser\'s speech service.'); typeInstead(); }
+        else if (ev.error !== 'aborted') toast('Didn\'t catch that — try again.');
+      };
       rec.onend = () => { voiceBtn.classList.remove('listening'); rec = null; };
       rec.start();
     });

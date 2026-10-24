@@ -16,7 +16,7 @@
       </form>
     </div>
     {% else %}<span class="list-picker static">{{ board.title }} › {{ card.list.title }}</span>{% endif %}
-    {% if card.is_archived %}<span class="archived-flag">Archived</span>{% endif %}
+    {% if card.is_archived %}<span class="archived-flag">Archived{% if not card.delete_blockers %} — Restore it, or Delete it for good{% endif %}</span>{% endif %}
     <button class="chip-btn watch-btn{% if watching %} on{% endif %}" data-watch-card title="{% if watching_board %}You're watching the whole board{% elif watching %}You'll be notified about changes to this card{% else %}Get notified about changes to this card{% endif %}">👁 {% if watching %}Watching{% else %}Watch{% endif %}{% if watching_board and not watching %} <small>(board)</small>{% endif %}</button>
     <button class="icon-btn" data-close-card title="Close">{% include "boards/_icon.html" with i="close" %}</button>
   </header>
@@ -179,7 +179,7 @@
         {% if fields and not fields_used %}<button class="chip-btn" type="button" data-reveal="fields" title="Fill in this board's fields">{% include "boards/_icon.html" with i="field" %}Fields</button>{% endif %}
         {% if dep_choices and not waits_for and not needed_by %}<button class="chip-btn" type="button" data-reveal="deps" title="Make this card wait for another">⛓ Waits for</button>{% endif %}
         {% if not time_entries and not my_timer and not card.estimate_hours %}<button class="chip-btn" type="button" data-reveal="time" title="Log time or start a timer">{% include "boards/_icon.html" with i="clock" %}Time</button>{% endif %}
-        <button class="chip-btn" data-archive-card="{{ card.is_archived|yesno:'0,1' }}">{% include "boards/_icon.html" with i="archive" %}{% if card.is_archived %}Restore{% else %}Archive{% endif %}</button>
+        <button class="chip-btn" data-archive-card="{{ card.is_archived|yesno:'0,1' }}">{% include "boards/_icon.html" with i="archive" %}{% if card.is_archived %}Restore{% else %}Archive{% endif %}</button>{% if card.is_archived %}{% with why=card.delete_blockers %}{% if why %}<button class="chip-btn" disabled title="Has {{ why|join:', ' }} — cards with work in them can only be archived">{% include "boards/_icon.html" with i="lock" %}Can't delete</button>{% else %}<button class="chip-btn danger" data-delete-open-card="{{ card.pk }}" title="Delete this empty card for good">{% include "boards/_icon.html" with i="close" %}Delete</button>{% endif %}{% endwith %}{% endif %}
       </div>
       {% endif %}
 

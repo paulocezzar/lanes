@@ -289,7 +289,7 @@ Setup:
     <div class="archived-row"><span>{{ l.title }}</span>{% if can_edit %}<button class="btn ghost sm" data-restore-list="{{ l.pk }}">Restore</button>{% endif %}</div>
     {% endfor %}<h4 class="section-label">Cards</h4>{% endif %}
     {% for card in archived_cards %}
-    <div class="archived-row"><span>{{ card.title }}</span>{% if can_edit %}<button class="btn ghost sm" data-restore="{{ card.pk }}">Restore</button><button class="btn ghost sm danger-text" data-delete-card="{{ card.pk }}" title="Delete for good">Delete</button>{% endif %}</div>
+    <div class="archived-row"><span>{{ card.title }}</span>{% if can_edit %}<button class="btn ghost sm" data-restore="{{ card.pk }}">Restore</button>{% with why=card.delete_blockers %}{% if why %}<span class="muted small" title="Has {{ why|join:', ' }} — cards with work in them can only be archived">🔒</span>{% else %}<button class="btn ghost sm danger-text" data-delete-card="{{ card.pk }}" title="Delete this empty card for good">Delete</button>{% endif %}{% endwith %}{% endif %}</div>
     {% empty %}<p class="muted">No archived cards.</p>{% endfor %}
   </div>
   {% if can_edit %}

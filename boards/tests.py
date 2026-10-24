@@ -1364,7 +1364,12 @@ class ArchiveMoveDeleteTests(TestCase):
         self.l1.refresh_from_db(); self.assertFalse(self.l1.is_archived)
         self.assertEqual(self.j(f"/api/cards/{self.card.pk}/delete/").status_code, 400)  # must archive first
         self.j(f"/api/cards/{self.card.pk}/update/", {"archive": True})
-        self.assertEqual(self.j(f"/api/cards/{self.card.pk}/delete/").status_code, 200)
+        _empty(self.card)
+        self.assertEqual(self.j(f"/api/cards/{self.card.pk}/delete/").status_code, 400)   # must type DELETE CARD
+        self.card.comments.create(body="note")
+        self.assertEqual(self.j(f"/api/cards/{self.card.pk}/delete/", {"confirm": "DELETE CARD"}).status_code, 409)
+        self.card.comments.all().delete()
+        self.assertEqual(self.j(f"/api/cards/{self.card.pk}/delete/", {"confirm": "delete card"}).status_code, 200)
         self.assertFalse(Card.objects.filter(pk=self.card.pk).exists())
         self.j(f"/api/boards/{self.b2.pk}/update/", {"archive": True})
         self.assertContains(self.c.get("/"), "Archived boards")
@@ -2594,7 +2599,9 @@ class FullSweepTests(TestCase):
         self.assertEqual(self.j(self.o, f"/api/cards/{self.card.pk}/delete/").status_code, 403)
         self.assertEqual(self.j(self.c, f"/api/cards/{self.card.pk}/delete/").status_code, 400)   # archive first
         self.card.is_archived = True; self.card.save()
-        self.assertEqual(self.j(self.c, f"/api/cards/{self.card.pk}/delete/").status_code, 200)
+        self.assertEqual(self.j(self.c, f"/api/cards/{self.card.pk}/delete/", {"confirm": "DELETE CARD"}).status_code, 409)  # has work in it
+        _empty(self.card)
+        self.assertEqual(self.j(self.c, f"/api/cards/{self.card.pk}/delete/", {"confirm": "DELETE CARD"}).status_code, 200)
         self.assertFalse(Card.objects.filter(pk=self.card.pk).exists())
 
     def test_card_modal_and_board_views_render(self):
@@ -4220,3 +4227,11 @@ class WelcomeTests(TestCase):
         self.assertContains(self.client.get("/"), "Welcome to Lanes, Nia")
         self.client.post("/account/theme/", {"welcomed": "1"})
         self.assertNotContains(self.client.get("/"), "Welcome to Lanes")
+
+
+def _empty(card):
+    """Strip a card of everything that stops it being deleted."""
+    for rel in ("checklists", "comments", "attachments", "time_entries", "signoffs"):
+        getattr(card, rel).all().delete()
+    card.children.update(parent=None)
+    type(card).objects.filter(pk=card.pk).update(description="")

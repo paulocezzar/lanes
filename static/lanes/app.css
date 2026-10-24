@@ -2183,3 +2183,5 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .cl-tools { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: -2px 0 8px 32px; font-size: 13px; }
 .cl-tools .link-btn { font-size: 13px; }
 .item-acts-pop.up { top: auto; bottom: calc(100% + 4px); }
+.chip-btn.danger { color: var(--danger, #dc2626); }
+.ui-typed { display: grid; gap: 6px; margin: 4px 0 12px; font-size: 14px; }

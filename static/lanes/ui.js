@@ -27,13 +27,17 @@
     `<h3 class="ui-title">${esc(title)}</h3>${text ? `<p class="ui-text">${esc(text).replace(/\n/g, '<br>')}</p>` : ''}`;
 
   window.LanesUI = {
-    confirm(message, { ok = 'OK', cancel = 'Cancel', danger = false, text = '' } = {}) {
+    confirm(message, { ok = 'OK', cancel = 'Cancel', danger = false, text = '', typed = '' } = {}) {
       return open(`<form method="dialog">${head(message, text)}
+        ${typed ? `<label class="ui-typed">Type <b>${esc(typed)}</b> to confirm<input class="ui-input" autocomplete="off" spellcheck="false" data-typed></label>` : ''}
         <div class="dialog-actions"><button type="button" class="btn ghost" data-no>${esc(cancel)}</button>
         <button class="btn ${danger ? 'danger' : 'primary'}" data-yes autofocus>${esc(ok)}</button></div></form>`,
       finish => {
         dlg.querySelector('[data-no]').onclick = () => finish(false);
-        dlg.querySelector('form').onsubmit = e => { e.preventDefault(); finish(true); };
+        const box = dlg.querySelector('[data-typed]'), yes = dlg.querySelector('[data-yes]');
+        const ok = () => !box || box.value.trim().toUpperCase() === typed.toUpperCase();
+        if (box) { yes.disabled = true; box.oninput = () => (yes.disabled = !ok()); setTimeout(() => box.focus()); }
+        dlg.querySelector('form').onsubmit = e => { e.preventDefault(); if (ok()) finish(true); };
       }).then(v => v === true);
     },
     ask(message, { value = '', placeholder = '', ok = 'Save', hint = '', type = 'text' } = {}) {

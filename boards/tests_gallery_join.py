@@ -333,3 +333,11 @@ class DoneListTests(Base):
         self.post(f"/api/cards/{self.card.pk}/update/", {"is_complete": True})
         self.card.refresh_from_db()
         self.assertEqual(self.card.list_id, self.todo.pk)
+
+    def test_archived_card_offers_delete(self):
+        self.card.is_archived = True
+        self.card.save()
+        r = self.client.get(f"/cards/{self.card.pk}/")
+        self.assertContains(r, "data-delete-open-card")
+        self.post(f"/api/cards/{self.card.pk}/delete/", {"confirm": "DELETE CARD"})
+        self.assertFalse(type(self.card).objects.filter(pk=self.card.pk).exists())

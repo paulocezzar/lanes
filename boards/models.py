@@ -219,6 +219,23 @@ class Card(models.Model):
     class Meta:
         ordering = ["position", "id"]
 
+    def delete_blockers(self):
+        """What's in the card that stops it being deleted for good (it can still be archived)."""
+        from .models import ChecklistItem
+        out = []
+        if (self.description or "").strip():
+            out.append("a description")
+        n = ChecklistItem.objects.filter(checklist__card=self).count()
+        if n:
+            out.append(f"{n} checklist item{'s' if n != 1 else ''}")
+        for rel, word in (("comments", "comment"), ("attachments", "attachment"), ("children", "part"),
+                          ("time_entries", "time entry"), ("signoffs", "sign-off")):
+            k = getattr(self, rel).count()
+            if k:
+                out.append(f"{k} {word}{'s' if k != 1 else ''}" if word != "time entry" else
+                           f"{k} time entr{'ies' if k != 1 else 'y'}")
+        return out
+
     def __str__(self):
         return self.title
 
