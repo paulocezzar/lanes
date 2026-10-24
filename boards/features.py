@@ -83,14 +83,15 @@ def item_to_card(item, target_list, user):
     The new card is a part of the item's card, and the item ticks itself when it's done."""
     src = item.checklist.card
     card = Card.objects.create(list=target_list, title=item.text[:250], due_at=item.due_at, created_by=user,
-                               parent=src, position=positions.end_position(target_list.cards.filter(is_archived=False)),
+                               parent=src, is_complete=item.is_done, position=positions.end_position(target_list.cards.filter(is_archived=False)),
                                description=f"From the checklist “{item.checklist.title}” on {src.title}.")
     if item.assignee_id:
         card.members.add(item.assignee)
     if item.has_qty:
         cl = Checklist.objects.create(card=card, title="Progress")
         ChecklistItem.objects.create(checklist=cl, text=item.text[:250], qty_target=item.qty_target,
-                                     qty_done=item.qty_done, qty_unit=item.qty_unit, assignee=item.assignee)
+                                     qty_done=item.qty_done, qty_unit=item.qty_unit, assignee=item.assignee,
+                                     is_done=item.is_done or item.qty_done >= item.qty_target)
     item.linked_card = card
     item.save(update_fields=["linked_card"])
     log(target_list.board, user, "card_created", card=card, list=target_list.title)

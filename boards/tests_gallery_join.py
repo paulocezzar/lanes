@@ -272,3 +272,21 @@ class ChecklistAmountTests(Base):
         self.client.post(f"/api/items/{c.pk}/", '{"text": "430 Cake Tin", "reparse": true}', content_type="application/json")
         c.refresh_from_db()
         self.assertEqual((c.text, int(c.qty_target)), ("Cake Tin", 430))
+
+
+class ItemsToCardsTests(Base):
+    def test_each_item_a_card_and_done_item_stays_done(self):
+        from .models import Card, Checklist, ChecklistItem
+        b = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=b, user=self.u, role="admin")
+        card = b.lists.create(title="To do", position=1).cards.create(title="Cakes", position=1)
+        cl = Checklist.objects.create(card=card, title="What it needs", position=1)
+        ChecklistItem.objects.create(checklist=cl, text="Soak", position=1, qty_target=230, qty_done=230, qty_unit="kg", is_done=True)
+        ChecklistItem.objects.create(checklist=cl, text="Bake", position=2)
+        r = self.client.post(f"/api/checklists/{cl.pk}/to-cards/", "{}", content_type="application/json")
+        self.assertEqual(r.json()["made"], 2)
+        soak = Card.objects.get(title="Soak")
+        self.assertTrue(soak.is_complete)
+        self.assertTrue(soak.checklists.get().items.get().is_done)
+        self.assertEqual(card.children.count(), 2)
+        self.assertEqual(cl.items_not_cards(), 0)

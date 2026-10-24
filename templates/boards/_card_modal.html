@@ -377,6 +377,7 @@
           <h4 class="cm-h">{% include "boards/_icon.html" with i="check" %}{{ cl.title }}</h4>
           {% if can_edit %}
 {% if can_edit %}{% with n=cl.amount_candidates %}{% if n %}<button class="btn sm" data-read-amounts="{{ cl.pk }}" title="Items like “430 Christmas Cake” become 0 / 430 and count up as you record what's done">Use the numbers as amounts ({{ n }})</button>{% endif %}{% endwith %}{% endif %}
+          {% if can_edit %}{% with left=cl.items_not_cards %}{% if left > 1 %}<button class="btn ghost sm" data-items-to-cards="{{ cl.pk }}" title="Each item becomes a card of its own, shown under Parts — with labels, dates, sign-off and everything a card has">Make each a card ({{ left }})</button>{% endif %}{% endwith %}{% endif %}
           <button class="btn ghost sm" data-hide-checked="{{ cl.hide_checked|yesno:'0,1' }}">{% if cl.hide_checked %}Show checked items{% else %}Hide checked items{% endif %}</button>
           <button class="btn ghost sm" data-delete-checklist>Delete</button>
           {% endif %}
@@ -388,7 +389,7 @@
           {% for item in cl.items.all %}{% if not cl.hide_checked or not item.is_done %}
           <li class="item{% if item.is_done %} done{% endif %}">
             <input type="checkbox" data-item="{{ item.pk }}" {% if item.is_done %}checked{% endif %} {% if not can_edit %}disabled{% endif %} aria-label="{{ item.text }}">
-            <span class="item-text"><span class="item-label"{% if can_edit %} data-item-edit="{{ item.pk }}" title="Click to edit"{% endif %}>{{ item.text }}</span>{% if item.has_qty %}
+            <span class="item-text">{% if item.linked_card_id %}<a class="item-label is-card" href="{% url 'board' item.linked_card.list.board_id %}?card={{ item.linked_card_id }}"{% if item.linked_card.list.board_id == board.pk %} data-card-open="{{ item.linked_card_id }}"{% endif %} title="Open its card — labels, dates, sign-off and everything else live there">{{ item.text }}</a>{% else %}<span class="item-label"{% if can_edit %} data-item-edit="{{ item.pk }}" title="Click to edit"{% endif %}>{{ item.text }}</span>{% endif %}{% if item.has_qty %}
               <span class="item-qty" title="{{ item.qty_pct }}% done{% if item.per_unit is not None %} · {{ item.per_unit_txt }} {{ item.qty_unit }} per product{% endif %}">
                 <span class="iq-bar{% if item.qty_pct >= 100 %} full{% endif %}"><i style="width: {{ item.qty_pct }}%"></i></span>
                 <b>{{ item.qty_done_txt }}</b> / {{ item.qty_target_txt }}{% if item.qty_unit %} {{ item.qty_unit }}{% endif %}
@@ -424,6 +425,7 @@
                 {% if not item.linked_card_id %}<hr class="pop-rule"><button type="button" class="btn sm block" data-item-to-card="{{ item.pk }}" title="Keeps the due date, person and amount — and ticks this item when the card is done">↗ Make this item a card</button>{% endif %}
               </form>
             </details>
+            {% if not item.linked_card_id %}<button type="button" class="icon-btn xs item-mk" data-item-to-card="{{ item.pk }}" title="Make this item a card — then it can have labels, attachments, sign-off, its own checklist…">↗</button>{% endif %}
             <button class="icon-btn xs item-del" data-delete-item="{{ item.pk }}" title="Delete item">{% include "boards/_icon.html" with i="close" %}</button>
             {% endif %}
           </li>

@@ -863,6 +863,16 @@ Invite the press`,
     if (tDel) return cardPost('time', { action: 'delete', id: +tDel.dataset.timeDel }).catch(err => toast(err.message));
     const depX = t.closest('[data-dep-remove]');
     if (depX) return cardPost('dependencies', { remove: +depX.dataset.depRemove });
+    const allCards = t.closest('[data-items-to-cards]');
+    if (allCards) {
+      const n = allCards.textContent.match(/\d+/)?.[0] || '';
+      if (!await LanesUI.confirm(`Make each item a card (${n})?`, { text: 'Every item becomes a card of its own in this list, shown under Parts. Each item ticks itself when its card is done.', ok: 'Make cards' })) return;
+      allCards.disabled = true;
+      return post(`/api/checklists/${allCards.dataset.itemsToCards}/to-cards/`, {}).then(d => {
+        applyCard(d); if (typeof forceRefresh === 'function') forceRefresh();
+        toast(`Made ${d.made} card${d.made === 1 ? '' : 's'}. Open any of them from Parts or the list.`);
+      }).catch(err => toast(err.message || 'Could not do that.')).finally(() => (allCards.disabled = false));
+    }
     const toCard = t.closest('[data-item-to-card]');
     if (toCard) {
       toCard.disabled = true;

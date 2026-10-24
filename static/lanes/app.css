@@ -2158,3 +2158,9 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .iq-btn { font-weight: 700; font-size: 13px; }
 .finish-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; margin: 0 0 10px; border-radius: 8px; background: color-mix(in srgb, #22c55e 14%, var(--surface)); border: 1px solid color-mix(in srgb, #22c55e 40%, transparent); }
 .finish-bar span { font-weight: 600; margin-right: auto; }
+
+.item-label.is-card { color: inherit; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; }
+.item-label.is-card:hover { text-decoration-color: currentColor; }
+.item-mk { font-weight: 700; }
+.item .icon-btn.item-mk { margin-left: 0; }
+@media (hover: none) { .item .icon-btn.item-mk { visibility: visible; } }

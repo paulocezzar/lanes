@@ -151,6 +151,7 @@ urlpatterns = [
     path("api/cards/<int:card_id>/vote/", api.card_vote),
     path("api/cards/<int:card_id>/delete/", api.card_delete),
     path("api/items/<int:item_id>/to-card/", api_more.item_to_card),
+    path("api/checklists/<int:checklist_id>/to-cards/", api_more.checklist_to_cards),
     path("api/cards/lookup/", api_more.card_lookup),
     path("api/cards/<int:card_id>/parent/", api_more.card_parent),
     path("api/cards/<int:card_id>/children/", api_more.card_child_create),

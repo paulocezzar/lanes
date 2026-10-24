@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 
 from . import features, permissions, positions
 from .api import ApiError, _card, _edit, _text, api
-from .models import Card, ChecklistItem, Label, List, SignOff, WorkspaceMember
+from .models import Card, Checklist, ChecklistItem, Label, List, SignOff, WorkspaceMember
 from .services import card_response, log
 
 User = get_user_model()
@@ -31,6 +31,19 @@ def item_to_card(request, item_id):
     if data["new_card"]["same_board"]:
         from .services import render_tile
         data["new_card"]["tile"] = render_tile(Card.objects.get(pk=new.pk), request)
+    return data
+
+
+@api
+def checklist_to_cards(request, checklist_id):
+    """Every item on a checklist that isn't a card yet becomes one (a part of this card), in one go."""
+    cl = get_object_or_404(Checklist.objects.select_related("card__list__board"), pk=checklist_id)
+    src = _card(request, cl.card_id)
+    _edit(src.list.board, request.user)
+    made = [features.item_to_card(i, src.list, request.user)
+            for i in cl.items.filter(linked_card__isnull=True).order_by("position")]
+    data = card_response(src.pk, request)
+    data["made"] = len(made)
     return data
 
 

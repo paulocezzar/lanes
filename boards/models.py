@@ -317,6 +317,9 @@ class Checklist(models.Model):
     class Meta:
         ordering = ["position", "id"]
 
+    def items_not_cards(self):
+        return sum(1 for it in self.items.all() if not it.linked_card_id)
+
     def amount_candidates(self):
         """How many plain items start with a number ('430 Christmas Cake') that could count up instead."""
         from . import products
