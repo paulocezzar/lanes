@@ -123,8 +123,14 @@ document.addEventListener('click', async e => {
     if (q.length < 2) return close();
     const mine = ++seq;
     let d;
-    try { d = await (await fetch('/api/search/quick/?q=' + encodeURIComponent(q), { credentials: 'same-origin' })).json(); }
-    catch { return; }
+    try {
+      const r = await fetch('/api/search/quick/?q=' + encodeURIComponent(q), { credentials: 'same-origin' });
+      if (!r.ok) throw new Error(r.status);
+      d = await r.json();
+    } catch {
+      if (mine === seq) open(`<div class="sd-empty">Couldn't search just now.</div><a class="sd-all" role="option" href="${all(q)}">Try the full search for “${esc(q)}”</a>`);
+      return;
+    }
     if (mine !== seq || input.value.trim() !== q) return;
     const parts = [];
     if (d.cards.length) parts.push('<div class="sd-head">Cards</div>' + d.cards.map(c => row(c, q, ICON.card).replace('class="sd-row"', 'class="sd-row' + (c.done ? ' done' : '') + '"')).join(''));
@@ -145,7 +151,11 @@ document.addEventListener('click', async e => {
     o[active].scrollIntoView({ block: 'nearest' });
   }
   input.addEventListener('focus', () => (input.value.trim() ? suggest() : showRecent()));
-  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(suggest, 160); });
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    if (input.value.trim().length >= 2 && drop.querySelector('.sd-head')?.textContent === 'Recent boards') open('<div class="sd-empty">Searching…</div>');
+    timer = setTimeout(suggest, 160);
+  });
   input.addEventListener('keydown', e => {
     if (e.key === 'Escape') { close(); input.blur(); }
     else if (e.key === 'ArrowDown') { e.preventDefault(); if (drop.hidden) suggest(); else move(1); }

@@ -63,8 +63,12 @@ DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
+        conn_health_checks=True,
     )
 }
+if DATABASES["default"]["ENGINE"].endswith("postgresql"):
+    # A runaway query is stopped after 20 seconds instead of exhausting the (small) database server.
+    DATABASES["default"].setdefault("OPTIONS", {})["options"] = "-c statement_timeout=20000"
 
 AUTH_USER_MODEL = "accounts.User"
 AUTH_PASSWORD_VALIDATORS = [

@@ -19,6 +19,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from . import permissions
+from .models import Attachment, Card, CardFieldValue, ChecklistItem, Comment
 from .services import cards_qs
 
 User = get_user_model()
@@ -110,9 +111,14 @@ def run(user, query, limit=200):
     boards = permissions.visible_boards(user).filter(is_template=False)
     qs = cards_qs().filter(list__board__in=boards, list__is_archived=False, is_archived=False, is_template=False)
     for t in terms:
-        qs = qs.filter(Q(title__icontains=t) | Q(description__icontains=t) | Q(checklists__items__text__icontains=t)
-                       | Q(comments__body__icontains=t) | Q(attachments__name__icontains=t)
-                       | Q(labels__name__icontains=t) | Q(field_values__value__icontains=t))
+        # Each place is its own small sub-query. Joining them all at once multiplies rows (items × comments ×
+        # fields …) for every extra word, which once took the database server down.
+        qs = qs.filter(Q(title__icontains=t) | Q(description__icontains=t)
+                       | Q(pk__in=ChecklistItem.objects.filter(text__icontains=t).values("checklist__card_id"))
+                       | Q(pk__in=Comment.objects.filter(body__icontains=t).values("card_id"))
+                       | Q(pk__in=Attachment.objects.filter(name__icontains=t).values("card_id"))
+                       | Q(pk__in=Card.labels.through.objects.filter(label__name__icontains=t).values("card_id"))
+                       | Q(pk__in=CardFieldValue.objects.filter(value__icontains=t).values("card_id")))
     now = timezone.now()
     for op, val in ops:
         v = val.lower()
