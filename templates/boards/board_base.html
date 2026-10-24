@@ -3,7 +3,12 @@
 {% block title %}{{ board.title }}{% if view != "board" %} · {{ view|capfirst }}{% endif %} · Lanes{% endblock %}
 {% block body_class %}board-page{% endblock %}
 {% block content %}
-<main class="board bg-{{ board.background }}" id="board"
+{% if board.is_template %}<div class="tpl-banner">
+  <span>⧉ This board is a template — anyone in {{ board.workspace.name }} can make a new board from it.</span>
+  <a class="btn primary sm" href="/templates/b{{ board.pk }}/">Create board from template</a>
+  <a class="tpl-more" href="{% url 'gallery' %}">Explore more templates</a>
+</div>{% endif %}
+<main class="board bg-{{ board.background }}{% if board.is_template %} has-banner{% endif %}" id="board"
       data-board-id="{{ board.pk }}" data-user-id="{{ user.pk }}" data-view="{{ view }}" data-version="{{ board.version }}" data-can-edit="{{ can_edit|yesno:'1,0' }}" data-open-card="{{ open_card|default:'' }}" data-label-ids="[{% for l in labels %}{{ l.pk }}{% if not forloop.last %},{% endif %}{% endfor %}]">
   <header class="board-head">
     <h1 class="board-title" {% if can_manage %}contenteditable="plaintext-only" spellcheck="false" data-board-title{% endif %}>{{ board.title }}</h1>
@@ -63,7 +68,7 @@
       {% endif %}
       {% if can_edit %}{% for b in board_buttons %}<button class="btn light sm press-btn" data-press-board="{{ b.pk }}" title="Board button">{{ b.icon }} {{ b.name }}</button>{% endfor %}{% endif %}
       <div class="avatar-stack" data-open-share>
-        {% for u in people|slice:":6" %}{% include "boards/_avatar.html" %}{% endfor %}
+        {% for u in people|slice:":6" %}<button type="button" class="av-btn" data-member-card="{{ u.pk }}" aria-label="{{ u.display_name }}">{% include "boards/_avatar.html" %}</button>{% endfor %}
         {% if people|length > 6 %}<span class="avatar more">+{{ people|length|add:"-6" }}</span>{% endif %}
       </div>
       {% if me %}
@@ -84,6 +89,8 @@
 
   {% block board_body %}{% endblock %}
 </main>
+<div class="member-card" data-member-pop hidden role="dialog" aria-label="Member"></div>
+<script type="application/json" id="member-data">{{ member_cards|safe }}</script>
 
 <dialog id="card-dialog" class="card-dialog" aria-label="Card"><div id="card-dialog-body"></div></dialog>
 

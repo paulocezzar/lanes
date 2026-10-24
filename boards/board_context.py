@@ -30,11 +30,22 @@ def board_context(request, board_id, view):
     if recent[:1] != [board.pk]:
         request.user.recent_boards = [board.pk] + [b for b in recent if b != board.pk][:7]
         request.user.save(update_fields=["recent_boards"])
+    import json
+    from django.db.models import Count, Q
+    people = board_people(board)
+    roles = dict(BoardMember.objects.filter(board=board).values_list("user_id", "role"))
+    open_counts = dict(board.lists.filter(is_archived=False).values_list("cards__members").annotate(
+        n=Count("cards", filter=Q(cards__is_archived=False, cards__is_complete=False))).values_list("cards__members", "n"))
+    member_cards = json.dumps({u.pk: {"name": u.display_name, "email": u.email, "initials": u.initials, "hue": u.avatar_hue,
+                                      "first": u.first_name or u.email.split("@")[0],
+                                      "role": dict(BoardMember.ROLES).get(roles.get(u.pk), ""),
+                                      "open": open_counts.get(u.pk, 0)} for u in people})
     return board, {
+        "member_cards": member_cards.replace("</", "<\\/"),
         "board": board,
         "view": view,
         "view_tabs": VIEW_TABS,
-        "people": board_people(board),
+        "people": people,
         "labels": board.labels.all(),
         "me": BoardMember.objects.filter(board=board, user=request.user).first(),
         "can_edit": permissions.can_edit(board, request.user),

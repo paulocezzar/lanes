@@ -1077,7 +1077,41 @@ Invite the press`,
 
   // Share dialog
   const share = document.getElementById('share-dialog') || document.createElement('dialog');
-  $$('[data-open-share]').forEach(b => b.addEventListener('click', () => share.showModal()));
+  $$('[data-open-share]').forEach(b => b.addEventListener('click', e => { if (!e.target.closest('[data-member-card]')) share.showModal(); }));
+
+  // Click someone's avatar in the board header: who they are, their role, and their cards here.
+  const memberPop = $('[data-member-pop]');
+  const memberData = (() => { try { return JSON.parse($('#member-data')?.textContent || '{}'); } catch { return {}; } })();
+  const escHTML = v => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  $$('[data-member-card]').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const id = btn.dataset.memberCard, m = memberData[id];
+    if (!m || !memberPop) return;
+    if (!memberPop.hidden && memberPop.dataset.for === id) { memberPop.hidden = true; return; }
+    memberPop.dataset.for = id;
+    memberPop.innerHTML = `<div class="mc-top"><span class="avatar xl" style="--h:${m.hue}">${escHTML(m.initials)}</span>
+        <div><b>${escHTML(m.name)}</b><small>${escHTML(m.email)}</small>${m.role ? `<span class="mc-role">Board ${escHTML(m.role.toLowerCase())}</span>` : ''}</div>
+        <button type="button" class="icon-btn xs mc-x" data-mc-close aria-label="Close">×</button></div>
+      <p class="mc-count">${m.open ? `${m.open} open card${m.open === 1 ? '' : 's'} on this board` : 'No open cards on this board'}</p>
+      ${filterForm ? `<button type="button" class="mc-item" data-mc-filter="${id}">Show only their cards here</button>` : ''}
+      <a class="mc-item" href="/search/?q=${encodeURIComponent('@' + m.first + ' is:open')}">Their open cards on every board</a>
+      <a class="mc-item" href="/workload/">See their workload</a>`;
+    const r = btn.getBoundingClientRect();
+    memberPop.style.top = `${r.bottom + 8 + window.scrollY}px`;
+    memberPop.style.left = `${Math.max(8, Math.min(r.left - 120, window.innerWidth - 300))}px`;
+    memberPop.hidden = false;
+  }));
+  memberPop?.addEventListener('click', e => {
+    if (e.target.closest('[data-mc-close]')) { memberPop.hidden = true; return; }
+    const f = e.target.closest('[data-mc-filter]');
+    if (f && filterForm) {
+      $$('input[name=m]', filterForm).forEach(cb => (cb.checked = cb.value === f.dataset.mcFilter || (cb.value === 'me' && +f.dataset.mcFilter === +boardEl.dataset.userId)));
+      filterForm.dispatchEvent(new Event('input', { bubbles: true }));
+      memberPop.hidden = true;
+      toast('Showing only their cards — clear it from Filter.');
+    }
+  });
+  document.addEventListener('click', e => { if (memberPop && !memberPop.hidden && !memberPop.contains(e.target)) memberPop.hidden = true; });
   $('[data-close]', share)?.addEventListener('click', () => share.close());
   share.addEventListener('click', e => { if (e.target === share) share.close(); });
   const shareMembers = document.getElementById('share-members') || document.createElement('div');

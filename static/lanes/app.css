@@ -2095,3 +2095,20 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .dept-head h1 { margin: 0; font-size: 1.6rem; display: flex; align-items: center; gap: 8px; }
 .dept-head p { margin: 4px 0 0; }
 .dept-badge { width: 64px; height: 64px; border-radius: 10px; display: grid; place-items: center; font-size: 30px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #4b7bec, #6a4bc4); flex: none; }
+
+/* ---------- template banner + member card ---------- */
+.tpl-banner { display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 8px 16px; background: var(--surface-2); color: var(--text); font-size: 14px; border-bottom: 1px solid var(--border); }
+.tpl-more { color: var(--text); text-decoration: underline; }
+.av-btn { border: 0; padding: 0; background: none; cursor: pointer; border-radius: 50%; margin-left: -6px; }
+.av-btn:first-child { margin-left: 0; }
+.av-btn:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.member-card { position: absolute; z-index: 80; width: 290px; background: var(--surface); color: var(--text); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; display: grid; }
+.mc-top { display: flex; gap: 12px; align-items: center; padding: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 35%, var(--surface)), var(--surface)); position: relative; }
+.mc-top div { display: grid; min-width: 0; }
+.mc-top small { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; }
+.mc-role { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.mc-x { position: absolute; top: 6px; right: 6px; }
+.avatar.xl { width: 56px; height: 56px; font-size: 20px; }
+.mc-count { margin: 0; padding: 10px 14px 4px; font-size: 13px; color: var(--text-2); }
+.mc-item { display: block; text-align: left; border: 0; background: none; font: inherit; font-size: 14px; color: var(--text); padding: 9px 14px; text-decoration: none; cursor: pointer; border-top: 1px solid var(--border); }
+.mc-item:hover { background: var(--surface-2); }

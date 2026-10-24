@@ -170,3 +170,15 @@ class SidebarTests(Base):
         self.assertContains(r, "Dept board")
         self.assertNotContains(r, "Other departments")
         self.assertNotContains(self.client.get(f"/b/{b.pk}/"), 'class="side"')     # boards keep the full width
+
+
+class BoardHeadTests(Base):
+    def test_template_banner_and_member_card_data(self):
+        b = Board.objects.create(workspace=self.ws, title="Tpl", is_template=True)
+        BoardMember.objects.create(board=b, user=self.u, role="admin")
+        r = self.client.get(f"/b/{b.pk}/")
+        self.assertContains(r, "Create board from template")
+        self.assertContains(r, f'/templates/b{b.pk}/')
+        self.assertContains(r, 'data-member-card="%d"' % self.u.pk)
+        self.assertIn('"role": "Admin"', r.context["member_cards"])
+        self.assertEqual(self.client.get(f"/templates/b{b.pk}/").status_code, 200)
