@@ -1909,8 +1909,9 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .problem-detail { white-space: pre-wrap; font-size: 12px; max-height: 320px; overflow: auto; background: var(--surface-3); padding: 8px; border-radius: 6px; }
 .ok-note { color: var(--ok); font-weight: 600; }
 .dash-grid.two { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-.day-bars.weeks .day-bar { position: relative; }
-.wk-n { position: absolute; top: -2px; left: 0; right: 0; text-align: center; font-size: 11px; color: var(--text-2); }
+.day-bars.weeks { grid-template-columns: repeat(8, 1fr); gap: 10px; padding-top: 16px; }
+.day-bars.weeks .day-bar span { left: 50%; transform: translateX(-50%); }
+.wk-n { position: absolute; top: -16px; left: 0; right: 0; text-align: center; font-size: 11px; color: var(--text-2); }
 .quiet-row td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .parts .progress, .parts .part-list, .parts .part-add, .parts > p.muted, .signoffs .so-row, .signoffs > p.muted { margin-left: 26px; }
 @media (max-width: 1400px) { .view-tabs a { padding: 5px 8px; } }
