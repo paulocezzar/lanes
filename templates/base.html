@@ -40,19 +40,14 @@
     <a class="brand" href="{% url 'home' %}">
       {% include "_logo.html" %}Lanes
     </a>
-    <nav class="topnav">
-      <a href="{% url 'home' %}" class="{% if request.resolver_match.url_name == 'home' %}on{% endif %}">Boards</a>
-      <a href="{% url 'planner' %}" class="{% if request.resolver_match.url_name == 'planner' %}on{% endif %}">Planner</a>
-      <a href="{% url 'my_cards' %}" class="{% if request.resolver_match.url_name == 'my_cards' %}on{% endif %}">My cards</a>
-      <a href="{% url 'portfolio' %}" class="{% if request.resolver_match.url_name == 'portfolio' %}on{% endif %}">Portfolio</a>
-      <a href="{% url 'workload' %}" class="{% if request.resolver_match.url_name == 'workload' or request.resolver_match.url_name == 'timesheets' %}on{% endif %}">Workload</a>
-    </nav>
+    <div class="top-mid">
     <form class="top-search" method="get" action="{% url 'search' %}" role="search">
-      <input type="search" name="q" placeholder="Search cards" value="{% if request.resolver_match.url_name == 'search' %}{{ request.GET.q }}{% endif %}" aria-label="Search cards" autocomplete="off" data-top-search>
-      <div class="search-drop" data-search-drop hidden></div>
+      <svg class="ic top-search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" name="q" placeholder="Search" value="{% if request.resolver_match.url_name == 'search' %}{{ request.GET.q }}{% endif %}" aria-label="Search cards, boards and people" autocomplete="off" data-top-search role="combobox" aria-expanded="false" aria-controls="search-drop">
+      <kbd class="top-search-key" aria-hidden="true">/</kbd>
+      <div class="search-drop" id="search-drop" data-search-drop role="listbox" hidden></div>
     </form>
-    <a class="icon-btn top-search-mobile" href="{% url 'search' %}" title="Search cards" aria-label="Search cards"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></a>
-    <div class="topbar-right">
+    <a class="icon-btn top-search-mobile" href="{% url 'search' %}" title="Search" aria-label="Search"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></a>
       <div class="create-wrap" data-create-wrap>
         <button type="button" class="btn primary sm create-btn" data-create-toggle aria-expanded="false" aria-haspopup="true" aria-label="Create">＋<span class="create-word"> Create</span></button>
         <div class="create-menu" data-create-menu hidden>
@@ -64,6 +59,8 @@
           </div>
         </div>
       </div>
+    </div>
+    <div class="topbar-right">
       {% if running_timer %}<span class="timer-pill" data-timer-pill title="Timer running on {{ running_timer.card.title }}">
         <a href="{% url 'board' running_timer.card.list.board_id %}?card={{ running_timer.card_id }}"><i class="rec"></i><span data-since="{{ running_timer.started_at|date:'c' }}" data-base="{{ running_timer.minutes }}">0:00</span><small>{{ running_timer.card.title|truncatechars:24 }}</small></a>
         <button type="button" data-timer-stop-top title="Stop and log the time" aria-label="Stop timer">■</button></span>{% endif %}

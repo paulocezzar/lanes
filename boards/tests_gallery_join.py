@@ -205,6 +205,19 @@ class AccountTests(Base):
         self.assertIn("watched", self.u.email_muted)
         self.assertNotIn("commented", self.u.email_muted)
 
+    def test_quick_search(self):
+        b = Board.objects.create(workspace=self.ws, title="Planning")
+        BoardMember.objects.create(board=b, user=self.u)
+        lst = b.lists.create(title="To do", position=1)
+        lst.cards.create(title="Plan the week", position=1)
+        hidden = Board.objects.create(workspace=self.ws, title="Plan secret", visibility="private")
+        hidden.lists.create(title="X", position=1).cards.create(title="Plan hidden", position=1)
+        d = self.client.get("/api/search/quick/?q=plan").json()
+        self.assertEqual([c["title"] for c in d["cards"]], ["Plan the week"])
+        self.assertEqual([x["title"] for x in d["boards"]], ["Planning"])
+        self.assertTrue(any("Project" in t["title"] for t in d["templates"]))
+        self.assertEqual(self.client.get("/api/search/quick/?q=p").json()["cards"], [])
+
     def test_department_settings_page(self):
         url = f"/departments/{self.ws.pk}/settings/"
         self.assertEqual(self.client.get(url).status_code, 404)  # plain member

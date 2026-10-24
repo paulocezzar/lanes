@@ -86,28 +86,73 @@ document.addEventListener('click', async e => {
   });
 });
 
-// Top search: show recently viewed boards when the box is focused and empty.
+// Top search: recent boards when empty; as you type, cards, boards, people, departments and templates.
 (() => {
   const input = document.querySelector('[data-top-search]');
   const drop = document.querySelector('[data-search-drop]');
   if (!input || !drop) return;
-  let loaded = null;
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  async function show() {
-    if (input.value.trim()) { drop.hidden = true; return; }
-    if (!loaded) {
-      try { loaded = (await (await fetch('/api/boards/recent/', { credentials: 'same-origin' })).json()).boards || []; }
-      catch { loaded = []; }
+  let recent = null, timer = null, seq = 0, active = -1;
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const all = q => '/search/?q=' + encodeURIComponent(q);
+  const open = html => { drop.innerHTML = html; drop.hidden = false; input.setAttribute('aria-expanded', 'true'); active = -1; };
+  const close = () => { drop.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; };
+  const mark = (t, q) => {
+    let out = esc(t);
+    q.split(/\s+/).filter(w => w.length > 1 && !w.includes(':')).forEach(w => {
+      out = out.replace(new RegExp('(' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[&<>"]/g, '') + ')', 'ig'), '<mark>$1</mark>');
+    });
+    return out;
+  };
+  const ICON = {
+    card: '<span class="sd-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15h18"/></svg></span>',
+  };
+  const row = (r, q, lead) => `<a class="sd-row" role="option" href="${esc(r.url)}">${lead}<span><b>${mark(r.title, q)}</b><small>${esc(r.where)}</small></span></a>`;
+  async function showRecent() {
+    if (!recent) {
+      try { recent = (await (await fetch('/api/boards/recent/', { credentials: 'same-origin' })).json()).boards || []; }
+      catch { recent = []; }
     }
-    drop.innerHTML = (loaded.length ? '<div class="sd-head">Recent boards</div>' + loaded.map(b =>
-      `<a class="sd-row" href="/b/${b.id}/"><span class="sd-thumb bg-${esc(b.bg)}"></span><span><b>${esc(b.title)}</b><small>${esc(b.where)}</small></span></a>`).join('') : '')
-      + '<div class="sd-foot">Type and press Enter to search every card</div>';
-    drop.hidden = false;
+    if (input.value.trim()) return;
+    open((recent.length ? '<div class="sd-head">Recent boards</div>' + recent.map(b =>
+      `<a class="sd-row" role="option" href="/b/${b.id}/"><span class="sd-thumb bg-${esc(b.bg)}"></span><span><b>${esc(b.title)}</b><small>${esc(b.where)}</small></span></a>`).join('') : '')
+      + '<div class="sd-foot">Type to search cards, boards, people and templates · <a href="/search/">Advanced search</a></div>');
   }
-  input.addEventListener('focus', show);
-  input.addEventListener('input', show);
-  input.addEventListener('keydown', e => { if (e.key === 'Escape') { drop.hidden = true; input.blur(); } });
-  document.addEventListener('click', e => { if (!e.target.closest('.top-search')) drop.hidden = true; });
+  async function suggest() {
+    const q = input.value.trim();
+    if (!q) return showRecent();
+    if (q.length < 2) return close();
+    const mine = ++seq;
+    let d;
+    try { d = await (await fetch('/api/search/quick/?q=' + encodeURIComponent(q), { credentials: 'same-origin' })).json(); }
+    catch { return; }
+    if (mine !== seq || input.value.trim() !== q) return;
+    const parts = [];
+    if (d.cards.length) parts.push('<div class="sd-head">Cards</div>' + d.cards.map(c => row(c, q, ICON.card).replace('class="sd-row"', 'class="sd-row' + (c.done ? ' done' : '') + '"')).join(''));
+    if (d.boards.length) parts.push('<div class="sd-head">Boards</div>' + d.boards.map(b => row(b, q, `<span class="sd-thumb bg-${esc(b.bg)}"></span>`)).join(''));
+    if (d.people.length) parts.push('<div class="sd-head">People</div>' + d.people.map(p => row(p, q, `<span class="avatar sm" style="--h:${+p.hue || 0}">${esc(p.initials)}</span>`)).join(''));
+    if (d.departments.length) parts.push('<div class="sd-head">Departments</div>' + d.departments.map(w => row(w, q, `<span class="ws-badge sm">${esc(w.initial)}</span>`)).join(''));
+    if (d.templates.length) parts.push('<div class="sd-head">Templates</div>' + d.templates.map(t => row(t, q, `<span class="sd-thumb bg-${esc(t.bg)}"></span>`)).join(''));
+    const none = parts.length ? '' : `<div class="sd-empty">Nothing matches “${esc(q)}” by name. Press Enter to look inside descriptions, checklists and comments too.</div>`;
+    open(parts.join('') + none
+      + `<a class="sd-all" role="option" href="${all(q)}">View all results for “${esc(q)}”</a>`
+      + `<a class="sd-adv" role="option" href="/search/"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Advanced search<kbd>↵</kbd></a>`);
+  }
+  const opts = () => [...drop.querySelectorAll('[role="option"]')];
+  function move(by) {
+    const o = opts(); if (!o.length) return;
+    active = (active + by + o.length) % o.length;
+    o.forEach((el, i) => el.classList.toggle('on', i === active));
+    o[active].scrollIntoView({ block: 'nearest' });
+  }
+  input.addEventListener('focus', () => (input.value.trim() ? suggest() : showRecent()));
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(suggest, 160); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { close(); input.blur(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); if (drop.hidden) suggest(); else move(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+    else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); opts()[active].click(); }
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('.top-search')) close(); });
 })();
 
 // Search box inside a popover: <input data-pop-filter=".row-selector"> hides rows that don't match.

@@ -23,6 +23,7 @@ urlpatterns = [
     path("company/people/import/", views_company.people_import, name="people_import"),
     path("company/settings/", views_company.settings_page, name="company_settings"),
     path("search/", views_search.search_page, name="search"),
+    path("api/search/quick/", views_search.quick, name="search_quick"),
     path("search/save/", views_search.search_save, name="search_save"),
     path("search/<int:pk>/delete/", views_search.search_delete, name="search_delete"),
     path("planner/", views_planner.planner, name="planner"),
