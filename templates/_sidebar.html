@@ -8,7 +8,7 @@
     <a class="side-link{% if n == 'my_cards' %} on{% endif %}" href="{% url 'my_cards' %}">{% include "boards/_icon.html" with i="card" %}My cards</a>
     <a class="side-link{% if n == 'portfolio' %} on{% endif %}" href="{% url 'portfolio' %}">{% include "boards/_icon.html" with i="chart" %}Portfolio</a>
     <a class="side-link{% if n == 'workload' or n == 'timesheets' %} on{% endif %}" href="{% url 'workload' %}">{% include "boards/_icon.html" with i="person" %}Workload</a>
-    {% if side_stockup %}<a class="side-link{% if n == 'stockup' %} on{% endif %}" href="{% url 'stockup' %}"><span class="side-emoji" aria-hidden="true">🏭</span>StockUp plans</a>{% endif %}
+    {% if side_stockup %}<a class="side-link{% if n == 'stockup' %} on{% endif %}" href="{% url 'stockup' %}">{% include "boards/_icon.html" with i="factory" %}StockUp plans</a>{% endif %}
     {% if side_join_count %}<a class="side-link{% if n == 'join_requests' %} on{% endif %}" href="{% url 'join_requests' %}">{% include "boards/_icon.html" with i="people" %}Join requests<span class="side-count">{{ side_join_count }}</span></a>{% endif %}
   </nav>
   <h5 class="side-h">You</h5>
