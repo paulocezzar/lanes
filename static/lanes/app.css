@@ -2151,3 +2151,10 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .member-name a { color: inherit; }
 
 @media (max-width: 760px) { .create-menu { left: auto; right: 0; } .top-mid { justify-content: flex-end; } }
+
+.item-label[data-item-edit] { cursor: text; border-radius: 4px; }
+.item-label[data-item-edit]:hover { background: var(--surface-2); box-shadow: 0 0 0 3px var(--surface-2); }
+.item-edit { width: 100%; font: inherit; padding: 4px 8px; border-radius: 6px; }
+.iq-btn { font-weight: 700; font-size: 13px; }
+.finish-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; margin: 0 0 10px; border-radius: 8px; background: color-mix(in srgb, #22c55e 14%, var(--surface)); border: 1px solid color-mix(in srgb, #22c55e 40%, transparent); }
+.finish-bar span { font-weight: 600; margin-right: auto; }

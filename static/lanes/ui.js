@@ -163,3 +163,25 @@ document.addEventListener('input', e => {
   const scope = f.closest('.pop, [data-pop-panel]') || f.parentElement;
   scope.querySelectorAll(f.dataset.popFilter).forEach(row => { row.hidden = !!q && !row.textContent.toLowerCase().includes(q); });
 });
+
+// The logo goes home; on the home page it goes back to wherever you were before (a toggle, like Trello).
+(() => {
+  const brand = document.querySelector('.topbar .brand');
+  if (!brand) return;
+  const KEY = 'lanes:last-page';
+  const homePath = new URL(brand.href, location.href).pathname;
+  const atHome = location.pathname === homePath && !location.search;
+  try {
+    if (!atHome) sessionStorage.setItem(KEY, location.pathname + location.search + location.hash);
+  } catch {}
+  if (!atHome) return;
+  let back = null;
+  try { back = sessionStorage.getItem(KEY); } catch {}
+  if (!back || back === homePath) return;
+  brand.title = 'Back to where you were';
+  brand.addEventListener('click', e => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    e.preventDefault();
+    location.href = back;
+  });
+})();

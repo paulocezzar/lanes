@@ -133,6 +133,7 @@ urlpatterns = [
     path("api/lists/<int:list_id>/cards/", api.card_create),
     path("api/lists/<int:list_id>/product/", api.product_create),
     path("api/cards/<int:card_id>/move/", api.card_move),
+    path("api/checklists/<int:checklist_id>/read-amounts/", api.checklist_read_amounts),
     path("api/cards/<int:card_id>/update/", api.card_update),
     path("api/cards/<int:card_id>/labels/", api.card_toggle_label),
     path("api/cards/<int:card_id>/members/", api.card_toggle_member),

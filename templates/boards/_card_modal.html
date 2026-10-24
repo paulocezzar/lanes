@@ -376,6 +376,7 @@
         <div class="cm-h-row">
           <h4 class="cm-h">{% include "boards/_icon.html" with i="check" %}{{ cl.title }}</h4>
           {% if can_edit %}
+{% if can_edit %}{% with n=cl.amount_candidates %}{% if n %}<button class="btn sm" data-read-amounts="{{ cl.pk }}" title="Items like “430 Christmas Cake” become 0 / 430 and count up as you record what's done">Use the numbers as amounts ({{ n }})</button>{% endif %}{% endwith %}{% endif %}
           <button class="btn ghost sm" data-hide-checked="{{ cl.hide_checked|yesno:'0,1' }}">{% if cl.hide_checked %}Show checked items{% else %}Hide checked items{% endif %}</button>
           <button class="btn ghost sm" data-delete-checklist>Delete</button>
           {% endif %}
@@ -387,7 +388,7 @@
           {% for item in cl.items.all %}{% if not cl.hide_checked or not item.is_done %}
           <li class="item{% if item.is_done %} done{% endif %}">
             <input type="checkbox" data-item="{{ item.pk }}" {% if item.is_done %}checked{% endif %} {% if not can_edit %}disabled{% endif %} aria-label="{{ item.text }}">
-            <span class="item-text">{{ item.text }}{% if item.has_qty %}
+            <span class="item-text"><span class="item-label"{% if can_edit %} data-item-edit="{{ item.pk }}" title="Click to edit"{% endif %}>{{ item.text }}</span>{% if item.has_qty %}
               <span class="item-qty" title="{{ item.qty_pct }}% done{% if item.per_unit is not None %} · {{ item.per_unit_txt }} {{ item.qty_unit }} per product{% endif %}">
                 <span class="iq-bar{% if item.qty_pct >= 100 %} full{% endif %}"><i style="width: {{ item.qty_pct }}%"></i></span>
                 <b>{{ item.qty_done_txt }}</b> / {{ item.qty_target_txt }}{% if item.qty_unit %} {{ item.qty_unit }}{% endif %}
@@ -401,6 +402,7 @@
               <summary class="item-tools" title="Assign someone, set a due date and reminder">
                 <span class="icon-btn xs" title="Due date">{% include "boards/_icon.html" with i="clock" %}</span>
                 <span class="icon-btn xs" title="Assign">{% include "boards/_icon.html" with i="person" %}</span>
+                <span class="icon-btn xs iq-btn" title="Amount — how many are needed" data-focus-qty>#</span>
               </summary>
               <form class="item-pop" data-item-meta="{{ item.pk }}">
                 <div class="pop-head">Checklist item</div>
@@ -429,7 +431,7 @@
         </ul>
         {% if can_edit %}
         <form class="item-new" data-item-new><input name="text" placeholder="Add an item" maxlength="250" autocomplete="off"><button class="btn sm">Add</button></form>
-        <p class="item-hint" data-item-hint>Tip: <b>300 kg Flour</b> or <b>1 x Tin</b> counts up as it's done · paste a list to add many at once</p>
+        <p class="item-hint" data-item-hint>Tip: <b>300 kg Flour</b>, <b>430 Cakes</b> or <b>1 x Tin</b> counts up as it's done · click an item to edit it · paste a list to add many at once</p>
         {% endif %}
       </section>
       {% endfor %}

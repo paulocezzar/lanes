@@ -529,6 +529,8 @@ def item_update(request, item_id):
         return card_response(card.pk, request)
     if "text" in request.data:
         item.text = _text(request.data["text"], 250)
+        if request.data.get("reparse") and not item.has_qty:
+            _amount_from_text(item, card)
     if "assignee_id" in request.data:
         uid = request.data["assignee_id"]
         if uid:
@@ -1353,6 +1355,41 @@ def _planned(card):
             except Exception:
                 return None
     return None
+
+
+def _amount_from_text(item, card):
+    """'430 Christmas Cake (Baked)' → text 'Christmas Cake (Baked)', 0 / 430. Returns True if it found one."""
+    from decimal import Decimal
+
+    from . import products
+    it = products.parse_item(item.text, _planned(card))
+    if it["target"] is None or it["done"]:
+        return False
+    item.text = it["text"][:250] or item.text
+    item.qty_target = it["target"].quantize(Decimal("0.001"))
+    item.qty_unit = (it["unit"] or "")[:20]
+    item.per_unit = it["per_unit"] if it["kind"] == "per" else None
+    if item.is_done:
+        item.qty_done = item.qty_target
+    return True
+
+
+@api
+def checklist_read_amounts(request, checklist_id):
+    """Turn items written as '430 Christmas Cake' into amounts that count up, all at once."""
+    cl = get_object_or_404(Checklist.objects.select_related("card__list__board"), pk=checklist_id)
+    card = cl.card
+    _edit(card.list.board, request.user)
+    n = 0
+    for item in cl.items.all():
+        if not item.has_qty and item.per_unit is None and _amount_from_text(item, card):
+            item.save()
+            n += 1
+    if n:
+        log(card.list.board, request.user, "items_amounts", card=card, n=n)
+    data = card_response(card.pk, request)
+    data["converted"] = n
+    return data
 
 
 def _item_qty(item, d, card):

@@ -33,6 +33,8 @@ KNOWN_FIELD = re.compile(r"^(deadline|due|due date|launch|start|start date|date|
 # "Bake 500 Christmas Cakes" → Bake, 0 / 500 Christmas Cakes
 MID = re.compile(r"^([A-Za-z][^\d]*?)\s+" + NUM + r"\s*([A-Za-z][\w &'/-]{0,30})$")
 DONE = re.compile(r"^\[(x|✓)\]\s*|^✓\s*", re.I)
+# "430 Christmas Cake (Baked)" → 0 / 430 Christmas Cake (Baked); not "2027 plan"
+LEAD = re.compile(r"^" + NUM + r"\s+(\S.*)$")
 
 
 def _d(s):
@@ -64,6 +66,11 @@ def parse_item(line, planned=None):
                 m = MID.match(line)
                 if m:
                     item.update(text=m.group(1).strip(), target=_d(m.group(2)), unit=m.group(3).strip()[:20])
+                else:
+                    m = LEAD.match(line)
+                    n = _d(m.group(1)) if m else None
+                    if n and not (n == n.to_integral() and 1900 <= n <= 2100 and "," not in m.group(1)):
+                        item.update(text=m.group(2).strip(), target=n)
     item["kind"] = "per" if item["per_unit"] is not None else "total" if item["target"] is not None else "tick"
     if item["per_unit"] is not None:
         item["unit"] = item["unit"] or "each"

@@ -789,6 +789,24 @@ Invite the press`,
     const person = t.closest('[data-member]');
     if (person) return cardPost('members', { user_id: +person.dataset.member });
     if (t.closest('[data-clear-dates]')) return cardPost('update', { due_at: '', start_date: '' });
+    const readAmt = t.closest('[data-read-amounts]');
+    if (readAmt) return post(`/api/checklists/${readAmt.dataset.readAmounts}/read-amounts/`).then(d => {
+      applyCard(d); toast(d.converted ? `${d.converted} item${d.converted === 1 ? '' : 's'} now count up — type how many are done next to each.` : 'Nothing to change.');
+    });
+    if (t.closest('[data-focus-qty]')) {
+      const det = t.closest('details.item-more');
+      setTimeout(() => { if (det?.open) det.querySelector('input[name="qty_target"]')?.focus(); }, 30);
+      return;
+    }
+    const edit = t.closest('[data-item-edit]');
+    if (edit && !edit.querySelector('input')) return editItemText(edit);
+    const finish = t.closest('[data-finish-card]');
+    if (finish) {
+      finish.disabled = true;
+      await cardPost('update', { is_complete: true });
+      if (finish.dataset.finishCard) await cardPost('move', { list_id: +finish.dataset.finishCard });
+      return;
+    }
     const hide = t.closest('[data-hide-checked]');
     if (hide) return post(`/api/checklists/${hide.closest('[data-checklist]').dataset.checklist}/`,
       { hide_checked: hide.dataset.hideChecked === '1' }).then(applyCard);
@@ -892,10 +910,51 @@ Invite the press`,
     }
   });
 
+  // Click a checklist item's words to change them. "430 Christmas Cake" becomes an amount that counts up.
+  function editItemText(span) {
+    const id = span.dataset.itemEdit, was = span.textContent.trim();
+    const box = document.createElement('input');
+    box.className = 'item-edit'; box.value = was; box.maxLength = 250;
+    span.textContent = ''; span.appendChild(box); box.focus(); box.select();
+    let done = false;
+    const finish = save => {
+      if (done) return; done = true;
+      const v = box.value.trim();
+      if (!save || !v || v === was) { span.textContent = was; return; }
+      span.textContent = v;
+      post(`/api/items/${id}/`, { text: v, reparse: true }).then(applyCard).catch(() => (span.textContent = was));
+    };
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+    });
+    box.addEventListener('blur', () => finish(true));
+  }
+
+  // Every item ticked: offer to mark the card complete and move it to the Done list.
+  const DONE_WORDS = ['done', 'complete', 'finished', 'closed', 'delivered', 'shipped'];
+  function offerFinish() {
+    setTimeout(() => {
+      const boxes = $$('[data-item]', dialogBody);
+      if (!boxes.length || boxes.some(b => !b.checked) || $('[data-finish-bar]', dialogBody)) return;
+      if ($('.complete-toggle.on', dialogBody)) return;
+      const lists = $$('.list[data-list-id]', listsEl).map(l => ({ value: l.dataset.listId, textContent: $('.list-title', l)?.textContent || '' }));
+      const opt = lists.find(o => DONE_WORDS.some(w => o.textContent.toLowerCase().includes(w)));
+      const tile = $(`.card-tile[data-card-id="${openCardId}"]:not([data-mirror-id])`, listsEl);
+      const here = opt && tile?.closest('.list')?.dataset.listId === String(opt.value);
+      const bar = document.createElement('div');
+      bar.className = 'finish-bar'; bar.dataset.finishBar = '';
+      bar.innerHTML = `<span>✅ Everything's ticked off.</span><button type="button" class="btn primary sm" data-finish-card="${opt && !here ? opt.value : ''}">Mark complete${opt && !here ? ' and move to ' + opt.textContent.trim().replace(/[<&>]/g, '') : ''}</button><button type="button" class="btn ghost sm" data-finish-later>Not yet</button>`;
+      bar.querySelector('[data-finish-later]').addEventListener('click', () => bar.remove());
+      const cl = boxes[boxes.length - 1].closest('[data-checklist]');
+      (cl || dialogBody).prepend(bar);
+    }, 250);
+  }
+
   dialogBody.addEventListener('change', async e => {
     const t = e.target;
     if (t.matches('[data-label]')) return cardPost('labels', { label_id: +t.dataset.label });
-    if (t.matches('[data-item]')) return post(`/api/items/${t.dataset.item}/`, { is_done: t.checked }).then(d => { applyCard(d); if (d.refresh_board && typeof forceRefresh === 'function') forceRefresh(); })
+    if (t.matches('[data-item]')) return post(`/api/items/${t.dataset.item}/`, { is_done: t.checked }).then(d => { applyCard(d); if (d.refresh_board && typeof forceRefresh === 'function') forceRefresh(); if (t.checked) offerFinish(); })
       .catch(err => { if (err.queued) t.closest('.item')?.classList.toggle('done', t.checked); else t.checked = !t.checked; });
     if (t.matches('[data-move-list]')) return cardPost('move', { list_id: +t.value });
     if (t.matches('[data-move-board]')) {

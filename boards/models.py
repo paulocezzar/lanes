@@ -317,6 +317,12 @@ class Checklist(models.Model):
     class Meta:
         ordering = ["position", "id"]
 
+    def amount_candidates(self):
+        """How many plain items start with a number ('430 Christmas Cake') that could count up instead."""
+        from . import products
+        return sum(1 for it in self.items.all() if not it.has_qty and it.per_unit is None and not it.is_done
+                   and it.text[:1].isdigit() and products.parse_item(it.text)["target"] is not None)
+
     def progress(self):
         items = list(self.items.all())
         if not items:
@@ -544,6 +550,7 @@ class Activity(models.Model):
             "report_sent": f"sent the weekly status report to {d.get('to', 0)} people",
             "amount_set": (f"set the amount to {d.get('amount')} {d.get('unit', '')}".rstrip() if d.get("amount")
                            else "removed the amount"),
+            "items_amounts": f"gave {d.get('n', '')} checklist items an amount to count up to",
             "item_qty": f"recorded {d.get('done', '')} / {d.get('target', '')} {d.get('unit', '')} on “{d.get('text', '')}”",
             "time_logged": f"logged {d.get('time', 'time')} on this card",
             "cost_added": f"added a cost: {d.get('name', '')} ({d.get('amount', '')})",

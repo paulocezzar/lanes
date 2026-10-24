@@ -248,3 +248,27 @@ class AccountTests(Base):
         self.assertIn("line-one.json", names)
         self.client.force_login(self.u)
         self.assertEqual(self.client.get(f"/departments/{self.ws.pk}/export/").status_code, 404)
+
+
+class ChecklistAmountTests(Base):
+    def test_numbers_in_names_become_amounts(self):
+        from .models import Checklist, ChecklistItem
+        from .products import parse_item
+        self.assertEqual(parse_item("430 Christmas Cake (Baked)")["target"], 430)
+        self.assertEqual(parse_item("430 5mm Black Board")["text"], "5mm Black Board")
+        self.assertIsNone(parse_item("2027 plan")["target"])
+        b = Board.objects.create(workspace=self.ws, title="B")
+        BoardMember.objects.create(board=b, user=self.u, role="admin")
+        card = b.lists.create(title="To do", position=1).cards.create(title="Cakes", position=1)
+        cl = Checklist.objects.create(card=card, title="What it needs", position=1)
+        a = ChecklistItem.objects.create(checklist=cl, text="430 Christmas Cake (Baked)", position=1)
+        ChecklistItem.objects.create(checklist=cl, text="Label artwork", position=2)
+        self.assertEqual(cl.amount_candidates(), 1)
+        r = self.client.post(f"/api/checklists/{cl.pk}/read-amounts/", "{}", content_type="application/json")
+        self.assertEqual(r.json()["converted"], 1)
+        a.refresh_from_db()
+        self.assertEqual((a.text, int(a.qty_target)), ("Christmas Cake (Baked)", 430))
+        c = ChecklistItem.objects.create(checklist=cl, text="Tin", position=3)
+        self.client.post(f"/api/items/{c.pk}/", '{"text": "430 Cake Tin", "reparse": true}', content_type="application/json")
+        c.refresh_from_db()
+        self.assertEqual((c.text, int(c.qty_target)), ("Cake Tin", 430))
