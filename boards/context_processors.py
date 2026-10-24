@@ -42,10 +42,10 @@ def sidebar(request):
     ws_id = (match.kwargs or {}).get("workspace_id")
     return {"show_sidebar": True, "side_depts": depts, "side_join_count": pending.count(),
             "side_categories": CATEGORIES if name in ("gallery", "gallery_template") else [],
-            "side_ws": int(ws_id) if ws_id else None, "side_name": name, "side_stockup": _stockup_on(),
+            "side_ws": int(ws_id) if ws_id else None, "side_name": name, "side_stockup": _stockup_on(user),
             "side_dept": int(request.GET["dept"]) if name == "home" and request.GET.get("dept", "").isdigit() else None}
 
 
-def _stockup_on():
-    from django.conf import settings
-    return bool(settings.STOCKUP_URL and settings.STOCKUP_TOKEN)
+def _stockup_on(user):
+    from .stockup import allowed
+    return allowed(user)

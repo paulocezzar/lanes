@@ -14,6 +14,23 @@
     <p class="muted small">{{ people }} {{ people|pluralize:"person,people" }} · {{ live_boards }} board{{ live_boards|pluralize }}</p>
   </section>
 
+  {% if stockup_enabled %}
+  <section class="panel">
+    <h2>🏭 StockUp</h2>
+    <p class="muted small">Departments that plan production in StockUp see its plans in Lanes and get the 🏭 StockUp button on their cards. Everyone else never sees them.</p>
+    {% if su_error %}<p class="su-err small">{{ su_error }}</p>{% endif %}
+    <form method="post" action="{% url 'workspace_settings' workspace.pk %}" class="row-form">
+      {% csrf_token %}<input type="hidden" name="action" value="stockup">
+      <label>Plans for StockUp department<select name="stockup_department">
+        <option value="">Doesn't use StockUp</option>
+        {% for d in su_depts %}<option value="{{ d }}" {% if d == workspace.stockup_department %}selected{% endif %}>{{ d }}</option>{% endfor %}
+        {% if workspace.stockup_department and workspace.stockup_department not in su_depts %}<option value="{{ workspace.stockup_department }}" selected>{{ workspace.stockup_department }}</option>{% endif %}
+      </select></label>
+      <button class="btn primary sm">Save</button>
+    </form>
+  </section>
+  {% endif %}
+
   <section class="panel">
     <h2>People and boards</h2>
     <p class="muted small">Add people, change roles and see guests or join requests on <a href="{% url 'workspace_members' workspace.pk %}">Members</a>. Download every board on <a href="{% url 'department_export' workspace.pk %}">Export</a>.{% if user.is_superuser %} Company-wide rules (allowed email addresses, who can archive boards) are in <a href="{% url 'company_settings' %}">Company → Settings</a>.{% endif %}</p>

@@ -4,6 +4,7 @@
 {% block content %}
 <main class="home narrow">
   <h1 class="page-title">🏭 StockUp plans</h1>
+  <p class="muted small">For {% for w in mine %}{{ w.name }}{% if not forloop.last %}, {% endif %}{% endfor %} — only departments that plan in StockUp see this. Department admins switch it on in their department's Settings.</p>
   <p class="muted">Plans from StockUp, and the boards made from them. On any card you can also use <b>🏭 StockUp</b> to schedule a run — it shows on the floor in StockUp, counts up as batches are made, and completes the card when the batch code is generated.</p>
 
   {% if not enabled %}
@@ -17,8 +18,8 @@
     <div class="su-plan">
       <div><b>{{ p.name }}</b> <span class="role-pill">{{ p.status }}</span><small class="muted">{{ p.department }}{% if p.start %} · {{ p.start }} → {{ p.end }}{% endif %}</small></div>
       {% if p.board %}<a class="btn sm" href="{% url 'board' p.board.pk %}">Open board</a>
-      {% elif depts %}<form method="post" action="{% url 'stockup_plan_board' p.id %}" class="su-make">{% csrf_token %}
-        {% if depts|length > 1 %}<select name="workspace" aria-label="Department">{% for d in depts %}<option value="{{ d.pk }}">{{ d.name }}</option>{% endfor %}</select>{% else %}<input type="hidden" name="workspace" value="{{ depts.0.pk }}">{% endif %}
+      {% elif p.depts %}<form method="post" action="{% url 'stockup_plan_board' p.id %}" class="su-make">{% csrf_token %}
+        {% if p.depts|length > 1 %}<select name="workspace" aria-label="Department">{% for d in p.depts %}<option value="{{ d.pk }}">{{ d.name }}</option>{% endfor %}</select>{% else %}<input type="hidden" name="workspace" value="{{ p.depts.0.pk }}">{% endif %}
         <button class="btn primary sm">Make a board</button></form>
       {% else %}<span class="muted small">Ask a department admin to make its board.</span>{% endif %}
     </div>

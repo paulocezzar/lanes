@@ -665,7 +665,7 @@ Invite the press`,
       if (!planSel.value) { box.innerHTML = '<p class="muted small">Choose a plan first.</p>'; search.disabled = true; return; }
       box.innerHTML = '<p class="muted small">Loading…</p>';
       try {
-        const d = await (await fetch(`/api/stockup/?plan=${planSel.value}`, { credentials: 'same-origin' })).json();
+        const d = await (await fetch(`/api/stockup/?board=${form.dataset.suBoard}&plan=${planSel.value}`, { credentials: 'same-origin' })).json();
         if (d.error) throw new Error(d.error);
         items = d.items; search.disabled = false; draw();
         const words = (dialogBody.querySelector('[data-card-title]')?.textContent || '').toLowerCase();
@@ -676,7 +676,7 @@ Invite the press`,
     $('[data-pop="stockup"]', root)?.addEventListener('click', async () => {
       if (loaded) return; loaded = true;
       try {
-        const d = await (await fetch('/api/stockup/', { credentials: 'same-origin' })).json();
+        const d = await (await fetch(`/api/stockup/?board=${form.dataset.suBoard}`, { credentials: 'same-origin' })).json();
         if (d.error) throw new Error(d.error);
         planSel.innerHTML = '<option value="">Choose a plan…</option>' + d.plans.map(p => `<option value="${p.id}">${suEsc(p.name)} (${suEsc(p.status)})</option>`).join('');
         if (d.plans.length === 1) { planSel.value = d.plans[0].id; loadItems(); }

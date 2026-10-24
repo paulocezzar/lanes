@@ -29,17 +29,24 @@ def _admin_of(user):
 
 @login_required
 def stockup_page(request):
-    ctx = {"enabled": stockup.enabled(), "plans": [], "error": "", "depts": _admin_of(request.user),
+    if stockup.enabled() and not stockup.allowed(request.user):
+        raise Http404
+    mine = stockup.departments_for(request.user) if stockup.enabled() else []
+    ctx = {"enabled": stockup.enabled(), "plans": [], "error": "",
+           "depts": [w for w in _admin_of(request.user) if w.stockup_department],
+           "mine": mine,
            "people": [], "links": {}, "users": []}
     if ctx["enabled"]:
         try:
-            ctx["plans"] = stockup.plans()
+            ctx["plans"] = stockup.plans_for(request.user)
         except stockup.StockUpError as e:
             ctx["error"] = str(e)
     boards = {b.stockup_plan_id: b for b in Board.objects.filter(stockup_plan_id__isnull=False, is_archived=False)
               if permissions.can_view(b, request.user)}
     for p in ctx["plans"]:
         p["board"] = boards.get(p["id"])
+        dn = (p.get("department") or "").strip().lower()
+        p["depts"] = [w for w in ctx["depts"] if w.stockup_department.strip().lower() == dn]
     if request.user.is_superuser and ctx["enabled"] and not ctx["error"]:
         try:
             ctx["people"] = stockup.people()
@@ -55,8 +62,14 @@ def stockup_page(request):
 @require_POST
 def make_plan_board(request, plan_id):
     ws = get_object_or_404(Workspace, pk=request.POST.get("workspace"))
-    if ws not in _admin_of(request.user) and not permissions.is_workspace_member(ws, request.user):
+    if ws not in _admin_of(request.user) or not ws.stockup_department:
         raise Http404
+    try:
+        if not any(p["id"] == plan_id for p in stockup.plans_for(request.user, ws)):
+            raise Http404
+    except stockup.StockUpError as e:
+        messages.error(request, str(e))
+        return redirect("stockup")
     existing = Board.objects.filter(stockup_plan_id=plan_id, is_archived=False).first()
     if existing and permissions.can_view(existing, request.user):
         return redirect("board", board_id=existing.pk)
@@ -111,15 +124,27 @@ def people_link(request):
 
 @login_required
 def items_json(request):
-    """Plans and, for one plan, what it still needs — for the card's StockUp picker."""
+    """Plans and, for one plan, what it still needs — for the card's StockUp picker.
+    ?board= limits the plans to that board's department."""
+    ws = None
+    if request.GET.get("board"):
+        b = get_object_or_404(Board, pk=request.GET["board"])
+        if not permissions.can_view(b, request.user) or not stockup.board_on(b):
+            raise Http404
+        ws = b.workspace
+    elif not stockup.allowed(request.user):
+        raise Http404
     try:
+        mine = stockup.plans_for(request.user, ws)
         if request.GET.get("plan"):
+            if not any(str(p["id"]) == request.GET["plan"] for p in mine):
+                raise Http404
             d = stockup.plan_items(int(request.GET["plan"]))
             return JsonResponse({"items": [{
                 "owner": i["owner"], "owner_id": i["owner_id"], "name": i["name"], "code": i.get("code", ""),
                 "unit": i["unit"], "kind": i.get("kind", ""), "still": i.get("still_to_make"),
                 "scheduled": i.get("already_scheduled")} for i in d.get("items", [])]})
-        return JsonResponse({"plans": stockup.plans()})
+        return JsonResponse({"plans": mine})
     except (stockup.StockUpError, ValueError) as e:
         return JsonResponse({"error": str(e)}, status=502)
 
@@ -129,6 +154,8 @@ def card_link(request, card_id):
     card = _card(request, card_id)
     if not permissions.can_edit(card.list.board, request.user):
         raise ApiError("Only people on the board can do that.", 403)
+    if not stockup.board_on(card.list.board):
+        raise ApiError(f"{card.list.board.workspace.name} doesn't use StockUp.", 403)
     d = request.data
     try:
         if d.get("unlink"):
@@ -152,6 +179,8 @@ def card_link(request, card_id):
                     day = date.fromisoformat(str(d["date"])[:10])
                 except ValueError:
                     raise ApiError("Couldn't read that day.")
+            if not any(str(p["id"]) == str(d.get("plan_id")) for p in stockup.plans_for(request.user, card.list.board.workspace)):
+                raise ApiError("That plan isn't one this department plans in StockUp.")
             stockup.link_card(card, request.user, d.get("plan_id"), d.get("owner"), d.get("owner_id"),
                               d.get("unit"), qty, day)
     except stockup.StockUpError as e:

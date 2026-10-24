@@ -37,6 +37,32 @@ def enabled():
     return bool(settings.STOCKUP_URL and settings.STOCKUP_TOKEN)
 
 
+# ---------- which departments use StockUp ----------
+
+def departments_for(user):
+    """The user's Lanes departments that plan in StockUp (all of them, for a Lanes admin)."""
+    from .models import Workspace
+    qs = Workspace.objects.exclude(stockup_department="")
+    if not user.is_superuser:
+        qs = qs.filter(memberships__user=user).distinct()
+    return list(qs.order_by("name"))
+
+
+def allowed(user):
+    return bool(enabled() and user.is_authenticated and departments_for(user))
+
+
+def board_on(board):
+    return bool(enabled() and board.workspace.stockup_department)
+
+
+def plans_for(user, workspace=None):
+    """StockUp plans the user may see: those of the StockUp departments their departments plan for."""
+    wss = [workspace] if workspace is not None else departments_for(user)
+    names = {w.stockup_department.strip().lower() for w in wss if w.stockup_department}
+    return [p for p in plans() if (p.get("department") or "").strip().lower() in names]
+
+
 def _call(method, path, data=None, timeout=15):
     if not enabled():
         raise StockUpError("StockUp isn't connected yet.")

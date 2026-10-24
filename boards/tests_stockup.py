@@ -82,7 +82,7 @@ class StockUpLinkTests(TestCase):
         self.p = patch("boards.stockup._call", self.fake)
         self.p.start()
         self.addCleanup(self.p.stop)
-        self.ws = Workspace.objects.create(name="Bakery")
+        self.ws = Workspace.objects.create(name="Bakery", stockup_department="Bakery")
         self.u = User.objects.create_user("u@x.com", "pw-12345", first_name="Una", last_name="Baker")
         self.boss = User.objects.create_superuser("boss@x.com", "pw")
         WorkspaceMember.objects.create(workspace=self.ws, user=self.u, role="admin")
@@ -173,3 +173,29 @@ class StockUpLinkTests(TestCase):
     def test_off_when_not_configured(self):
         self.assertContains(self.client.get("/stockup/"), "Not connected")
         self.assertNotContains(self.client.get(f"/cards/{self.card.pk}/"), "data-su-form")
+
+
+    def test_only_departments_that_use_stockup_see_it(self):
+        other = Workspace.objects.create(name="Kitchen")
+        cook = User.objects.create_user("c@x.com", "pw-12345", first_name="Cook")
+        WorkspaceMember.objects.create(workspace=other, user=cook, role="admin")
+        kb = Board.objects.create(workspace=other, title="Menus")
+        BoardMember.objects.create(board=kb, user=cook, role="admin")
+        card = kb.lists.create(title="To do", position=1).cards.create(title="Soup", position=1)
+        self.client.force_login(cook)
+        self.assertEqual(self.client.get("/stockup/").status_code, 404)
+        self.assertNotContains(self.client.get("/"), "StockUp plans")
+        self.assertNotContains(self.client.get(f"/cards/{card.pk}/"), "data-su-form")
+        self.assertEqual(self.client.get(f"/api/stockup/?board={kb.pk}").status_code, 404)
+        r = self.post(f"/api/cards/{card.pk}/stockup/", {"plan_id": 7, "owner": "requirement", "owner_id": 11,
+                                                        "unit": "each", "qty": "5"})
+        self.assertEqual(r.status_code, 403)
+        # a plan for another StockUp department isn't offered even to the bakery
+        self.client.force_login(self.u)
+        self.fake.plan["department"] = "Butchery"
+        cache.clear()
+        self.assertEqual(self.client.get(f"/api/stockup/?board={self.b.pk}").json()["plans"], [])
+        # the department admin switches it on
+        self.client.force_login(cook)
+        self.client.post(f"/departments/{other.pk}/settings/", {"action": "stockup", "stockup_department": "Butchery"})
+        self.assertEqual(self.client.get("/stockup/").status_code, 200)

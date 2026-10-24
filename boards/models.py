@@ -25,6 +25,9 @@ class Workspace(models.Model):
 
     name = models.CharField(max_length=80, unique=True)
     description = models.TextField(blank=True)
+    # The StockUp department this one plans for (e.g. "Bakery"). Blank = this department
+    # doesn't use StockUp, and its people never see StockUp plans or the 🏭 button.
+    stockup_department = models.CharField(max_length=120, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -999,6 +1002,7 @@ class AuditEvent(models.Model):
         "dept_renamed": "renamed the department {old} to {dept}",
         "dept_exported": "downloaded every board in {dept} ({n} boards)",
         "stockup_board": "made a board from StockUp plan {plan}",
+        "dept_stockup": "set {dept}'s StockUp department to {value}",
         "dept_deleted": "deleted the department {dept}",
         "dept_member_added": "added {name} to {dept}",
         "dept_account_created": "created an account for {name} in {dept}",

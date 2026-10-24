@@ -104,7 +104,7 @@ def render_modal(card, request):
         "field_kinds": CustomField.KINDS,
         "colours": COLOURS,
         "ai_enabled": ai.enabled(),
-        "stockup_on": _stockup_on(),
+        "stockup_on": _stockup_on(board),
         "su": getattr(card, "stockup", None) if hasattr(card, "stockup") else None,
         "sticker_choices": STICKERS,
         "card_buttons": [b for b in board.buttons.all() if b.kind == "card" and b.is_enabled],
@@ -174,9 +174,9 @@ def _feed(card, user):
     return sorted(comments + acts, key=lambda x: x["at"], reverse=True)
 
 
-def _stockup_on():
+def _stockup_on(board):
     from . import stockup
-    return stockup.enabled()
+    return stockup.board_on(board)
 
 
 def card_response(card_id, request):

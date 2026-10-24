@@ -187,10 +187,26 @@ def workspace_settings(request, workspace_id):
     ws = get_object_or_404(Workspace, pk=workspace_id)
     if not _can_manage_workspace(ws, request.user):
         raise Http404
+    from . import stockup
     if request.method != "POST":
+        su_depts, su_error = [], ""
+        if stockup.enabled():
+            try:
+                su_depts = sorted({p["department"] for p in stockup.plans() if p.get("department")}
+                                  | {p["department"] for p in stockup.people() if p.get("department")})
+            except stockup.StockUpError as e:
+                su_error = str(e)
         return render(request, "boards/department_settings.html", {
             "workspace": ws, "live_boards": ws.boards.filter(is_archived=False).count(),
-            "people": ws.memberships.count()})
+            "people": ws.memberships.count(), "stockup_enabled": stockup.enabled(),
+            "su_depts": su_depts, "su_error": su_error})
+    if request.POST.get("action") == "stockup":
+        ws.stockup_department = (request.POST.get("stockup_department") or "").strip()[:120]
+        ws.save(update_fields=["stockup_department"])
+        audit.record(request, "dept_stockup", workspace=ws, value=ws.stockup_department or "off")
+        messages.success(request, f"{ws.name} now plans in StockUp ({ws.stockup_department})." if ws.stockup_department
+                         else f"StockUp is off for {ws.name}.")
+        return redirect("workspace_settings", workspace_id=ws.pk)
     if request.POST.get("action") == "delete":
         live = ws.boards.filter(is_archived=False).count()
         if live:

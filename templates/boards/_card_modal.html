@@ -114,7 +114,7 @@
         {% if stockup_on and not su %}<div class="pop-wrap"><button class="chip-btn su-chip" data-pop="stockup" title="Schedule this in StockUp — it shows on the floor, counts up as batches are made and completes this card">🏭 StockUp</button>
           <div class="pop su-pop" data-pop-panel="stockup" hidden>
             <div class="pop-head">Schedule in StockUp</div>
-            <form data-su-form class="stack">
+            <form data-su-form data-su-board="{{ board.pk }}" class="stack">
               <label>Plan<select name="plan_id" data-su-plan required><option value="">Loading plans…</option></select></label>
               <label>What to make<input type="search" class="pop-search" placeholder="Search the plan…" data-su-search aria-label="Search items" disabled></label>
               <div class="su-items" data-su-items><p class="muted small">Choose a plan first.</p></div>
