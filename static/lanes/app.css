@@ -2360,3 +2360,12 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
   .cm-actions:not(.cm-all) .cm-desk { display: none; }
   .cm-more { display: inline-flex; }
 }
+
+@media (max-width: 640px) {
+  /* Phone top bar: just the logo and you. Everything else lives in the bottom bar. */
+  .topbar .apps-wrap, .topbar .top-search, .topbar .top-search-mobile, .topbar .create-wrap, .topbar .bell-wrap { display: none !important; }
+  .today-foot { display: none; }
+  .mnav a { position: relative; }
+  .mnav-count { position: absolute; top: 2px; right: calc(50% - 22px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+    background: #e2483d; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+}
