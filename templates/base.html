@@ -119,6 +119,7 @@
   {% block content %}{% endblock %}
   {% if show_sidebar %}</div></div>{% endif %}
   <div id="toast" class="toast floating" hidden></div>
+  {% if user.is_authenticated %}{% include "_mobile_nav.html" %}{% endif %}
   <script>
     setTimeout(() => document.querySelectorAll('.toasts .toast').forEach(t => t.remove()), 5000);
     document.querySelectorAll('[data-theme-set]').forEach(b => b.addEventListener('click', async () => {

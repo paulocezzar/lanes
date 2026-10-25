@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Boards · Lanes{% endblock %}
 {% block content %}
+<script>/* On a phone, Lanes opens on Today (capture + what's due). Boards stay one tap away. */
+  try { if (matchMedia('(max-width: 640px)').matches && !/[?&]boards=1/.test(location.search)) location.replace('{% url "today" %}'); } catch (e) {}
+</script>
 <main class="home">
   {% if dept %}
   <header class="dept-head">

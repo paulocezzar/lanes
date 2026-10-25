@@ -25,6 +25,14 @@ def manifest(request):
         "name": "Lanes", "short_name": "Lanes", "start_url": "/", "scope": "/", "display": "standalone",
         "background_color": "#1d2125", "theme_color": "#ff8c50",
         "description": "Boards, cards and checklists for your team.",
+        # Long-press the icon → "Add to Inbox"; Android's Share menu → Lanes (prefills the box).
+        "shortcuts": [
+            {"name": "Add to Inbox", "short_name": "Add", "url": "/today/?add=1",
+             "icons": [{"src": static("lanes/icon-192.png"), "sizes": "192x192"}]},
+            {"name": "Today", "url": "/today/"},
+        ],
+        "share_target": {"action": "/today/", "method": "GET",
+                         "params": {"title": "title", "text": "text", "url": "url"}},
         "icons": [
             {"src": static("lanes/icon-192.png"), "sizes": "192x192", "type": "image/png"},
             {"src": static("lanes/icon-512.png"), "sizes": "512x512", "type": "image/png"},

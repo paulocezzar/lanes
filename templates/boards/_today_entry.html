@@ -1,0 +1,17 @@
+{% if e.kind == "card" %}{% with c=e.obj %}
+<div class="today-row{% if e.overdue %} overdue{% endif %}" data-today-card="{{ c.pk }}">
+  <button class="today-tick" data-today-done aria-label="Mark “{{ c.title }}” complete"></button>
+  <a class="today-main" href="{% url 'board' c.list.board_id %}?card={{ c.pk }}">
+    <span class="today-text">{{ c.title }}</span>
+    <small>{{ c.list.board.title }} · {{ c.list.title }} · {{ c.due_at|date:"j M H:i" }}</small>
+  </a>
+</div>
+{% endwith %}{% else %}{% with it=e.obj %}
+<div class="today-row item{% if e.overdue %} overdue{% endif %}" data-today-item="{{ it.pk }}">
+  <button class="today-tick" data-today-done aria-label="Tick “{{ it.text }}”"></button>
+  <a class="today-main" href="{% url 'board' it.checklist.card.list.board_id %}?card={{ it.checklist.card_id }}">
+    <span class="today-text">{{ it.text }}</span>
+    <small>☐ {{ it.checklist.card.title }} · {{ it.checklist.card.list.board.title }} · {{ it.due_at|date:"j M H:i" }}</small>
+  </a>
+</div>
+{% endwith %}{% endif %}

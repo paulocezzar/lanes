@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Today · Lanes{% endblock %}
+{% block body_class %}today-page{% endblock %}
+{% block content %}
+<main class="today" data-inbox-panel data-ai="{{ ai_enabled|yesno:'1,0' }}">
+  <h1 class="today-title">Today <small>{{ today|date:"l j M" }}</small></h1>
+
+  <form class="today-capture inbox-add" data-inbox-add id="capture">
+    <textarea name="text" rows="2" maxlength="12000" placeholder="Add to your Inbox… (type, or tap the mic)"
+              {% if focus_add %}autofocus{% endif %} data-today-text>{{ prefill }}</textarea>
+    <div class="row">
+      <button class="btn primary">Add</button>
+      <button type="button" class="btn today-mic" data-today-mic hidden aria-label="Say it">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg> Say it</button>
+      {% if ai_enabled %}<button type="button" class="btn ai-btn" data-inbox-ai title="Paste an email or message and let AI pull out the to-dos">✨ From a message</button>{% endif %}
+    </div>
+  </form>
+
+  <section class="today-sec" data-today-list>
+    {% if overdue %}<h2 class="today-h bad">Overdue <span class="count">{{ overdue|length }}</span></h2>
+    {% for e in overdue %}{% include "boards/_today_entry.html" %}{% endfor %}{% endif %}
+    <h2 class="today-h">Due today <span class="count">{{ due_today|length }}</span></h2>
+    {% for e in due_today %}{% include "boards/_today_entry.html" %}{% empty %}<p class="today-empty">Nothing else due today 🎉</p>{% endfor %}
+  </section>
+
+  <section class="today-sec" id="inbox">
+    <h2 class="today-h">Inbox</h2>
+    <div data-inbox-list>{{ inbox_html }}</div>
+  </section>
+
+  <p class="today-foot"><a href="{% url 'planner' %}">Planner — your week →</a></p>
+</main>
+
+{% if ai_enabled %}
+<dialog id="ai-dialog" class="dialog" aria-label="Capture from a message">
+  <div class="dialog-head"><h3>✨ Capture from a message</h3><button class="icon-btn" data-close>✕</button></div>
+  <form><textarea name="text" rows="8" placeholder="Paste an email, WhatsApp or meeting notes…"></textarea>
+    <p class="muted small">AI picks out the to-dos (with dates) and adds them to your Inbox. The text is sent to Anthropic's AI service to do this.</p>
+    <button class="btn primary">Capture</button></form>
+</dialog>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'lanes/inbox.js' %}"></script>
+<script src="{% static 'lanes/today.js' %}"></script>
+{% endblock %}

@@ -1,10 +1,11 @@
 from django.urls import path
 
-from . import (views_stockup, api, api_more, views, views_account, views_describe, views_forms, views_gallery, views_join, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio,
+from . import (views_stockup, api, api_more, views, views_account, views_describe, views_forms, views_gallery, views_join, views_automation, views_board, views_files, views_notify, views_people, views_planner, views_portfolio, views_today,
                views_company, views_export, views_public, views_search)
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("today/", views_today.today, name="today"),
     path("internal/run-automations/", views.run_automations_hook),
     path("internal/stockup-ping/", views_stockup.ping),
     path("stockup/", views_stockup.stockup_page, name="stockup"),
