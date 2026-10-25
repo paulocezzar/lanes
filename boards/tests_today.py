@@ -67,3 +67,11 @@ class TodayTests(TestCase):
 
     def test_login_required(self):
         self.assertEqual(Client().get("/today/").status_code, 302)
+
+    def test_inbox_tab_shows_only_the_inbox(self):
+        r = self.c.get("/today/?view=inbox")
+        self.assertContains(r, "Buy cake boards")
+        self.assertNotContains(r, "Due today card")
+        self.assertContains(r, 'href="/today/?view=inbox" class="on"')
+        self.assertContains(r, 'id="send-dialog"')
+        self.assertContains(r, "To do</option>")

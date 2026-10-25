@@ -2,8 +2,8 @@
 Add — the quick way into the Inbox. Hidden on bigger screens; the board's own dock
 is hidden on phones instead.{% endcomment %}
 <nav class="mnav" aria-label="Phone navigation">
-  <a href="{% url 'today' %}" class="{% if request.resolver_match.url_name == 'today' %}on{% endif %}">{% include "boards/_icon.html" with i="check" %}<span>Today</span></a>
-  <a href="{% url 'today' %}#inbox">{% include "boards/_icon.html" with i="inbox" %}<span>Inbox</span></a>
+  <a href="{% url 'today' %}" class="{% if request.resolver_match.url_name == 'today' and request.GET.view != 'inbox' %}on{% endif %}">{% include "boards/_icon.html" with i="check" %}<span>Today</span></a>
+  <a href="{% url 'today' %}?view=inbox" class="{% if request.GET.view == 'inbox' %}on{% endif %}">{% include "boards/_icon.html" with i="inbox" %}<span>Inbox</span></a>
   <a href="{% url 'home' %}?boards=1" class="{% if request.resolver_match.url_name == 'home' or request.resolver_match.url_name == 'board' %}on{% endif %}">{% include "boards/_icon.html" with i="board" %}<span>Boards</span></a>
   <a href="{% url 'notifications' %}" class="{% if request.resolver_match.url_name == 'notifications' %}on{% endif %}">{% include "boards/_icon.html" with i="bell" %}<span>Alerts</span></a>
   <a href="{% url 'today' %}?add=1" class="mnav-add" aria-label="Add to Inbox">{% include "boards/_icon.html" with i="plus" %}</a>

@@ -4,7 +4,7 @@
 {% block body_class %}today-page{% endblock %}
 {% block content %}
 <main class="today" data-inbox-panel data-ai="{{ ai_enabled|yesno:'1,0' }}">
-  <h1 class="today-title">Today <small>{{ today|date:"l j M" }}</small></h1>
+  <h1 class="today-title">{% if inbox_only %}Inbox <small>only you see this</small>{% else %}Today <small>{{ today|date:"l j M" }}</small>{% endif %}</h1>
 
   <form class="today-capture inbox-add" data-inbox-add id="capture">
     <textarea name="text" rows="2" maxlength="12000" placeholder="Add to your Inbox… (type, or tap the mic)"
@@ -17,6 +17,7 @@
     </div>
   </form>
 
+  {% if not inbox_only %}
   <section class="today-sec" data-today-list>
     {% if overdue %}<h2 class="today-h bad">Overdue <span class="count">{{ overdue|length }}</span></h2>
     {% for e in overdue %}{% include "boards/_today_entry.html" %}{% endfor %}{% endif %}
@@ -24,13 +25,27 @@
     {% for e in due_today %}{% include "boards/_today_entry.html" %}{% empty %}<p class="today-empty">Nothing else due today 🎉</p>{% endfor %}
   </section>
 
+  {% endif %}
   <section class="today-sec" id="inbox">
-    <h2 class="today-h">Inbox</h2>
+    {% if not inbox_only %}<h2 class="today-h">Inbox</h2>{% endif %}
     <div data-inbox-list>{{ inbox_html }}</div>
   </section>
 
   <p class="today-foot"><a href="{% url 'planner' %}">Planner — your week →</a></p>
 </main>
+
+<dialog id="send-dialog" class="dialog">
+  <form data-send-form>
+    <h3>Send to a board</h3>
+    <p class="muted small" data-send-what></p>
+    <label>List
+      <select name="list_id" required>
+        {% for board, lists in list_groups %}<optgroup label="{{ board.title }} · {{ board.workspace.name }}">{% for l in lists %}<option value="{{ l.pk }}">{{ l.title }}</option>{% endfor %}</optgroup>{% endfor %}
+      </select>
+    </label>
+    <div class="dialog-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary">Create card</button></div>
+  </form>
+</dialog>
 
 {% if ai_enabled %}
 <dialog id="ai-dialog" class="dialog" aria-label="Capture from a message">

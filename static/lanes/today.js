@@ -2,7 +2,22 @@
 (() => {
   const page = document.querySelector('[data-inbox-panel].today');
   if (!page || !window.LanesInbox) return;
-  const inbox = window.LanesInbox.init(page);
+  const sendDialog = document.getElementById('send-dialog');
+  let sendingId = null;
+  const inbox = window.LanesInbox.init(page, {
+    sendToBoard(id, text) {
+      sendingId = id;
+      sendDialog.querySelector('[data-send-what]').textContent = `“${text}” becomes a card, assigned to you.`;
+      sendDialog.showModal();
+    },
+  });
+  sendDialog?.querySelector('[data-close]').addEventListener('click', () => sendDialog.close());
+  sendDialog?.querySelector('form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const data = await inbox.post(`/api/inbox/${sendingId}/to-card/`, { list_id: +e.target.list_id.value });
+    sendDialog.close();
+    location.href = `/b/${data.board_id}/?card=${data.card_id}`;
+  });
   const { post, toast } = inbox;
 
   // Tick a card complete / a checklist item done, straight from the list.

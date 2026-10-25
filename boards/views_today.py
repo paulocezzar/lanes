@@ -13,7 +13,7 @@ from django.utils import timezone
 from . import ai, permissions
 from .models import ChecklistItem, Notification
 from .services import cards_qs
-from .views_planner import inbox_html
+from .views_planner import editable_lists, inbox_html
 
 
 @login_required
@@ -49,4 +49,8 @@ def today(request):
         "prefill": prefill,
         "focus_add": bool(request.GET.get("add") or prefill),
         "today": day,
+        # The Inbox tab: the same capture box, then ONLY the Inbox — what you've
+        # caught and still have to sort. Today = what's due; Inbox = what's loose.
+        "inbox_only": request.GET.get("view") == "inbox",
+        "list_groups": editable_lists(user),
     })

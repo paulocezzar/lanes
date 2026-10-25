@@ -2340,3 +2340,9 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
   #lists.lists { scroll-snap-type: x mandatory; }
   #lists.lists > .list { flex: 0 0 calc(100vw - 40px); width: calc(100vw - 40px); max-width: none; scroll-snap-align: center; }
 }
+
+.on-phone { display: none; }
+@media (max-width: 640px) {
+  .on-desk { display: none; } .on-phone { display: inline; }
+  .welcome { display: none; }          /* the desk tour; the phone has Today */
+}
