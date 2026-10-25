@@ -43,7 +43,7 @@
 
       {% if can_edit %}
       <div class="cm-actions">
-        <div class="pop-wrap"><button class="chip-btn" data-pop="labels">{% include "boards/_icon.html" with i="label" %}Labels</button>
+        <div class="pop-wrap cm-desk"><button class="chip-btn" data-pop="labels">{% include "boards/_icon.html" with i="label" %}Labels</button>
           <div class="pop" data-pop-panel="labels" hidden>
             <div class="pop-head">Labels</div>
             <input type="search" class="pop-search" placeholder="Search labels…" data-pop-filter=".label-opt" aria-label="Search labels">
@@ -74,7 +74,7 @@
           </div>
         </div>
         {% if ai_enabled %}
-        <div class="pop-wrap"><button class="chip-btn ai-chip" data-pop="suggest" data-suggest-steps title="Let AI draft a checklist from this card's title and description">✨ Suggest steps</button>
+        <div class="pop-wrap cm-desk"><button class="chip-btn ai-chip" data-pop="suggest" data-suggest-steps title="Let AI draft a checklist from this card's title and description">✨ Suggest steps</button>
           <div class="pop wide-pop" data-pop-panel="suggest" hidden>
             <div class="pop-head">Suggested steps</div>
             <div data-suggest-body><p class="muted small">Thinking…</p></div>
@@ -100,7 +100,7 @@
             {% endfor %}
           </div>
         </div>
-        <div class="pop-wrap"><button class="chip-btn" data-pop="signoff" title="Ask someone to approve this card before it can be completed">✔ Sign-off</button>
+        <div class="pop-wrap cm-desk"><button class="chip-btn" data-pop="signoff" title="Ask someone to approve this card before it can be completed">✔ Sign-off</button>
           <div class="pop" data-pop-panel="signoff" hidden>
             <div class="pop-head">Ask for sign-off</div>
             <form data-signoff-new class="stack">
@@ -126,14 +126,14 @@
             </form>
           </div>
         </div>{% endif %}
-        <div class="pop-wrap"><button class="chip-btn" data-pop="partof" title="Put this card inside a bigger job">⊂ Part of…</button>
+        <div class="pop-wrap cm-desk"><button class="chip-btn" data-pop="partof" title="Put this card inside a bigger job">⊂ Part of…</button>
           <div class="pop" data-pop-panel="partof" hidden>
             <div class="pop-head">Part of a bigger card</div>
             <input type="search" class="pop-search" placeholder="Search cards on any board…" data-parent-search aria-label="Search cards">
             <div class="parent-results" data-parent-results><p class="muted small">Type to find the card this one belongs to.</p></div>
           </div>
         </div>
-        {% if not children %}<button class="chip-btn" type="button" data-reveal="parts" title="Split this card into smaller cards, on this board or others">▦ Parts</button>{% endif %}
+        {% if not children %}<button class="cm-desk chip-btn" type="button" data-reveal="parts" title="Split this card into smaller cards, on this board or others">▦ Parts</button>{% endif %}
         <div class="pop-wrap"><button class="chip-btn" data-pop="attach">{% include "boards/_icon.html" with i="clip" %}Attach</button>
           <div class="pop" data-pop-panel="attach" hidden>
             <div class="pop-head">Attach</div>
@@ -149,7 +149,7 @@
           </div>
         </div>
         {% if mirror_targets %}
-        <div class="pop-wrap"><button class="chip-btn" data-pop="mirror" title="Show this same card on another list or board">🔗 Mirror</button>
+        <div class="pop-wrap cm-desk"><button class="chip-btn" data-pop="mirror" title="Show this same card on another list or board">🔗 Mirror</button>
           <div class="pop" data-pop-panel="mirror" hidden>
             <div class="pop-head">Mirror card</div>
             <p class="muted small">The same card appears in another list — handy when a job involves two departments. Changes show everywhere.</p>
@@ -160,7 +160,7 @@
           </div>
         </div>
         {% endif %}
-        <div class="pop-wrap"><button class="chip-btn" data-pop="copy">{% include "boards/_icon.html" with i="copy" %}Copy</button>
+        <div class="pop-wrap cm-desk"><button class="chip-btn" data-pop="copy">{% include "boards/_icon.html" with i="copy" %}Copy</button>
           <div class="pop" data-pop-panel="copy" hidden>
             <div class="pop-head">Copy card</div>
             <form data-copy-card>
@@ -173,7 +173,7 @@
             </form>
           </div>
         </div>
-        <div class="pop-wrap"><button class="chip-btn" data-pop="look">🎨 Cover &amp; stickers</button>
+        <div class="pop-wrap cm-desk"><button class="chip-btn" data-pop="look">🎨 Cover &amp; stickers</button>
           <div class="pop" data-pop-panel="look" hidden>
             <div class="pop-head">Cover</div>
             <div class="colour-row">
@@ -191,11 +191,12 @@
             <div class="sticker-grid">{% for s in sticker_choices %}<button class="sticker{% if s in card.stickers %} on{% endif %}" data-sticker="{{ s }}">{{ s }}</button>{% endfor %}</div>
           </div>
         </div>
-        <button class="chip-btn{% if card.is_template %} on{% endif %}" data-template-toggle="{{ card.is_template|yesno:'0,1' }}" title="Use it from any list's copy button — on any board in this department">{% include "boards/_icon.html" with i="copy" %}{% if card.is_template %}Template ✓{% else %}Make template{% endif %}</button>
-        {% if fields and not fields_used %}<button class="chip-btn" type="button" data-reveal="fields" title="Fill in this board's fields">{% include "boards/_icon.html" with i="field" %}Fields</button>{% endif %}
-        {% if dep_choices and not waits_for and not needed_by %}<button class="chip-btn" type="button" data-reveal="deps" title="Make this card wait for another">⛓ Waits for</button>{% endif %}
-        {% if not time_entries and not my_timer and not card.estimate_hours %}<button class="chip-btn" type="button" data-reveal="time" title="Log time or start a timer">{% include "boards/_icon.html" with i="clock" %}Time</button>{% endif %}
-        <button class="chip-btn" data-archive-card="{{ card.is_archived|yesno:'0,1' }}">{% include "boards/_icon.html" with i="archive" %}{% if card.is_archived %}Restore{% else %}Archive{% endif %}</button>{% if card.is_archived %}{% with why=card.delete_blockers %}{% if why %}<button class="chip-btn" disabled title="Has {{ why|join:', ' }} — cards with work in them can only be archived">{% include "boards/_icon.html" with i="lock" %}Can't delete</button>{% else %}<button class="chip-btn danger" data-delete-open-card="{{ card.pk }}" title="Delete this empty card for good">{% include "boards/_icon.html" with i="close" %}Delete</button>{% endif %}{% endwith %}{% endif %}
+        <button class="cm-desk chip-btn{% if card.is_template %} on{% endif %}" data-template-toggle="{{ card.is_template|yesno:'0,1' }}" title="Use it from any list's copy button — on any board in this department">{% include "boards/_icon.html" with i="copy" %}{% if card.is_template %}Template ✓{% else %}Make template{% endif %}</button>
+        {% if fields and not fields_used %}<button class="cm-desk chip-btn" type="button" data-reveal="fields" title="Fill in this board's fields">{% include "boards/_icon.html" with i="field" %}Fields</button>{% endif %}
+        {% if dep_choices and not waits_for and not needed_by %}<button class="cm-desk chip-btn" type="button" data-reveal="deps" title="Make this card wait for another">⛓ Waits for</button>{% endif %}
+        {% if not time_entries and not my_timer and not card.estimate_hours %}<button class="cm-desk chip-btn" type="button" data-reveal="time" title="Log time or start a timer">{% include "boards/_icon.html" with i="clock" %}Time</button>{% endif %}
+        <button class="cm-desk chip-btn" data-archive-card="{{ card.is_archived|yesno:'0,1' }}">{% include "boards/_icon.html" with i="archive" %}{% if card.is_archived %}Restore{% else %}Archive{% endif %}</button>{% if card.is_archived %}{% with why=card.delete_blockers %}{% if why %}<button class="chip-btn" disabled title="Has {{ why|join:', ' }} — cards with work in them can only be archived">{% include "boards/_icon.html" with i="lock" %}Can't delete</button>{% else %}<button class="chip-btn danger" data-delete-open-card="{{ card.pk }}" title="Delete this empty card for good">{% include "boards/_icon.html" with i="close" %}Delete</button>{% endif %}{% endwith %}{% endif %}
+        <button class="chip-btn cm-more" type="button" data-cm-more onclick="this.closest('.cm-actions').classList.toggle('cm-all');this.textContent=this.closest('.cm-actions').classList.contains('cm-all')?'Less':'More…'">More…</button>
       </div>
       {% endif %}
 

@@ -567,8 +567,18 @@ Invite the press`,
   function closeCard() {
     dialog.close();
   }
+  // Phone: a card opened from Today / My cards / an alert is the whole visit —
+  // closing it goes back there instead of leaving you on the board.
+  const backTo = (() => {
+    try {
+      const r = new URL(document.referrer);
+      return matchMedia('(max-width: 640px)').matches && r.origin === location.origin
+        && /^\/(today|my-cards|notifications)\//.test(r.pathname) && new URLSearchParams(location.search).get('card');
+    } catch { return false; }
+  })();
   dialog.addEventListener('close', () => {
     openCardId = null;
+    if (backTo) { history.back(); return; }
     history.replaceState(null, '', location.pathname);
   });
   dialog.addEventListener('click', e => { if (e.target === dialog) closeCard(); });

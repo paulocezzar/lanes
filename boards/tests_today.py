@@ -75,3 +75,9 @@ class TodayTests(TestCase):
         self.assertContains(r, 'href="/today/?view=inbox" class="on"')
         self.assertContains(r, 'id="send-dialog"')
         self.assertContains(r, "To do</option>")
+
+    def test_phone_bar_has_my_cards_not_boards(self):
+        r = self.c.get("/my-cards/")
+        self.assertContains(r, 'href="/my-cards/" class="on"')
+        self.assertNotContains(r, "?boards=1")
+        self.assertContains(r, "Due today card")
