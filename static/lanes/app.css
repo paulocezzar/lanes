@@ -2528,3 +2528,33 @@ html.simple .list-head .list-collapse, html.simple .list-foot [data-from-templat
 @media (max-width: 760px) { .explore-bar { display: none; } }
 body:has(.dock:not(.mini)) .explore-bar { bottom: 76px; }   /* sit above the bottom tool bar, not under it */
 body:has(.dock:not(.mini)) .board:has(~ .explore-bar:not([hidden])) .lists, body:has(.dock:not(.mini)) .board:has(~ .explore-bar:not([hidden])) .view-wrap { padding-bottom: 190px; }
+
+/* Board look (Simple mode): list name with its count beside it and the list buttons on hover;
+   cards read top-down as tick + title, labels, then people and date. */
+html.simple .list { flex-basis: 300px; border-radius: 12px; }
+html.simple .list.collapsed { flex-basis: 44px; }
+html.simple .list-head { padding: 12px 10px 8px 14px; gap: 4px; }
+html.simple .list-title { flex: 0 1 auto; font-size: 16px; font-weight: 700; padding: 4px 4px; }
+html.simple .list-count { margin-right: auto; padding-left: 4px; font-size: 14px; }
+html.simple .list-head .list-collapse { display: none; }                 /* "Collapse list" is in the list's menu */
+html.simple .list-head .list-add, html.simple .list-head > .menu { opacity: 0; transition: opacity .12s; }
+html.simple .list:hover .list-head .list-add, html.simple .list:hover .list-head > .menu,
+html.simple .list-head:focus-within .list-add, html.simple .list-head:focus-within > .menu, html.simple .list-head > .menu[open] { opacity: 1; }
+@media (hover: none) { html.simple .list-head .list-add, html.simple .list-head > .menu { opacity: 1; } }
+html.simple .list-cards { gap: 10px; padding: 4px 10px; }
+html.simple .list-foot { padding: 6px 10px 10px; }
+
+html.simple .card-tile:not(.cover-full) { display: flex; flex-direction: column; padding: 14px 16px; border-radius: 10px; }
+html.simple .card-tile:not(.cover-full) > .tile-title { order: 1; font-size: 15px; font-weight: 500; line-height: 1.35; }
+html.simple .card-tile:not(.cover-full) > .tile-labels { order: 2; margin: 10px 0 0; }
+html.simple .card-tile:not(.cover-full) > .tile-progress, html.simple .card-tile:not(.cover-full) > .tile-fields,
+html.simple .card-tile:not(.cover-full) > .tile-risk { order: 3; }
+html.simple .card-tile:not(.cover-full) > .tile-badges { order: 4; margin-top: 12px; gap: 6px 12px; font-size: 13px; }
+html.simple .card-tile:not(.cover-full) .tile-cover { width: calc(100% + 32px); margin: -14px -16px 12px; border-radius: 10px 10px 0 0; flex: none; }
+html.simple .tile-label:not(:empty) { font-size: 12.5px; padding: 2px 8px; }
+html.simple .tile-check { width: 18px; height: 18px; margin: 1px 8px 0 0; opacity: 1; }      /* the tick is always there, not only on hover */
+html.simple .card-tile:hover .tile-check, html.simple .tile-check.shown { width: 18px; margin-right: 8px; }
+html.simple .tile-check:not(.on) { color: var(--text-2); }
+html.simple .tile-check:not(.on) svg { opacity: .55; }
+html.simple .tile-badges .tile-members { order: -2; margin: 0 2px 0 0; }                    /* people first, then the date */
+html.simple .tile-badges .badge[class*="due-"] { order: -1; }

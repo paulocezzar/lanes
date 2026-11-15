@@ -4,6 +4,7 @@
     <span class="list-count{% if list.over_limit %} over{% endif %}" title="{% if list.card_limit %}Limit {{ list.card_limit }}{% endif %}">{{ list.entries|length }}{% if list.card_limit %}/{{ list.card_limit }}{% endif %}</span>
     <button class="icon-btn list-collapse" data-collapse-list title="Collapse list">⇤</button>
     {% if can_edit %}
+    <button class="icon-btn list-add simple-only" data-add-card-top title="Add a card to the top of this list" aria-label="Add a card to the top of this list">{% include "boards/_icon.html" with i="plus" %}</button>
     <details class="menu">
       <summary class="icon-btn" title="List actions">{% include "boards/_icon.html" with i="dots" %}</summary>
       <div class="menu-panel right">
