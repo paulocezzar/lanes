@@ -23,6 +23,16 @@
       } catch { location.reload(); }
       finally { lv.classList.remove('view-busy'); }
     });
+    lv.addEventListener('click', e => {       // fold a list's rows away, and remember it for this visit
+      const f = e.target.closest('[data-lv-fold]');
+      if (!f) return;
+      const g = f.closest('.lv-group'), shut = g.classList.toggle('folded');
+      f.setAttribute('aria-expanded', !shut);
+      try { sessionStorage.setItem(`lanes-lv-fold-${g.dataset.lvGroup}`, shut ? '1' : ''); } catch { /* fine */ }
+    });
+    $$('.lv-group', lv).forEach(g => {
+      try { if (sessionStorage.getItem(`lanes-lv-fold-${g.dataset.lvGroup}`)) { g.classList.add('folded'); $('[data-lv-fold]', g).setAttribute('aria-expanded', 'false'); } } catch { /* fine */ }
+    });
     lv.addEventListener('keydown', e => {
       if (e.key === 'Enter' && e.target.matches('.lv-row')) L.openCard(e.target.dataset.cardOpen);
     });

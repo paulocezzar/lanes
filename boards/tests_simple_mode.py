@@ -138,7 +138,7 @@ class ListViewTests(TestCase):
         self.assertLess(body.index("Ring the supplier"), body.index("Finished"))
         self.assertLess(body.index("Finished"), body.index("Old job"))
         self.assertIn(f'data-card-open="{self.card.pk}"', body); self.assertIn("0/1", body)
-        self.assertIn('class="lv-row done"', body)               # the finished one shows as ticked
+        self.assertIn('lv-row done"', body)               # the finished one shows as ticked
         self.assertNotIn("Put away", body)                         # archived cards stay out
         self.assertIn(f'data-lv-add="{self.todo.pk}"', body)       # a box to type a new card under each list
         self.assertIn("vt-list on", page)

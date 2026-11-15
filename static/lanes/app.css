@@ -2421,13 +2421,22 @@ html.simple .list-head .list-collapse, html.simple .list-foot [data-from-templat
 .board:has(#start-panel) .list-empty-hint { display: none; }
 
 /* ---------- List view ---------- */
-.lv-sheet { width: 100%; max-width: 920px; background: var(--surface); color: var(--text); border-radius: 12px; overflow: hidden;
-  box-shadow: 0 1px 3px rgb(0 0 0 / .25); }
-.lv-group + .lv-group { border-top: 6px solid var(--surface-2); }
-.lv-head { margin: 0; padding: 14px 18px 8px; font-size: 15px; }
-.lv-count { margin-left: 8px; color: var(--text-2); font-weight: 500; font-size: 13px; }
-.lv-row { display: flex; align-items: center; gap: 12px; padding: 9px 18px; border-top: 1px solid var(--border); cursor: pointer; }
+.lv-sheet { width: 100%; background: var(--surface); color: var(--text); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgb(0 0 0 / .25); }
+.board.bg-plain .lv-sheet { background: none; box-shadow: none; border-radius: 0; }
+.lv-grid { display: grid; grid-template-columns: minmax(240px, 1fr) 190px 110px 230px 100px; align-items: center; column-gap: 14px; padding: 0 18px; }
+.lv-colhead { padding-top: 10px; padding-bottom: 10px; color: var(--text-2); font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.lv-colhead span:first-child { padding-left: 34px; }
+.lv-head { display: flex; align-items: center; gap: 6px; margin: 0; padding: 18px 18px 10px 10px; font-size: 16px; }
+.lv-fold { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--text-2); cursor: pointer; display: grid; place-items: center; }
+.lv-fold:hover { background: var(--surface-2); color: var(--text); }
+.lv-fold svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .12s; }
+.lv-group.folded .lv-fold svg { transform: rotate(-90deg); }
+.lv-group.folded .lv-rows { display: none; }
+.lv-count { margin-left: 6px; color: var(--text-2); font-weight: 500; font-size: 13px; }
+.lv-row { min-height: 44px; border-top: 1px solid var(--border); cursor: pointer; }
 .lv-row:hover, .lv-row:focus-visible { background: var(--surface-2); outline: none; }
+.board.bg-plain .lv-row:hover, .board.bg-plain .lv-row:focus-visible { background: var(--surface); }
+.lv-name { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 8px 0; }
 .lv-tick { flex: 0 0 22px; width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid var(--text-2); background: none;
   color: #fff; display: grid; place-items: center; cursor: pointer; }
 .lv-tick:disabled { cursor: default; opacity: .6; }
@@ -2435,14 +2444,25 @@ html.simple .list-head .list-collapse, html.simple .list-foot [data-from-templat
 .lv-tick:not(:disabled):hover { border-color: #22a06b; }
 .lv-tick.on { background: #22a06b; border-color: #22a06b; }
 .lv-tick.on svg { opacity: 1; }
-.lv-title { flex: 1; min-width: 0; font-size: 14px; }
+.lv-title { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
 .lv-row.done .lv-title { text-decoration: line-through; color: var(--text-2); }
-.lv-meta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.lv-add { border-top: 1px solid var(--border); }
-.lv-add input:not([type=checkbox]):not([type=radio]) { width: 100%; border: 0; border-radius: 0; background: none; color: var(--text); font: inherit; font-size: 14px; padding: 11px 18px 12px 52px; }
+.lv-cell { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; color: var(--text-2); }
+.lv-labels { flex-wrap: wrap; padding: 6px 0; }
+.lv-who { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-nobody { width: 24px; height: 24px; border-radius: 50%; border: 1.5px dashed var(--text-2); display: grid; place-items: center; opacity: .7; }
+.lv-nobody .ic { width: 14px; height: 14px; }
+.lv-none { opacity: .5; }
+.lv-add { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.lv-add input:not([type=checkbox]):not([type=radio]) { width: 100%; border: 0; border-radius: 0; background: none; color: var(--text); font: inherit; font-size: 14px; padding: 12px 18px 12px 52px; }
 .lv-add input:not([type=checkbox])::placeholder { color: var(--text-2); }
 .lv-add input:not([type=checkbox]):not([type=radio]):focus { outline: none; background: var(--surface-2); }
 .lv-empty { margin: 0; padding: 18px; color: var(--text-2); }
+@media (max-width: 900px) {     /* narrow screens: the card and its due date; the rest is inside the card */
+  .lv-grid { grid-template-columns: minmax(0, 1fr) auto; }
+  .lv-grid > :nth-child(n+3), .lv-colhead span:nth-child(2) { display: none; }
+  .lv-grid > :nth-child(3) { display: flex; }
+  .lv-colhead span:nth-child(3) { display: inline; }
+}
 /* "More views": the name, then a line saying what it is */
 .vt-more .menu-panel { min-width: 270px; }
 .vt-more .menu-item small { display: block; font-weight: 400; font-size: 12px; color: var(--text-2); margin-top: 1px; }
