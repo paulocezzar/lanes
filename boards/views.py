@@ -111,6 +111,9 @@ def board_create(request):
 def board_page(request, board_id):
     board, ctx = board_context(request, board_id, "board")
     ctx["lists"] = lists_with_entries(board)
+    # A board with lists but no cards yet opens with "What needs doing?" instead of bare columns.
+    ctx["start_panel"] = bool(ctx["can_edit"] and ctx["lists"] and not board.is_template
+                              and not any(lst.entries() for lst in ctx["lists"]))
     return render(request, "boards/board.html", ctx)
 
 

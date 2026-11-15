@@ -82,3 +82,33 @@ class LightBackgroundTests(TestCase):
         css = (Path(__file__).resolve().parent.parent / "static/lanes/app.css").read_text()
         for key, _ in Board.BACKGROUNDS:
             self.assertIn(f".bg-{key}", css)
+
+
+class StartPanelTests(TestCase):
+    def setUp(self):
+        from .models import Card
+        ws = Workspace.objects.create(name="Team")
+        self.u = User.objects.create_user("e@x.com", "pw")
+        self.b = Board.objects.create(workspace=ws, title="Plan")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.todo = List.objects.create(board=self.b, title="To do", position=1000)
+        List.objects.create(board=self.b, title="Done", position=2000)
+        self.c = Client(); self.c.force_login(self.u)
+        self.Card = Card
+
+    def test_an_empty_board_asks_what_needs_doing(self):
+        page = self.c.get(f"/b/{self.b.pk}/").content.decode()
+        self.assertIn('id="start-panel"', page); self.assertIn("What needs doing?", page)
+        self.assertIn(f'data-start-list="{self.todo.pk}"', page)          # cards go into the first list
+
+    def test_the_panel_goes_once_the_board_has_a_card(self):
+        r = self.c.post(f"/api/lists/{self.todo.pk}/cards/", {"title": "First thing", "smart_due": False},
+                        content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn('id="start-panel"', self.c.get(f"/b/{self.b.pk}/").content.decode())
+
+    def test_someone_who_can_only_look_is_not_asked(self):
+        viewer = User.objects.create_user("v@x.com", "pw")
+        BoardMember.objects.create(board=self.b, user=viewer, role="observer")
+        c = Client(); c.force_login(viewer)
+        self.assertNotIn('id="start-panel"', c.get(f"/b/{self.b.pk}/").content.decode())

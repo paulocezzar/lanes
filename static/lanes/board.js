@@ -326,6 +326,41 @@
     refreshCounts();
   });
 
+  // ---------- start panel: a board with no cards yet asks "What needs doing?" ----------
+  const startPanel = document.getElementById('start-panel');
+  if (startPanel) {
+    const skipKey = `lanes-start-skip-${boardId}`;
+    const closeStart = () => startPanel.remove();
+    try { if (sessionStorage.getItem(skipKey)) closeStart(); } catch { /* private browsing: just show it */ }
+    $('[data-start-form]', startPanel)?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const ta = e.target.lines;
+      const lines = ta.value.split(/\n+/).map(t => t.trim()).filter(Boolean).slice(0, 100);
+      if (!lines.length) return ta.focus();
+      const listEl = $(`.list[data-list-id="${startPanel.dataset.startList}"]`, listsEl);
+      const btn = $('.btn.primary', startPanel);
+      btn.disabled = true;
+      let made = 0;
+      try {
+        for (const title of lines) {
+          const data = await post(`/api/lists/${listEl.dataset.listId}/cards/`, { title: title.slice(0, 250), smart_due: false });
+          $('[data-list-cards]', listEl).appendChild(fromHTML(data.tile));
+          made += 1;
+        }
+      } finally {
+        btn.disabled = false;
+        if (made) { refreshCounts(); closeStart(); toast(`Added ${made} card${made === 1 ? '' : 's'}. Click one to add a date or a checklist.`); }
+      }
+    });
+    $('[data-start-describe]', startPanel)?.addEventListener('click', () => {
+      $(`.list[data-list-id="${startPanel.dataset.startList}"] [data-new-product]`, listsEl)?.click();
+    });
+    $('[data-start-skip]', startPanel)?.addEventListener('click', () => {
+      try { sessionStorage.setItem(skipKey, '1'); } catch { /* fine */ }
+      closeStart();
+    });
+  }
+
   function openAddCard(listEl) {
     $('.foot-row', listEl).hidden = true;
     const form = $('[data-add-card-form]', listEl);

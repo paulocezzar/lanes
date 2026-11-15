@@ -2408,3 +2408,14 @@ html.simple .list-head .list-collapse, html.simple .list-foot [data-from-templat
 .board.bg-light .add-list-btn { background: rgb(9 30 66 / .07); color: #172b4d; }
 .board.bg-light .add-list-btn:hover { background: rgb(9 30 66 / .13); }
 .board.bg-light .list { box-shadow: 0 0 0 1px rgb(9 30 66 / .14), 0 1px 2px rgb(9 30 66 / .12); }
+
+/* ---------- Start panel (a board with no cards yet) ---------- */
+.start-panel { flex: 0 0 auto; margin: 16px 16px 0; padding: 18px 20px; max-width: 620px; background: var(--surface); color: var(--text);
+  border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / .25); }
+.start-panel h2 { margin: 0 0 4px; font-size: 20px; }
+.start-panel p { margin: 0 0 12px; color: var(--text-2); font-size: 14px; }
+.start-panel textarea { width: 100%; font: inherit; font-size: 15px; line-height: 1.5; padding: 10px 12px; border-radius: 8px; resize: vertical; }
+.start-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.start-actions .link-btn { margin-left: auto; }
+/* While the panel is up, the small dashed "set up several cards" hint would say the same thing twice. */
+.board:has(#start-panel) .list-empty-hint { display: none; }
