@@ -2344,18 +2344,19 @@ Invite the press`,
     f.reset(); f.field_id.value = field?.id || '';
     f.name.value = field?.name || ''; f.kind.value = field?.kind || 'dropdown';
     $('[data-field-heading]', fieldDlg).textContent = field ? 'Edit field' : 'Add field';
-    $('[data-field-save]', fieldDlg).textContent = field ? 'Save' : 'Create field';
+    $('[data-field-save]', fieldDlg).textContent = field ? 'Save changes' : 'Create field';
     $('[data-field-kind-wrap]', fieldDlg).hidden = !!field;               // a field keeps its type
     const opts = $('[data-field-opts]', fieldDlg); opts.innerHTML = '';
     if (field?.options?.length) field.options.forEach((o, i) => addFieldOpt(o, field.colours[i])); else { addFieldOpt(); addFieldOpt(); }
     syncFieldKind();
+    if (window.Sortable && !opts._sortable) opts._sortable = new Sortable(opts, { handle: '.fo-grip', animation: 120, ghostClass: 'fo-ghost' });
     fieldDlg.showModal(); f.name.focus();
   }
   const OPT_COLOURS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'sky', 'grey'];
   function recolourOpts() { $$('.field-opt', fieldDlg).forEach(r => { $('.fo-dot', r).className = `fo-dot lc-${r.dataset.colour}`; }); }
   function addFieldOpt(value = '', colour) {
     const used = $$('.field-opt', fieldDlg).map(r => r.dataset.colour);
-    const row = fromHTML(`<div class="field-opt"><button type="button" class="fo-dot" data-field-opt-colour title="Click to change the colour" aria-label="Change the colour"></button><input maxlength="60" placeholder="Type an option name" autocomplete="off"><button type="button" class="icon-btn" data-field-opt-del aria-label="Remove this option">×</button></div>`);
+    const row = fromHTML(`<div class="field-opt"><span class="fo-grip" title="Drag to change the order" aria-hidden="true">⠿</span><button type="button" class="fo-dot" data-field-opt-colour title="Choose the colour" aria-label="Choose the colour"></button><input maxlength="60" placeholder="Type an option name" autocomplete="off"><button type="button" class="icon-btn fo-del" data-field-opt-del title="Remove option" aria-label="Remove option">×</button></div>`);
     row.dataset.colour = colour || OPT_COLOURS.find(c => !used.includes(c)) || OPT_COLOURS[used.length % OPT_COLOURS.length];
     row.querySelector('input').value = value;
     $('[data-field-opts]', fieldDlg).appendChild(row); recolourOpts();
@@ -2378,7 +2379,14 @@ Invite the press`,
     if (e.target.closest('[data-field-cancel]')) fieldDlg.close();
     if (e.target.closest('[data-field-opt-add]')) addFieldOpt().querySelector('input').focus();
     const dot = e.target.closest('[data-field-opt-colour]');
-    if (dot) { const r = dot.closest('.field-opt'); r.dataset.colour = OPT_COLOURS[(OPT_COLOURS.indexOf(r.dataset.colour) + 1) % OPT_COLOURS.length]; recolourOpts(); }
+    const sw = e.target.closest('[data-fo-colour]');
+    if (sw) { sw.closest('.field-opt').dataset.colour = sw.dataset.foColour; recolourOpts(); }
+    const wasOpen = dot && !!$('.fo-palette', dot.closest('.field-opt'));
+    $$('.fo-palette', fieldDlg).forEach(p => p.remove());              // any click puts the palette away…
+    if (dot && !wasOpen) {                                         // …and a click on a dot opens that option's
+      const r = dot.closest('.field-opt');
+      r.appendChild(fromHTML(`<div class="fo-palette" role="listbox" aria-label="Colour">${OPT_COLOURS.map(c => `<button type="button" class="lc-${c}${c === r.dataset.colour ? ' on' : ''}" data-fo-colour="${c}" title="${c[0].toUpperCase() + c.slice(1)}" aria-label="${c}"></button>`).join('')}</div>`));
+    }
     const del = e.target.closest('[data-field-opt-del]');
     if (del) { del.closest('.field-opt').remove(); recolourOpts(); }
   });

@@ -2634,8 +2634,8 @@ button.tile-label.tile-field:hover { filter: brightness(1.08); box-shadow: 0 0 0
 .field-pop .tile-label { display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 6px; color: #1d2125; height: auto; }
 .fp-edit, .fp-new { color: var(--text-2); }
 .fp-empty { padding: 6px 8px; margin: 0; max-width: 250px; }
-.field-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
-.field-row label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.fd-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+.fd-row label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .field-opts { display: grid; gap: 8px; margin: 8px 0; }
 .field-opt { display: flex; align-items: center; gap: 10px; }
 .field-opt input { flex: 1; }
@@ -2694,3 +2694,21 @@ main.board[data-view="board"] ~ #card-dialog .cm-details ~ .cm-meta > .cm-meta-p
 main.board[data-view="board"] ~ #card-dialog .field-cell.fc-dropdown { display: none; }
 main.board[data-view="board"] ~ #card-dialog .cm-section[data-opt="fields"]:not(:has(.field-cell:not(.fc-dropdown))) { display: none; }
 dialog > .lv-pop { z-index: 5; }
+
+/* ---- Field window: quieter option rows, a colour palette, and drag to reorder ---- */
+.field-opts { gap: 2px; }
+.field-opt { position: relative; gap: 8px; padding: 2px 4px 2px 0; border-radius: 8px; }
+.field-opt:hover, .field-opt:focus-within { background: var(--surface-2); }
+.field-opt input { border-color: transparent !important; background: transparent !important; box-shadow: none; font-size: 15px; padding: 7px 8px; }
+.field-opt input:focus { border-color: var(--accent) !important; background: var(--surface) !important; }
+.fo-grip { width: 16px; text-align: center; color: var(--text-2); cursor: grab; opacity: 0; user-select: none; }
+.field-opt:hover .fo-grip, .field-opt:focus-within .fo-grip { opacity: .8; }
+.fo-del { opacity: 0; }
+.field-opt:hover .fo-del, .field-opt:focus-within .fo-del { opacity: 1; }
+@media (hover: none) { .fo-grip { opacity: .8; } .fo-del { opacity: 1; } }
+.fo-ghost { opacity: .4; }
+.fo-palette { position: absolute; left: 22px; top: calc(100% + 2px); z-index: 5; display: grid; grid-template-columns: repeat(9, 22px); gap: 6px; padding: 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.fo-palette button { width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; }
+.fo-palette button:hover { transform: scale(1.15); }
+.fo-palette button.on { box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--text); }
+#field-dialog { overflow: visible; }
