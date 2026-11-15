@@ -2775,3 +2775,18 @@ html:is(.simple,.full) .list > .list-head { margin-bottom: 10px; }
 html:is(.simple,.full) .card-tile.is-complete:not(.is-open) { background: var(--card); }
 html:is(.simple,.full) .card-tile.is-complete .tile-pick.due-complete { color: var(--text-2); font-weight: 400; }
 html:is(.simple,.full) .list-foot .add-card-btn { color: var(--text-2); font-weight: 500; }
+
+/* ---- Fix: the soft dark lists and cards above are for the dark theme only. In the light theme a dark coloured
+        board keeps its light lists and white cards, as it always had (dark cards there left dark text on them). ---- */
+:root[data-theme="light"] .board:not(.bg-light):not(.bg-plain) { --list: #f1f2f4; --card: #ffffff; --card-hover: #f7f8f9; }
+:root[data-theme="light"] .board:not(.bg-light) .card-tile { box-shadow: 0 1px 1px rgb(9 30 66 / .25); }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .board:not(.bg-light):not(.bg-plain) { --list: #f1f2f4; --card: #ffffff; --card-hover: #f7f8f9; }
+  :root[data-theme="system"] .board:not(.bg-light) .card-tile { box-shadow: 0 1px 1px rgb(9 30 66 / .25); }
+}
+
+/* ---- Plain background in the dark theme: neutral charcoal page, lists and cards, with no blue in them ---- */
+.board.bg-plain:not(.bg-light) { background: #1d1e20; --list: #252628; --card: #2b2c2f; --card-hover: #333437; }
+.board.bg-plain:not(.bg-light) .board-head { background: #1d1e20; border-bottom: 1px solid rgb(255 255 255 / .08); }
+.board.bg-plain:not(.bg-light) .card-tile { box-shadow: inset 0 0 0 1px rgb(255 255 255 / .08); }
+.board.bg-plain:not(.bg-light) .card-tile:hover { box-shadow: inset 0 0 0 1px rgb(255 255 255 / .18); }
