@@ -119,6 +119,25 @@ def board_table(request, board_id=None):
 
 
 @login_required
+def board_listview(request, board_id):
+    """A plain list: every open card as a row with a tick box, grouped under the board's lists.
+    The same cards as the board, for people who would rather tick things off than move them along."""
+    board, ctx, qs = _scope(request, board_id, "list")
+    by_list = {}
+    for c in qs.order_by("list__position", "position")[:2000]:
+        by_list.setdefault(c.list_id, []).append(c)
+    groups = []
+    for lst in board.lists.filter(is_archived=False):
+        rows = []
+        for c in by_list.get(lst.pk, []):
+            done, total = c.checklist_counts()
+            rows.append({"card": c, "done": done, "total": total})
+        groups.append({"list": lst, "rows": rows})
+    ctx["groups"] = groups
+    return render(request, "boards/view_list.html", ctx)
+
+
+@login_required
 def board_timeline(request, board_id=None):
     """Trello-style timeline: zoom (day/week/month/quarter), grouped by list, member or nothing,
     with each group's undated cards one click away."""

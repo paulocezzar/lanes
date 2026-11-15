@@ -63,7 +63,7 @@ class TodayTests(TestCase):
         page = self.c.get(f"/b/{self.b.pk}/")
         self.assertContains(page, "data-mhead-more")
         self.assertContains(page, 'class="vt-board on"')
-        self.assertContains(page, ">Gantt</a>")          # simple mode: under "More views", still one click away
+        self.assertContains(page, ">Gantt<")          # simple mode: under "More views", still one click away
 
     def test_login_required(self):
         self.assertEqual(Client().get("/today/").status_code, 302)

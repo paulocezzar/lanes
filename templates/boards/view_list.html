@@ -1,0 +1,29 @@
+{% extends base_template %}
+{% load static %}
+{% block board_body %}
+<div class="view-wrap list-view" data-listview>
+  <div class="lv-sheet">
+    {% for g in groups %}
+    <section class="lv-group">
+      <h3 class="lv-head">{{ g.list.title }}<span class="lv-count">{{ g.rows|length }}</span></h3>
+      {% for r in g.rows %}{% with c=r.card %}
+      <div class="lv-row{% if c.is_complete %} done{% endif %}" data-card-open="{{ c.pk }}" data-list="{{ g.list.pk }}" tabindex="0">
+        <button type="button" class="lv-tick{% if c.is_complete %} on{% endif %}" data-lv-tick="{{ c.pk }}"{% if not can_edit %} disabled{% endif %} aria-pressed="{{ c.is_complete|yesno:'true,false' }}" aria-label="Mark “{{ c.title }}” {% if c.is_complete %}not done{% else %}done{% endif %}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 8.3 2.2 2.2 4.8-5"/></svg></button>
+        <span class="lv-title">{{ c.title }}</span>
+        <span class="lv-meta">
+          {% for l in c.labels.all %}{% if l.name %}<span class="tag lc-{{ l.colour }}">{{ l.name }}</span>{% endif %}{% endfor %}
+          {% if r.total %}<span class="badge{% if r.done == r.total %} all-done{% endif %}" title="Checklist">{% include "boards/_icon.html" with i="check" %}{{ r.done }}/{{ r.total }}</span>{% endif %}
+          {% if c.due_at %}<span class="badge due-{{ c.due_state|default:'none' }}">{% include "boards/_icon.html" with i="clock" %}{{ c.due_at|date:"j M" }}</span>{% endif %}
+          {% if c.members.all %}<span class="avatar-row">{% for u in c.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% endfor %}</span>{% endif %}
+        </span>
+      </div>
+      {% endwith %}{% endfor %}
+      {% if can_edit %}<form class="lv-add" data-lv-add="{{ g.list.pk }}"><input name="title" maxlength="250" autocomplete="off" placeholder="Add a card…" aria-label="Add a card to {{ g.list.title }}"></form>{% endif %}
+    </section>
+    {% empty %}
+    <p class="lv-empty">This board has no lists yet. Add one from the Board view.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'lanes/views.js' %}"></script>{% endblock %}

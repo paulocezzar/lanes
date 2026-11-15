@@ -7,6 +7,46 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const canEdit = document.getElementById('board').dataset.canEdit === '1';
 
+  // ---------- List view: tick a card off, or type a new one under a list ----------
+  const lv = $('[data-listview]');
+  if (lv && canEdit) {
+    lv.addEventListener('click', async e => {
+      const t = e.target.closest('[data-lv-tick]');
+      if (!t) return;
+      e.preventDefault();                       // a tick is not "open the card"
+      const row = t.closest('.lv-row'), on = !t.classList.contains('on');
+      t.classList.toggle('on', on); t.setAttribute('aria-pressed', on); row.classList.toggle('done', on);
+      lv.classList.add('view-busy');            // hold live refresh while it saves
+      try {
+        const data = await L.post(`/api/cards/${t.dataset.lvTick}/update/`, { is_complete: on });
+        if (String(data.list_id) !== row.dataset.list || !!data.archived) location.reload();   // it moved (e.g. to Done)
+      } catch { location.reload(); }
+      finally { lv.classList.remove('view-busy'); }
+    });
+    lv.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target.matches('.lv-row')) L.openCard(e.target.dataset.cardOpen);
+    });
+    // typing in an "Add a card…" box holds live refresh, so nothing typed is lost
+    lv.addEventListener('input', () => lv.classList.toggle('view-busy', $$('.lv-add input', lv).some(i => i.value.trim())));
+    lv.addEventListener('submit', async e => {
+      const f = e.target.closest('[data-lv-add]');
+      if (!f) return;
+      e.preventDefault();
+      const title = f.title.value.trim();
+      if (!title) return;
+      f.title.disabled = true;
+      try {
+        await L.post(`/api/lists/${f.dataset.lvAdd}/cards/`, { title, smart_due: true });
+        try { sessionStorage.setItem('lanes-lv-focus', f.dataset.lvAdd); } catch { /* fine */ }
+        location.reload();
+      } catch { f.title.disabled = false; }
+    });
+    try {                                       // after adding, land back in the same box to keep typing
+      const again = sessionStorage.getItem('lanes-lv-focus');
+      if (again) { sessionStorage.removeItem('lanes-lv-focus'); $(`[data-lv-add="${again}"] input`, lv)?.focus(); }
+    } catch { /* fine */ }
+  }
+
   // ---------- Calendar ----------
   const cal = $('[data-calendar]');
   if (cal && canEdit) {

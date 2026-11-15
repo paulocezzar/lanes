@@ -2335,7 +2335,7 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
   .board-head .mhead-more { display: inline-flex; margin-left: auto; }
   .board-head .board-head-right { display: none; }
   .board-head.mopen .board-head-right { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
-  .view-tabs a:not(.vt-board):not(.vt-calendar) { display: none; }
+  .view-tabs a:not(.vt-board):not(.vt-list):not(.vt-calendar) { display: none; }
   /* One list at a time, swipe between them. */
   #lists.lists { scroll-snap-type: x mandatory; }
   #lists.lists > .list { flex: 0 0 calc(100vw - 40px); width: calc(100vw - 40px); max-width: none; scroll-snap-align: center; }
@@ -2419,3 +2419,30 @@ html.simple .list-head .list-collapse, html.simple .list-foot [data-from-templat
 .start-actions .link-btn { margin-left: auto; }
 /* While the panel is up, the small dashed "set up several cards" hint would say the same thing twice. */
 .board:has(#start-panel) .list-empty-hint { display: none; }
+
+/* ---------- List view ---------- */
+.lv-sheet { width: 100%; max-width: 920px; background: var(--surface); color: var(--text); border-radius: 12px; overflow: hidden;
+  box-shadow: 0 1px 3px rgb(0 0 0 / .25); }
+.lv-group + .lv-group { border-top: 6px solid var(--surface-2); }
+.lv-head { margin: 0; padding: 14px 18px 8px; font-size: 15px; }
+.lv-count { margin-left: 8px; color: var(--text-2); font-weight: 500; font-size: 13px; }
+.lv-row { display: flex; align-items: center; gap: 12px; padding: 9px 18px; border-top: 1px solid var(--border); cursor: pointer; }
+.lv-row:hover, .lv-row:focus-visible { background: var(--surface-2); outline: none; }
+.lv-tick { flex: 0 0 22px; width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid var(--text-2); background: none;
+  color: #fff; display: grid; place-items: center; cursor: pointer; }
+.lv-tick:disabled { cursor: default; opacity: .6; }
+.lv-tick svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.lv-tick:not(:disabled):hover { border-color: #22a06b; }
+.lv-tick.on { background: #22a06b; border-color: #22a06b; }
+.lv-tick.on svg { opacity: 1; }
+.lv-title { flex: 1; min-width: 0; font-size: 14px; }
+.lv-row.done .lv-title { text-decoration: line-through; color: var(--text-2); }
+.lv-meta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.lv-add { border-top: 1px solid var(--border); }
+.lv-add input:not([type=checkbox]):not([type=radio]) { width: 100%; border: 0; border-radius: 0; background: none; color: var(--text); font: inherit; font-size: 14px; padding: 11px 18px 12px 52px; }
+.lv-add input:not([type=checkbox])::placeholder { color: var(--text-2); }
+.lv-add input:not([type=checkbox]):not([type=radio]):focus { outline: none; background: var(--surface-2); }
+.lv-empty { margin: 0; padding: 18px; color: var(--text-2); }
+/* "More views": the name, then a line saying what it is */
+.vt-more .menu-panel { min-width: 270px; }
+.vt-more .menu-item small { display: block; font-weight: 400; font-size: 12px; color: var(--text-2); margin-top: 1px; }

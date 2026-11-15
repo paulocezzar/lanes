@@ -8,6 +8,7 @@ from .services import board_people, cards_qs
 
 VIEW_TABS = [
     ("board", "Board", "board"),
+    ("list", "List", "board_list"),
     ("calendar", "Calendar", "board_calendar"),
     ("table", "Table", "board_table"),
     ("timeline", "Timeline", "board_timeline"),
@@ -16,7 +17,19 @@ VIEW_TABS = [
     ("dashboard", "Dashboard", "board_dashboard"),
     ("map", "Map", "board_map"),
 ]
-SIMPLE_TABS = ("board", "calendar")
+SIMPLE_TABS = ("board", "list", "calendar")
+# One line each for the "More views" menu, so nobody has to open a view to find out what it is.
+VIEW_HINTS = {
+    "board": "Cards in columns you move along",
+    "list": "A plain list you tick off",
+    "calendar": "Cards on the days they're due",
+    "table": "Every card in a table you can sort",
+    "timeline": "Cards laid out across the weeks",
+    "swimlanes": "The board split into rows",
+    "gantt": "Bars for how long things take and what waits on what",
+    "dashboard": "Counts and charts for this board",
+    "map": "Cards that have a place, on a map",
+}
 
 
 def board_context(request, board_id, view):
@@ -44,7 +57,7 @@ def board_context(request, board_id, view):
     # Simple mode keeps Board and Calendar (and whichever view is open) as tabs; the rest sit under "More views".
     if getattr(request.user, "simple_mode", False):
         main_tabs = [t for t in VIEW_TABS if t[0] in SIMPLE_TABS or t[0] == view]
-        more_tabs = [t for t in VIEW_TABS if t not in main_tabs]
+        more_tabs = [(*t, VIEW_HINTS.get(t[0], "")) for t in VIEW_TABS if t not in main_tabs]
     else:
         main_tabs, more_tabs = VIEW_TABS, []
     return board, {

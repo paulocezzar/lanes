@@ -56,6 +56,7 @@ urlpatterns = [
     path("all/map/", views_board.board_map, name="all_map"),
     path("b/<int:board_id>/map/", views_board.board_map, name="board_map"),
     path("b/<int:board_id>/calendar/", views_board.board_calendar, name="board_calendar"),
+    path("b/<int:board_id>/list/", views_board.board_listview, name="board_list"),
     path("b/<int:board_id>/table/", views_board.board_table, name="board_table"),
     path("b/<int:board_id>/timeline/", views_board.board_timeline, name="board_timeline"),
     path("b/<int:board_id>/gantt/", views_board.board_gantt, name="board_gantt"),

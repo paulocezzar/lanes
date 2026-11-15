@@ -36,7 +36,7 @@
     </nav>
     {% if more_tabs %}<details class="menu vt-more">
       <summary class="btn light sm" title="Other ways to look at this board">More views</summary>
-      <div class="menu-panel">{% for key, label, url_name in more_tabs %}<a class="menu-item" href="{% url url_name board.pk %}">{{ label }}</a>{% endfor %}</div>
+      <div class="menu-panel">{% for key, label, url_name, hint in more_tabs %}<a class="menu-item" href="{% url url_name board.pk %}">{{ label }}{% if hint %}<small>{{ hint }}</small>{% endif %}</a>{% endfor %}</div>
     </details>{% endif %}
     {% if view == "calendar" or view == "table" or view == "timeline" or view == "dashboard" or view == "map" %}<a class="btn light sm all-toggle" href="{% url 'all_'|add:view %}" title="Show cards from every board you can see">All boards</a>{% endif %}
     <button class="icon-btn light mhead-more" data-mhead-more aria-expanded="false" title="Board tools">{% include "boards/_icon.html" with i="dots" %}</button>

@@ -30,7 +30,7 @@ class SimpleModeTests(TestCase):
             self.assertNotIn(hidden, tabs)
         more = page.split("vt-more")[1].split("</details>")[0]
         for label in ("Table", "Timeline", "Swimlanes", "Gantt", "Dashboard", "Map"):
-            self.assertIn(f">{label}</a>", more)          # still one click away
+            self.assertIn(f">{label}<", more)             # still one click away
 
     def test_a_view_opened_from_more_views_gets_its_tab(self):
         page = self.c.get(f"/b/{self.b.pk}/table/").content.decode()
@@ -112,3 +112,48 @@ class StartPanelTests(TestCase):
         BoardMember.objects.create(board=self.b, user=viewer, role="observer")
         c = Client(); c.force_login(viewer)
         self.assertNotIn('id="start-panel"', c.get(f"/b/{self.b.pk}/").content.decode())
+
+
+class ListViewTests(TestCase):
+    def setUp(self):
+        from .models import Card, Checklist, ChecklistItem
+        ws = Workspace.objects.create(name="Team")
+        self.u = User.objects.create_user("l@x.com", "pw")
+        self.b = Board.objects.create(workspace=ws, title="Plan")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.todo = List.objects.create(board=self.b, title="To do", position=1000)
+        self.done = List.objects.create(board=self.b, title="Finished", position=2000)
+        self.card = Card.objects.create(list=self.todo, title="Ring the supplier", position=1000)
+        ChecklistItem.objects.create(checklist=Checklist.objects.create(card=self.card), text="Find the number")
+        Card.objects.create(list=self.done, title="Old job", position=1000, is_complete=True)
+        Card.objects.create(list=self.todo, title="Put away", position=2000, is_archived=True)
+        self.c = Client(); self.c.force_login(self.u)
+
+    def test_cards_are_rows_grouped_under_their_lists(self):
+        r = self.c.get(f"/b/{self.b.pk}/list/")
+        self.assertEqual(r.status_code, 200)
+        page = r.content.decode()
+        body = page.split("data-listview")[1].split("</main>")[0]
+        self.assertLess(body.index("To do"), body.index("Ring the supplier"))
+        self.assertLess(body.index("Ring the supplier"), body.index("Finished"))
+        self.assertLess(body.index("Finished"), body.index("Old job"))
+        self.assertIn(f'data-card-open="{self.card.pk}"', body); self.assertIn("0/1", body)
+        self.assertIn('class="lv-row done"', body)               # the finished one shows as ticked
+        self.assertNotIn("Put away", body)                         # archived cards stay out
+        self.assertIn(f'data-lv-add="{self.todo.pk}"', body)       # a box to type a new card under each list
+        self.assertIn("vt-list on", page)
+
+    def test_list_is_one_of_the_simple_tabs_and_the_rest_explain_themselves(self):
+        page = self.c.get(f"/b/{self.b.pk}/").content.decode()
+        tabs = page.split('<nav class="view-tabs"')[1].split("</nav>")[0]
+        for key in ("vt-board", "vt-list", "vt-calendar"):
+            self.assertIn(key, tabs)
+        more = page.split("vt-more")[1].split("</details>")[0]
+        self.assertIn("<small>Every card in a table you can sort</small>", more)
+
+    def test_someone_who_can_only_look_gets_no_add_box_and_a_locked_tick(self):
+        viewer = User.objects.create_user("w@x.com", "pw")
+        BoardMember.objects.create(board=self.b, user=viewer, role="observer")
+        c = Client(); c.force_login(viewer)
+        body = c.get(f"/b/{self.b.pk}/list/").content.decode().split("data-listview")[1].split("</main>")[0]
+        self.assertNotIn("data-lv-add", body); self.assertIn("disabled", body)
