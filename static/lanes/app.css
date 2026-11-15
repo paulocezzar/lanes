@@ -2712,3 +2712,21 @@ dialog > .lv-pop { z-index: 5; }
 .fo-palette button:hover { transform: scale(1.15); }
 .fo-palette button.on { box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--text); }
 #field-dialog { overflow: visible; }
+
+/* ---- A little more room inside each card ---- */
+html:is(.simple,.full) .list { flex-basis: 320px; }
+html:is(.simple,.full) .list.collapsed { flex-basis: 44px; }
+html:is(.simple,.full) .list-cards { gap: 12px; padding: 12px 12px 6px; }
+html:is(.simple,.full) .card-tile:not(.cover-full) { padding: 18px 20px 16px; }
+html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-title { font-size: 16px; line-height: 1.4; }
+html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-labels { margin-top: 14px; gap: 8px; }
+html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-fields { margin-top: 10px; gap: 8px; }
+html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-badges { margin-top: 16px; gap: 8px 14px; }
+html:is(.simple,.full) .tile-label:not(:empty) { font-size: 13px; padding: 3px 9px; }
+html:is(.simple,.full) .card-tile:not(.cover-full) .tile-cover { width: calc(100% + 40px); margin: -18px -20px 14px; }
+html:is(.simple,.full) .card-tile .tile-badges .avatar { width: 28px; height: 28px; }
+.tile-empty { width: 28px; height: 28px; }
+html:is(.simple,.full) .tile-check { width: 20px; height: 20px; margin: 1px 10px 0 0; }
+html:is(.simple,.full) .card-tile:hover .tile-check, html:is(.simple,.full) .tile-check.shown { width: 20px; margin-right: 10px; }
+html:is(.simple,.full) .add-card-form { padding: 16px 18px 14px; }
+html:is(.simple,.full) .card-tile .tile-pick.tile-addfield { position: absolute; right: 14px; bottom: 14px; margin: 0; background: var(--card); }
