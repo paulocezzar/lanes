@@ -2049,7 +2049,12 @@ class TrelloTouches2Tests(TestCase):
         r = self.ca.post("/account/theme/", {"colourblind": "1", "only_unread": "1"})
         self.admin.refresh_from_db()
         self.assertTrue(self.admin.colourblind and self.admin.only_unread)
-        self.assertContains(self.ca.get("/"), 'class="cb"')
+        self.assertContains(self.ca.get("/"), 'class="cb simple"')        # everyone starts in simple mode
+        self.assertTrue(self.ca.post("/account/theme/", {"simple_mode": "0"}).json()["simple_mode"] is False)
+        self.assertContains(self.ca.get("/"), 'class="cb full"')
+        self.assertContains(self.ca.get("/"), "Show fewer features")
+        self.ca.post("/account/theme/", {"simple_mode": "1"})
+        self.assertContains(self.ca.get("/"), "Show all features")
         Notification.objects.create(recipient=self.admin, kind="assigned", text="old", read_at=timezone.now())
         Notification.objects.create(recipient=self.admin, kind="assigned", text="fresh")
         html = self.ca.get("/api/notifications/?html=1").json()["html"]

@@ -1,5 +1,5 @@
 {% load static %}<!doctype html>
-<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme }}{% else %}system{% endif %}"{% if user.is_authenticated and user.colourblind %} class="cb"{% endif %}>
+<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme }}{% else %}system{% endif %}"{% if user.is_authenticated %} class="{% if user.colourblind %}cb {% endif %}{% if user.simple_mode %}simple{% else %}full{% endif %}"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -102,6 +102,7 @@
             </div>
           </div>
           <button type="button" class="menu-item" data-colourblind="{{ user.colourblind|yesno:'0,1' }}">{% include "boards/_icon.html" with i="palette" %}<span data-cb-label>{% if user.colourblind %}Turn off colour-blind friendly mode{% else %}Enable colour-blind friendly mode{% endif %}</span></button>
+          <button type="button" class="menu-item" data-simple-mode="{{ user.simple_mode|yesno:'0,1' }}">{% include "boards/_icon.html" with i="sparkle" %}<span>{% if user.simple_mode %}Show all features{% else %}Show fewer features (simple view){% endif %}</span></button>
           <a class="menu-item" href="{% url 'export_all' %}">{% include "boards/_icon.html" with i="download" %}Export all my boards</a>
           <hr>
           <button type="button" class="menu-item" data-show-shortcuts>{% include "boards/_icon.html" with i="keyboard" %}Shortcuts <kbd class="menu-kbd">?</kbd></button>
@@ -129,6 +130,12 @@
       const fd = new FormData(); fd.append('theme', theme);
       await fetch('{% url "set_theme" %}', { method: 'POST', body: fd, credentials: 'same-origin',
         headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
+    }));
+    document.querySelectorAll('[data-simple-mode]').forEach(b => b.addEventListener('click', async () => {
+      const fd = new FormData(); fd.append('simple_mode', b.dataset.simpleMode);
+      await fetch('{% url "set_theme" %}', { method: 'POST', body: fd, credentials: 'same-origin',
+        headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
+      location.reload();
     }));
     document.querySelectorAll('[data-sub-toggle]').forEach(t => t.addEventListener('click', e => {
       e.preventDefault();

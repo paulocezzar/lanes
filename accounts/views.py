@@ -8,19 +8,20 @@ from .models import User
 @login_required
 @require_POST
 def set_theme(request):
-    """Small per-person display preferences: theme, colour-blind labels, only-unread notifications."""
+    """Small per-person display preferences: theme, colour-blind labels, only-unread notifications, simple mode."""
     u, changed = request.user, []
     theme = request.POST.get("theme")
     if theme in dict(User.THEMES):
         u.theme = theme
         changed.append("theme")
-    for flag in ("colourblind", "only_unread", "welcomed"):
+    for flag in ("colourblind", "only_unread", "welcomed", "simple_mode"):
         if flag in request.POST:
             setattr(u, flag, request.POST[flag] in ("1", "true", "on"))
             changed.append(flag)
     if changed:
         u.save(update_fields=changed)
-    return JsonResponse({"theme": u.theme, "colourblind": u.colourblind, "only_unread": u.only_unread})
+    return JsonResponse({"theme": u.theme, "colourblind": u.colourblind, "only_unread": u.only_unread,
+                         "simple_mode": u.simple_mode})
 
 
 # ---------- forgot password / set password from an email link ----------

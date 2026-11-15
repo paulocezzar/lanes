@@ -47,6 +47,8 @@ class User(AbstractUser):
     hourly_rate = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)  # for labour cost
     colourblind = models.BooleanField(default=False)       # patterns on labels as well as colour
     welcomed = models.BooleanField(default=False)          # has dismissed the first-time welcome
+    # Simple mode shows the everyday controls only; everything else is one switch away ("Show all features").
+    simple_mode = models.BooleanField(default=True)
     only_unread = models.BooleanField(default=False)       # notifications panel: hide read ones
     email_notifications = models.CharField(max_length=10, choices=EMAIL_PREFS, default="daily")
     last_digest_on = models.DateField(null=True, blank=True)
