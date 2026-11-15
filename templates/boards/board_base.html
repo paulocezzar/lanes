@@ -30,7 +30,7 @@
       </div>
       {% endif %}
     </div>
-    <button class="icon-btn light switch-btn" data-switch-boards title="Switch boards (s)">⇄</button>
+    {% if not user.simple_mode %}<button class="icon-btn light switch-btn" data-switch-boards title="Switch boards (s)">⇄</button>{% endif %}
     <nav class="view-tabs" aria-label="Views">
       {% for key, label, url_name in view_tabs %}<a href="{% url url_name board.pk %}" class="vt-{{ key }}{% if key == view %} on{% endif %}">{{ label }}</a>{% endfor %}
     </nav>
@@ -81,6 +81,23 @@
         {% for u in people|slice:":6" %}<button type="button" class="av-btn" data-member-card="{{ u.pk }}" aria-label="{{ u.display_name }}">{% include "boards/_avatar.html" %}</button>{% endfor %}
         {% if people|length > 6 %}<span class="avatar more">+{{ people|length|add:"-6" }}</span>{% endif %}
       </div>
+      {% if user.simple_mode %}
+      {% if me %}
+      <button class="btn light" data-open-share>{% include "boards/_icon.html" with i="share" %}Share</button>
+      {% else %}
+      <button class="btn light" data-join>Join board</button>
+      {% endif %}
+      <details class="menu head-more">
+        <summary class="btn light" title="More things you can do with this board">More</summary>
+        <div class="menu-panel right">
+          {% if me %}<button type="button" class="menu-item{% if me.starred %} on{% endif %}" data-star>★ Star this board</button>{% endif %}
+          <button type="button" class="menu-item{% if watching_board %} on{% endif %}" data-watch-board>👁 Watch this board</button>
+          <button type="button" class="menu-item" data-switch-boards>⇄ Switch boards</button>
+          <a class="menu-item" href="{% url 'board_automation' board.pk %}">⚡ Automation</a>
+          <button type="button" class="menu-item" data-open-drawer>Board menu and settings…</button>
+        </div>
+      </details>
+      {% else %}
       {% if me %}
       <button class="icon-btn light{% if me.starred %} on{% endif %}" data-star title="Star board">{% include "boards/_icon.html" with i="star" %}</button>
       {% endif %}
@@ -92,6 +109,7 @@
       {% endif %}
       <a class="icon-btn light{% if view == 'automation' %} on{% endif %}" href="{% url 'board_automation' board.pk %}" title="Automation">{% include "boards/_icon.html" with i="bolt" %}</a>
       <button class="icon-btn light" data-open-drawer title="Menu">{% include "boards/_icon.html" with i="dots" %}</button>
+      {% endif %}
     </div>
   </header>
 
@@ -99,7 +117,7 @@
 
   {% block board_body %}{% endblock %}
 </main>
-<script>/* Simple mode: the "More views" menu closes once something is picked, or on a click elsewhere. */
+<script>/* Simple mode: the "More" and "More views" menus close once something is picked, or on a click elsewhere. */
   document.addEventListener('click', e => {
     document.querySelectorAll('.board-head details.menu[open]').forEach(d => {
       if (!d.contains(e.target) || e.target.closest('.menu-item')) d.removeAttribute('open');

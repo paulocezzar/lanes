@@ -37,3 +37,24 @@ class SimpleModeTests(TestCase):
         tabs = page.split('<nav class="view-tabs"')[1].split("</nav>")[0]
         self.assertIn("vt-table on", tabs)
         self.assertTrue(User.objects.get(pk=self.u.pk).simple_mode)      # opening it doesn't switch modes
+
+    def test_simple_header_names_every_control(self):
+        page = self.c.get(f"/b/{self.b.pk}/").content.decode()
+        head = page.split('<header class="board-head">')[1].split("</header>")[0]
+        for label in ("Star this board", "Watch this board", "Switch boards", "Automation", "Board menu and settings"):
+            self.assertIn(label, head)
+        self.assertNotIn('class="icon-btn light switch-btn"', head)
+        for attr in ("data-star", "data-watch-board", "data-open-drawer", "data-switch-boards"):
+            self.assertEqual(head.count(attr), 1)           # the scripts bind to one of each
+        self.assertIn("Collapse list", page); self.assertIn("Add a card from a template", page)
+
+    def test_full_mode_is_the_board_as_it_was(self):
+        self.full()
+        page = self.c.get(f"/b/{self.b.pk}/").content.decode()
+        head = page.split('<header class="board-head">')[1].split("</header>")[0]
+        for key in ("board", "calendar", "table", "timeline", "swimlanes", "gantt", "dashboard", "map"):
+            self.assertIn(f"vt-{key}", head)
+        self.assertNotIn("vt-more", head); self.assertNotIn('class="menu head-more"', head)
+        self.assertIn('class="icon-btn light switch-btn"', head)
+        for attr in ("data-star", "data-watch-board", "data-open-drawer", "data-switch-boards"):
+            self.assertEqual(head.count(attr), 1)

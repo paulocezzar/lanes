@@ -2375,3 +2375,9 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 .board-head details.menu > summary::-webkit-details-marker { display: none; }
 .board-head .menu-panel .menu-item { color: var(--text); font-weight: 500; font-size: 14px; }
 .vt-more > summary::after { content: " ▾"; opacity: .8; }
+.head-more > summary::after { content: " ▾"; opacity: .8; }
+.head-more .menu-item.on::after { content: "  ✓"; color: var(--accent, #579dff); font-weight: 700; }
+/* Controls that only exist to give simple mode a labelled way in. */
+html:not(.simple) .simple-only { display: none; }
+/* Simple mode: the unlabelled list icons go; the same actions are in the list's ⋯ menu, by name. */
+html.simple .list-head .list-collapse, html.simple .list-foot [data-from-template] { display: none; }
