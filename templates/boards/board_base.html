@@ -117,6 +117,7 @@
 
   {% block board_body %}{% endblock %}
 </main>
+{% if can_edit and not board.is_template %}{% if view == "board" or view == "list" or view == "calendar" %}<aside class="explore-bar" id="explore-bar" data-view="{{ view }}" data-user="{{ user.pk }}" aria-label="Tips for this board" hidden></aside>{% endif %}{% endif %}
 <script>/* Simple mode: the "More" and "More views" menus close once something is picked, or on a click elsewhere. */
   document.addEventListener('click', e => {
     document.querySelectorAll('.board-head details.menu[open]').forEach(d => {
@@ -491,4 +492,5 @@ Setup:
 <script src="{% static 'lanes/vendor/Sortable.min.js' %}"></script>
 <script src="{% static 'lanes/inbox.js' %}"></script>
 <script src="{% static 'lanes/board.js' %}"></script>
+<script src="{% static 'lanes/explore.js' %}"></script>
 {% endblock %}

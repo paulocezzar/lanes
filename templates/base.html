@@ -102,6 +102,7 @@
             </div>
           </div>
           <button type="button" class="menu-item" data-colourblind="{{ user.colourblind|yesno:'0,1' }}">{% include "boards/_icon.html" with i="palette" %}<span data-cb-label>{% if user.colourblind %}Turn off colour-blind friendly mode{% else %}Enable colour-blind friendly mode{% endif %}</span></button>
+          <button type="button" class="menu-item" data-show-tips="{{ user.pk }}">{% include "boards/_icon.html" with i="info" %}<span>Show the tips again</span></button>
           <button type="button" class="menu-item" data-simple-mode="{{ user.simple_mode|yesno:'0,1' }}">{% include "boards/_icon.html" with i="sparkle" %}<span>{% if user.simple_mode %}Show all features{% else %}Show fewer features (simple view){% endif %}</span></button>
           <a class="menu-item" href="{% url 'export_all' %}">{% include "boards/_icon.html" with i="download" %}Export all my boards</a>
           <hr>
@@ -141,6 +142,10 @@
       const fd = new FormData(); fd.append('theme', theme);
       await fetch('{% url "set_theme" %}', { method: 'POST', body: fd, credentials: 'same-origin',
         headers: { 'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content } });
+    }));
+    document.querySelectorAll('[data-show-tips]').forEach(b => b.addEventListener('click', () => {
+      try { localStorage.removeItem('lanes-explore-u' + b.dataset.showTips); } catch (e) {}
+      location.reload();
     }));
     document.querySelectorAll('[data-simple-mode]').forEach(b => b.addEventListener('click', async () => {
       const fd = new FormData(); fd.append('simple_mode', b.dataset.simpleMode);

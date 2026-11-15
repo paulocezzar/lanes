@@ -202,3 +202,14 @@ class PlainBackgroundTests(TestCase):
         b = Board.objects.create(workspace=self.ws, title="Old", background="dusk")
         BoardMember.objects.create(board=b, user=self.u, role="admin")
         self.assertIn("bg-dusk", self.c.get(f"/b/{b.pk}/").content.decode().split("<main")[1].split(">")[0])
+
+
+class ExploreBarTests(ListViewTests):
+    """The tips bar is offered on the three everyday views, to people who can edit."""
+
+    def test_tips_bar_is_on_board_list_and_calendar_only(self):
+        for path, shown in (("", True), ("list/", True), ("calendar/", True), ("table/", False)):
+            body = self.c.get(f"/b/{self.b.pk}/{path}").content.decode()
+            self.assertEqual('id="explore-bar"' in body, shown, path)
+        self.assertIn("lanes/explore.js", body)
+        self.assertIn("data-show-tips", body)
