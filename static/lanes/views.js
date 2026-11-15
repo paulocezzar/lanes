@@ -23,6 +23,58 @@
       } catch { location.reload(); }
       finally { lv.classList.remove('view-busy'); }
     });
+    // Click a row's People or Due cell to set it there, without opening the card.
+    const pops = { people: $('[data-lv-pop="people"]', lv), due: $('[data-lv-pop="due"]', lv) };
+    let editing = null, changed = false;
+    const closePops = () => {
+      Object.values(pops).forEach(p => p && (p.hidden = true));
+      lv.classList.remove('view-busy');
+      if (changed) location.reload();          // redraw the row from what was saved
+      editing = null;
+    };
+    const openPop = (kind, cell) => {
+      Object.values(pops).forEach(p => p && (p.hidden = true));
+      const pop = pops[kind], r = cell.getBoundingClientRect();
+      editing = { kind, cell, id: cell.closest('.lv-row').dataset.cardOpen };
+      lv.classList.add('view-busy');
+      if (kind === 'people') {
+        const on = new Set(cell.dataset.members.trim().split(/\s+/).filter(Boolean));
+        $$('[data-lv-person]', pop).forEach(b => b.classList.toggle('on', on.has(b.dataset.lvPerson)));
+      } else { pop.day.value = cell.dataset.due || ''; }
+      pop.hidden = false;
+      pop.style.left = `${Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8))}px`;
+      pop.style.top = `${r.bottom + 4 + pop.offsetHeight > innerHeight ? Math.max(8, r.top - pop.offsetHeight - 4) : r.bottom + 4}px`;
+      if (kind === 'due') pop.day.focus();
+    };
+    lv.addEventListener('click', async e => {
+      const cell = e.target.closest('[data-lv-edit]');
+      if (cell) { e.preventDefault(); return editing?.cell === cell ? closePops() : openPop(cell.dataset.lvEdit, cell); }
+      const person = e.target.closest('[data-lv-person]');
+      if (person && editing) {
+        person.disabled = true;
+        try {
+          await L.post(`/api/cards/${editing.id}/members/`, { user_id: +person.dataset.lvPerson });
+          person.classList.toggle('on'); changed = true;
+        } finally { person.disabled = false; }
+        return;
+      }
+      if (e.target.closest('[data-lv-due-clear]') && editing) {
+        await L.post(`/api/cards/${editing.id}/update/`, { due_at: '' });
+        changed = true; return closePops();
+      }
+    });
+    pops.due?.addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!editing) return;
+      const day = pops.due.day.value;
+      await L.post(`/api/cards/${editing.id}/update/`, { due_at: day ? `${day}T${editing.cell.dataset.time || '17:00'}` : '' });
+      changed = true; closePops();
+    });
+    document.addEventListener('click', e => {
+      if (editing && !e.target.closest('.lv-pop') && !e.target.closest('[data-lv-edit]')) closePops();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && editing) closePops(); });
+
     lv.addEventListener('click', e => {       // fold a list's rows away, and remember it for this visit
       const f = e.target.closest('[data-lv-fold]');
       if (!f) return;

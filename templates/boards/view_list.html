@@ -2,6 +2,7 @@
 {% load static %}
 {% block board_body %}
 <div class="view-wrap list-view" data-listview>
+  {% include "boards/_start_panel.html" %}
   <div class="lv-sheet">
     <div class="lv-grid lv-colhead" aria-hidden="true"><span>Card</span><span>People</span><span>Due</span><span>Labels</span><span>Checklist</span></div>
     {% for g in groups %}
@@ -14,8 +15,8 @@
           <button type="button" class="lv-tick{% if c.is_complete %} on{% endif %}" data-lv-tick="{{ c.pk }}"{% if not can_edit %} disabled{% endif %} aria-pressed="{{ c.is_complete|yesno:'true,false' }}" aria-label="Mark “{{ c.title }}” {% if c.is_complete %}not done{% else %}done{% endif %}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 8.3 2.2 2.2 4.8-5"/></svg></button>
           <span class="lv-title">{{ c.title }}</span>
         </span>
-        <span class="lv-cell lv-people">{% for u in c.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% empty %}<i class="lv-nobody" title="Nobody yet">{% include "boards/_icon.html" with i="person" %}</i>{% endfor %}{% if c.members.all|length == 1 %}<span class="lv-who">{{ c.members.all.0.display_name }}</span>{% endif %}</span>
-        <span class="lv-cell">{% if c.due_at %}<span class="badge due-{{ c.due_state|default:'none' }}">{{ c.due_at|date:"j M" }}</span>{% else %}<span class="lv-none">—</span>{% endif %}</span>
+        <span class="lv-cell lv-people"{% if can_edit %} data-lv-edit="people" data-members="{% for u in c.members.all %}{{ u.pk }} {% endfor %}" title="Choose who is on this card"{% endif %}>{% for u in c.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% empty %}<i class="lv-nobody" title="Nobody yet">{% include "boards/_icon.html" with i="person" %}</i>{% endfor %}{% if c.members.all|length == 1 %}<span class="lv-who">{{ c.members.all.0.display_name }}</span>{% endif %}</span>
+        <span class="lv-cell"{% if can_edit %} data-lv-edit="due" data-due="{{ c.due_at|date:'Y-m-d' }}" data-time="{{ c.due_at|date:'H:i' }}" title="Set the due date"{% endif %}>{% if c.due_at %}<span class="badge due-{{ c.due_state|default:'none' }}">{{ c.due_at|date:"j M" }}</span>{% else %}<span class="lv-none">—</span>{% endif %}</span>
         <span class="lv-cell lv-labels">{% for l in c.labels.all %}<span class="tile-label lc-{{ l.colour }}" title="{{ l }}">{% if l.name %}{{ l.name }}{% endif %}</span>{% endfor %}</span>
         <span class="lv-cell">{% if r.total %}<span class="badge{% if r.done == r.total %} all-done{% endif %}" title="Checklist">{% include "boards/_icon.html" with i="check" %}{{ r.done }}/{{ r.total }}</span>{% else %}<span class="lv-none">—</span>{% endif %}</span>
       </div>
@@ -27,6 +28,17 @@
     <p class="lv-empty">This board has no lists yet. Add one from the Board view.</p>
     {% endfor %}
   </div>
+  {% if can_edit %}
+  <div class="pop lv-pop" data-lv-pop="people" hidden>
+    <div class="pop-head">Who is on this card?</div>
+    {% for u in people %}<button type="button" class="lv-pick" data-lv-person="{{ u.pk }}">{% include "boards/_avatar.html" with size="sm" %}<span>{{ u.display_name }}</span><i class="lv-picked" aria-hidden="true">✓</i></button>{% endfor %}
+  </div>
+  <form class="pop lv-pop" data-lv-pop="due" hidden>
+    <div class="pop-head">Due date</div>
+    <input type="date" name="day" aria-label="Due date">
+    <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-lv-due-clear>No date</button></div>
+  </form>
+  {% endif %}
 </div>
 {% endblock %}
 {% block scripts %}{{ block.super }}<script src="{% static 'lanes/views.js' %}"></script>{% endblock %}

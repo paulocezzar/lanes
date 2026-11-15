@@ -143,6 +143,25 @@ class ListViewTests(TestCase):
         self.assertIn(f'data-lv-add="{self.todo.pk}"', body)       # a box to type a new card under each list
         self.assertIn("vt-list on", page)
 
+    def test_people_and_due_can_be_set_from_the_row(self):
+        body = self.c.get(f"/b/{self.b.pk}/list/").content.decode().split("data-listview")[1].split("</main>")[0]
+        self.assertIn('data-lv-edit="people"', body); self.assertIn('data-lv-edit="due"', body)
+        self.assertIn('data-lv-pop="people"', body); self.assertIn(f'data-lv-person="{self.u.pk}"', body)
+        # the two calls the row makes
+        r = self.c.post(f"/api/cards/{self.card.pk}/members/", {"user_id": self.u.pk}, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        r = self.c.post(f"/api/cards/{self.card.pk}/update/", {"due_at": "2027-01-15T17:00"}, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        body = self.c.get(f"/b/{self.b.pk}/list/").content.decode().split("data-listview")[1].split("</main>")[0]
+        self.assertIn(f'data-members="{self.u.pk} "', body); self.assertIn('data-due="2027-01-15"', body); self.assertIn("15 Jan", body)
+
+    def test_an_empty_board_asks_what_needs_doing_on_the_list_view_too(self):
+        empty = Board.objects.create(workspace=self.b.workspace, title="Blank")
+        BoardMember.objects.create(board=empty, user=self.u, role="admin")
+        List.objects.create(board=empty, title="To do", position=1000)
+        self.assertIn('id="start-panel"', self.c.get(f"/b/{empty.pk}/list/").content.decode())
+        self.assertNotIn('id="start-panel"', self.c.get(f"/b/{self.b.pk}/list/").content.decode())
+
     def test_list_is_one_of_the_simple_tabs_and_the_rest_explain_themselves(self):
         page = self.c.get(f"/b/{self.b.pk}/").content.decode()
         tabs = page.split('<nav class="view-tabs"')[1].split("</nav>")[0]

@@ -337,23 +337,22 @@
       const ta = e.target.lines;
       const lines = ta.value.split(/\n+/).map(t => t.trim()).filter(Boolean).slice(0, 100);
       if (!lines.length) return ta.focus();
-      const listEl = $(`.list[data-list-id="${startPanel.dataset.startList}"]`, listsEl);
+      const listId = startPanel.dataset.startList;
+      const listEl = $(`.list[data-list-id="${listId}"]`, listsEl);        // only there on the Board view
       const btn = $('.btn.primary', startPanel);
       btn.disabled = true;
       let made = 0;
       try {
         for (const title of lines) {
-          const data = await post(`/api/lists/${listEl.dataset.listId}/cards/`, { title: title.slice(0, 250), smart_due: false });
-          $('[data-list-cards]', listEl).appendChild(fromHTML(data.tile));
+          const data = await post(`/api/lists/${listId}/cards/`, { title: title.slice(0, 250), smart_due: false });
+          if (listEl) $('[data-list-cards]', listEl).appendChild(fromHTML(data.tile));
           made += 1;
         }
       } finally {
         btn.disabled = false;
-        if (made) { refreshCounts(); closeStart(); toast(`Added ${made} card${made === 1 ? '' : 's'}. Click one to add a date or a checklist.`); }
+        if (made && !listEl) location.reload();                             // List view: show them as rows
+        else if (made) { refreshCounts(); closeStart(); toast(`Added ${made} card${made === 1 ? '' : 's'}. Click one to add a date or a checklist.`); }
       }
-    });
-    $('[data-start-describe]', startPanel)?.addEventListener('click', () => {
-      $(`.list[data-list-id="${startPanel.dataset.startList}"] [data-new-product]`, listsEl)?.click();
     });
     $('[data-start-skip]', startPanel)?.addEventListener('click', () => {
       try { sessionStorage.setItem(skipKey, '1'); } catch { /* fine */ }
@@ -437,6 +436,7 @@
   function openProductDialog(listId) { openSetup(listId); }
   window.LanesSetupCards = openSetup;
   document.addEventListener('click', e => { if (e.target.closest('[data-setup-board]')) { $('[data-close-drawer]')?.click(); openSetup(); } });
+  if (location.hash === '#setup' && setupDlg) { history.replaceState(null, '', location.pathname); openSetup(); }   // arriving from the List view's start panel
   setupDlg?.addEventListener('click', e => {
     const tab = e.target.closest('[data-su-tab]');
     if (tab) return suTab(tab.dataset.suTab);

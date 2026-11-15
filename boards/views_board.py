@@ -134,6 +134,10 @@ def board_listview(request, board_id):
             rows.append({"card": c, "done": done, "total": total})
         groups.append({"list": lst, "rows": rows})
     ctx["groups"] = groups
+    ctx["lists"] = [g["list"] for g in groups]
+    # No cards yet: ask "What needs doing?" here too, the same as on the Board view.
+    ctx["start_panel"] = bool(ctx["can_edit"] and groups and not board.is_template and not any(g["rows"] for g in groups)
+                              and not any(m for g in groups for m in g["list"].mirrors.all()))
     return render(request, "boards/view_list.html", ctx)
 
 

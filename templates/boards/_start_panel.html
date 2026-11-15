@@ -1,0 +1,14 @@
+{% if start_panel %}
+<section class="start-panel" id="start-panel" data-start-list="{{ lists.0.pk }}" aria-label="Start this board">
+  <h2>What needs doing?</h2>
+  <p>Type one thing per line. Each line becomes a card in “{{ lists.0.title }}” — you can add dates, people and checklists to them afterwards.</p>
+  <form data-start-form>
+    <textarea name="lines" rows="5" maxlength="6000" placeholder="Agree the budget&#10;Book the first meeting&#10;Write the plan" aria-label="What needs doing, one per line"></textarea>
+    <div class="start-actions">
+      <button class="btn primary">Add these cards</button>
+      {% if view == "board" %}<button type="button" class="btn ghost" data-setup-board>Describe it instead — Lanes writes the cards</button>{% else %}<a class="btn ghost" href="{% url 'board' board.pk %}#setup">Describe it instead — Lanes writes the cards</a>{% endif %}
+      <button type="button" class="link-btn" data-start-skip>Skip for now</button>
+    </div>
+  </form>
+</section>
+{% endif %}
