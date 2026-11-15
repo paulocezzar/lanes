@@ -2529,76 +2529,75 @@ html.simple .list-head .list-collapse, html.simple .list-foot [data-from-templat
 body:has(.dock:not(.mini)) .explore-bar { bottom: 76px; }   /* sit above the bottom tool bar, not under it */
 body:has(.dock:not(.mini)) .board:has(~ .explore-bar:not([hidden])) .lists, body:has(.dock:not(.mini)) .board:has(~ .explore-bar:not([hidden])) .view-wrap { padding-bottom: 190px; }
 
-/* Board look (Simple mode): list name with its count beside it and the list buttons on hover;
+/* Board look (both modes): list name with its count beside it and the list buttons on hover;
    cards read top-down as tick + title, labels, then people and date. */
-html.simple .list { flex-basis: 300px; border-radius: 12px; }
-html.simple .list.collapsed { flex-basis: 44px; }
-html.simple .list-head { padding: 12px 10px 8px 14px; gap: 4px; }
-html.simple .list-title { flex: 0 1 auto; font-size: 16px; font-weight: 700; padding: 4px 4px; }
-html.simple .list-count { margin-right: auto; padding-left: 4px; font-size: 14px; }
-html.simple .list-head .list-collapse { display: none; }                 /* "Collapse list" is in the list's menu */
-html.simple .list-head .list-add, html.simple .list-head > .menu { opacity: 0; transition: opacity .12s; }
-html.simple .list:hover .list-head .list-add, html.simple .list:hover .list-head > .menu,
-html.simple .list-head:focus-within .list-add, html.simple .list-head:focus-within > .menu, html.simple .list-head > .menu[open] { opacity: 1; }
-@media (hover: none) { html.simple .list-head .list-add, html.simple .list-head > .menu { opacity: 1; } }
-html.simple .list-cards { gap: 10px; padding: 4px 10px; }
-html.simple .list-foot { padding: 6px 10px 10px; }
+html:is(.simple,.full) .list { flex-basis: 300px; border-radius: 12px; }
+html:is(.simple,.full) .list.collapsed { flex-basis: 44px; }
+html:is(.simple,.full) .list-head { padding: 12px 10px 8px 14px; gap: 4px; }
+html:is(.simple,.full) .list-title { flex: 0 1 auto; font-size: 16px; font-weight: 700; padding: 4px 4px; }
+html:is(.simple,.full) .list-count { margin-right: auto; padding-left: 4px; font-size: 14px; }
+html:is(.simple,.full) .list-head .list-collapse { display: none; }                 /* "Collapse list" is in the list's menu */
+html:is(.simple,.full) .list-head .list-add, html:is(.simple,.full) .list-head > .menu { opacity: 0; transition: opacity .12s; }
+html:is(.simple,.full) .list:hover .list-head .list-add, html:is(.simple,.full) .list:hover .list-head > .menu,
+html:is(.simple,.full) .list-head:focus-within .list-add, html:is(.simple,.full) .list-head:focus-within > .menu, html:is(.simple,.full) .list-head > .menu[open] { opacity: 1; }
+@media (hover: none) { html:is(.simple,.full) .list-head .list-add, html:is(.simple,.full) .list-head > .menu { opacity: 1; } }
+html:is(.simple,.full) .list-cards { gap: 10px; padding: 4px 10px; }
+html:is(.simple,.full) .list-foot { padding: 6px 10px 10px; }
 
-html.simple .card-tile:not(.cover-full) { display: flex; flex-direction: column; padding: 14px 16px; border-radius: 10px; }
-html.simple .card-tile:not(.cover-full) > .tile-title { order: 1; font-size: 15px; font-weight: 500; line-height: 1.35; }
-html.simple .card-tile:not(.cover-full) > .tile-labels { order: 2; margin: 10px 0 0; }
-html.simple .card-tile:not(.cover-full) > .tile-progress, html.simple .card-tile:not(.cover-full) > .tile-fields,
-html.simple .card-tile:not(.cover-full) > .tile-risk { order: 3; }
-html.simple .card-tile:not(.cover-full) > .tile-badges { order: 4; margin-top: 12px; gap: 6px 12px; font-size: 13px; }
-html.simple .card-tile:not(.cover-full) .tile-cover { width: calc(100% + 32px); margin: -14px -16px 12px; border-radius: 10px 10px 0 0; flex: none; }
-html.simple .tile-label:not(:empty) { font-size: 12.5px; padding: 2px 8px; }
-html.simple .tile-check { width: 18px; height: 18px; margin: 1px 8px 0 0; opacity: 1; }      /* the tick is always there, not only on hover */
-html.simple .card-tile:hover .tile-check, html.simple .tile-check.shown { width: 18px; margin-right: 8px; }
-html.simple .tile-check:not(.on) { color: var(--text-2); }
-html.simple .tile-check:not(.on) svg { opacity: .55; }
-html.simple .tile-badges .tile-members { order: -2; margin: 0 2px 0 0; }                    /* people first, then the date */
-html.simple .tile-badges .badge[class*="due-"] { order: -1; }
+html:is(.simple,.full) .card-tile:not(.cover-full) { display: flex; flex-direction: column; padding: 14px 16px; border-radius: 10px; }
+html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-title { order: 1; font-size: 15px; font-weight: 500; line-height: 1.35; }
+html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-labels { order: 2; margin: 10px 0 0; }
+html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-progress, html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-fields,
+html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-risk { order: 3; }
+html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-badges { order: 4; margin-top: 12px; gap: 6px 12px; font-size: 13px; }
+html:is(.simple,.full) .card-tile:not(.cover-full) .tile-cover { width: calc(100% + 32px); margin: -14px -16px 12px; border-radius: 10px 10px 0 0; flex: none; }
+html:is(.simple,.full) .tile-label:not(:empty) { font-size: 12.5px; padding: 2px 8px; }
+html:is(.simple,.full) .tile-check { width: 18px; height: 18px; margin: 1px 8px 0 0; opacity: 1; }      /* the tick is always there, not only on hover */
+html:is(.simple,.full) .card-tile:hover .tile-check, html:is(.simple,.full) .tile-check.shown { width: 18px; margin-right: 8px; }
+html:is(.simple,.full) .tile-check:not(.on) { color: var(--text-2); }
+html:is(.simple,.full) .tile-check:not(.on) svg { opacity: .55; }
+html:is(.simple,.full) .tile-badges .tile-members { order: -2; margin: 0 2px 0 0; }                    /* people first, then the date */
+html:is(.simple,.full) .tile-badges .badge[class*="due-"] { order: -1; }
 
-/* ---- Board, Asana-style (Simple mode) ---- */
+/* ---- Board, Asana-style (both modes) ---- */
 /* Page header in three rows on a computer: name and sharing; the views; then the tools for this view. */
 @media (min-width: 901px) {
-  html.simple .board-head { row-gap: 8px; padding: 14px 20px 10px; align-items: center; }
-  html.simple .board-head > .board-title { order: 1; font-size: 22px; font-weight: 700; }
-  html.simple .board-head > .vis-wrap { order: 1; }
-  html.simple .board-head > .board-head-right { display: contents; }
-  html.simple .board-head-right > * { order: 2; }
-  html.simple .board-head-right > .avatar-stack { margin-left: auto; }
-  html.simple .board-head-right:not(:has(.avatar-stack)) > :first-child { margin-left: auto; }
-  html.simple .board-head::before { content: ""; order: 3; flex-basis: 100%; height: 0; }
-  html.simple .board-head > .view-tabs, html.simple .board-head > .vt-more, html.simple .board-head > .all-toggle { order: 4; }
-  html.simple .board-head:has(.head-add, .filter-wrap)::after { content: ""; order: 5; flex-basis: 100%; height: 1px; background: currentColor; opacity: .14; margin: 2px 0; }
-  html.simple .board-head { color: #fff; }
-  html.simple .board.bg-light .board-head { color: #172b4d; }
-  html.simple .board-head > .head-add { order: 6; }
-  html.simple .board-head-right > .filter-wrap { order: 6; margin-left: auto; }
-  html.simple .board-head:has(.head-add) .filter-wrap { margin-left: auto; }
-  html.simple .board-head-right > .press-btn { order: 6; }
-  html.simple .view-tabs { background: none !important; padding: 0; gap: 4px; }
-  html.simple .view-tabs a { font-size: 15px; font-weight: 500; padding: 6px 12px; border-radius: 8px; }
-  html.simple .board-head .menu-panel, html.simple .board-head .pop { color: var(--text); }
+  html:is(.simple,.full) .board-head { row-gap: 8px; padding: 14px 20px 10px; align-items: center; }
+  html:is(.simple,.full) .board-head > .board-title { order: 1; font-size: 22px; font-weight: 700; }
+  html:is(.simple,.full) .board-head > .vis-wrap { order: 1; }
+  html:is(.simple,.full) .board-head > .board-head-right { display: contents; }
+  html:is(.simple,.full) .board-head-right > * { order: 2; }
+  html:is(.simple,.full) .board-head-right > .avatar-stack { margin-left: auto; }
+  html:is(.simple,.full) .board-head-right:not(:has(.avatar-stack)) > :first-child { margin-left: auto; }
+  html:is(.simple,.full) .board-head::before { content: ""; order: 3; flex-basis: 100%; height: 0; }
+  html:is(.simple,.full) .board-head > .view-tabs, html:is(.simple,.full) .board-head > .vt-more, html:is(.simple,.full) .board-head > .all-toggle { order: 4; }
+  html:is(.simple,.full) .board-head:has(.head-add, .filter-wrap)::after { content: ""; order: 5; flex-basis: 100%; height: 1px; background: currentColor; opacity: .14; margin: 2px 0; }
+  html:is(.simple,.full) .board-head { color: #fff; }
+  html:is(.simple,.full) .board.bg-light .board-head { color: #172b4d; }
+  html:is(.simple,.full) .board-head > .head-add { order: 6; }
+  html:is(.simple,.full) .board-head-right > .filter-wrap { order: 6; margin-left: auto; }
+  html:is(.simple,.full) .board-head:has(.head-add) .filter-wrap { margin-left: auto; }
+  html:is(.simple,.full) .board-head-right > .press-btn { order: 6; }
+  html:is(.simple,.full) .view-tabs { background: none !important; padding: 0; gap: 4px; }
+  html:is(.simple,.full) .view-tabs a { font-size: 15px; font-weight: 500; padding: 6px 12px; border-radius: 8px; }
+  html:is(.simple,.full) .board-head .menu-panel, html:is(.simple,.full) .board-head .pop { color: var(--text); }
 }
-html.simple .head-add { font-weight: 600; }
+html:is(.simple,.full) .head-add { font-weight: 600; }
 
 /* A list is two blocks: its name, then its cards. */
-html.simple .list { --lbg: var(--list); background: transparent; box-shadow: none; }
-html.simple .list.list-c { --lbg: color-mix(in srgb, var(--lc) 38%, var(--list)); background: transparent; }
-html.simple .list.collapsed { background: var(--lbg); }
-html.simple .list > .list-head { background: var(--lbg); border-radius: 10px; margin-bottom: 8px; padding: 12px 10px 12px 14px; }
-html.simple .list > .list-cards { background: var(--lbg); border-radius: 10px 10px 0 0; padding: 10px 10px 4px; }
-html.simple .list > .list-cards:last-child { border-radius: 10px; padding-bottom: 10px; }
-html.simple .list > .list-foot { background: var(--lbg); border-radius: 0 0 10px 10px; }
-html.simple .list-head .list-collapse { display: inline-grid; opacity: 0; transition: opacity .12s; }
-html.simple .list:hover .list-head .list-collapse, html.simple .list-head:focus-within .list-collapse { opacity: .8; }
-@media (hover: none) { html.simple .list-head .list-collapse { opacity: .8; } }
+html:is(.simple,.full) .list { --lbg: var(--list); background: transparent; box-shadow: none; }
+html:is(.simple,.full) .list.list-c { --lbg: color-mix(in srgb, var(--lc) 38%, var(--list)); background: transparent; }
+html:is(.simple,.full) .list.collapsed { background: var(--lbg); }
+html:is(.simple,.full) .list > .list-head { background: var(--lbg); border-radius: 10px; margin-bottom: 8px; padding: 12px 10px 12px 14px; }
+html:is(.simple,.full) .list > .list-cards { background: var(--lbg); border-radius: 10px 10px 0 0; padding: 10px 10px 4px; }
+html:is(.simple,.full) .list > .list-cards:last-child { border-radius: 10px; padding-bottom: 10px; }
+html:is(.simple,.full) .list > .list-foot { background: var(--lbg); border-radius: 0 0 10px 10px; }
+html:is(.simple,.full) .list-head .list-collapse { display: inline-grid; opacity: 0; transition: opacity .12s; }
+html:is(.simple,.full) .list:hover .list-head .list-collapse, html:is(.simple,.full) .list-head:focus-within .list-collapse { opacity: .8; }
+@media (hover: none) { html:is(.simple,.full) .list-head .list-collapse { opacity: .8; } }
 
 /* The bottom of a card: who, then when. Each is a button that opens a small picker. */
-html:not(.simple) .tile-badges:not(:has(> .badge, > .tile-members)) { display: none; }
-html.simple .tile-badges > .tile-members, html.simple .tile-badges > .badge[class*="due-"] { display: none; }
+html:is(.simple,.full) .tile-badges > .tile-members, html:is(.simple,.full) .tile-badges > .badge[class*="due-"] { display: none; }
 .tile-pick { display: inline-flex; align-items: center; gap: 2px; min-height: 26px; padding: 0; border: 0; border-radius: 13px; background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
 .tile-pick.tile-who { order: -2; margin-right: 2px; }
 .tile-pick.tile-when { order: -1; padding: 0 6px; border-radius: 6px; }
@@ -2612,7 +2611,8 @@ html.simple .tile-badges > .tile-members, html.simple .tile-badges > .badge[clas
 .tile-when.unset { opacity: 0; transition: opacity .12s; }
 .card-tile:hover .tile-when.unset, .tile-when.unset:focus-visible { opacity: 1; }
 @media (hover: none) { .tile-when.unset { opacity: 1; } }
-html.simple .card-tile .tile-badges .avatar { width: 26px; height: 26px; font-size: 11px; }
-html.simple .board .list:not(.collapsed) { background: transparent; box-shadow: none; border: 0; }
+html:is(.simple,.full) .card-tile .tile-badges .avatar { width: 26px; height: 26px; font-size: 11px; }
+html:is(.simple,.full) .board .list:not(.collapsed) { background: transparent; box-shadow: none; border: 0; }
 .tile-pick.tile-when.unset { order: 10; }
 @media (max-width: 900px) { .head-add { display: none; } }
+@media (min-width: 901px) { .board-head > .switch-btn { order: 1; } }
