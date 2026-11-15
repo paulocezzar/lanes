@@ -2189,6 +2189,50 @@ Invite the press`,
     try { await onCard(tile.dataset.cardId, 'update', { is_complete: done }); }
     catch (err) { b.classList.toggle('on', !done); tile.classList.toggle('is-complete', !done); toast(err.message || 'Could not update the card.'); }
   }, true);
+  // ---------- people and due date, picked straight from the card (Simple mode) ----------
+  const tilePops = { people: $('[data-tile-pop="people"]'), due: $('[data-tile-pop="due"]') };
+  let picking = null;
+  const closeTilePops = () => { Object.values(tilePops).forEach(p => p && (p.hidden = true)); picking = null; };
+  listsEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-tile-pick]');
+    if (!b) return;
+    e.stopImmediatePropagation(); e.preventDefault();                 // don't open the card
+    if (boardEl.dataset.canEdit !== '1') return;
+    const kind = b.dataset.tilePick, pop = tilePops[kind], id = b.closest('.card-tile').dataset.cardId;
+    if (!pop) return;
+    if (picking && picking.id === id && picking.kind === kind) return closeTilePops();
+    closeTilePops();
+    picking = { id, kind, time: b.dataset.time };
+    if (kind === 'people') {
+      const on = new Set(b.dataset.members.trim().split(/\s+/).filter(Boolean));
+      $$('[data-tile-person]', pop).forEach(x => x.classList.toggle('on', on.has(x.dataset.tilePerson)));
+    } else pop.day.value = b.dataset.due || '';
+    pop.hidden = false;
+    const r = b.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8))}px`;
+    pop.style.top = `${r.bottom + 6 + pop.offsetHeight > innerHeight ? Math.max(8, r.top - pop.offsetHeight - 6) : r.bottom + 6}px`;
+    if (kind === 'due') pop.day.focus();
+  }, true);
+  tilePops.people?.addEventListener('click', async e => {
+    const x = e.target.closest('[data-tile-person]');
+    if (!x || !picking) return;
+    x.disabled = true;
+    try { await onCard(picking.id, 'members', { user_id: +x.dataset.tilePerson }); x.classList.toggle('on'); }
+    catch (err) { toast(err.message || 'Could not update the card.'); }
+    finally { x.disabled = false; }
+  });
+  const saveTileDue = async due_at => {
+    if (!picking) return;
+    const id = picking.id; closeTilePops();
+    try { await onCard(id, 'update', { due_at }); } catch (err) { toast(err.message || 'Could not update the card.'); }
+  };
+  tilePops.due?.addEventListener('submit', e => { e.preventDefault(); const d = tilePops.due.day.value; saveTileDue(d ? `${d}T${picking?.time || '17:00'}` : ''); });
+  tilePops.due?.addEventListener('click', e => { if (e.target.closest('[data-tile-due-clear]')) saveTileDue(''); });
+  document.addEventListener('click', e => { if (picking && !e.target.closest('[data-tile-pop], [data-tile-pick]')) closeTilePops(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && picking) closeTilePops(); });
+  listsEl.addEventListener('scroll', closeTilePops, true);
+  $('[data-head-add]')?.addEventListener('click', () => $('.list:not(.collapsed) [data-add-card-top]', listsEl)?.click());
+
   listsEl.addEventListener('contextmenu', e => {
     const tile = e.target.closest('.card-tile');
     if (!tile || e.target.closest('input, textarea')) return;

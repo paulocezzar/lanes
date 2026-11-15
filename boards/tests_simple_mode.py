@@ -213,3 +213,15 @@ class ExploreBarTests(ListViewTests):
             self.assertEqual('id="explore-bar"' in body, shown, path)
         self.assertIn("lanes/explore.js", body)
         self.assertIn("data-show-tips", body)
+
+
+class BoardLookTests(ListViewTests):
+    """Simple mode's board: an Add card button in the header, and people / date buttons on each card."""
+
+    def test_board_has_the_header_button_and_card_pickers(self):
+        body = self.c.get(f"/b/{self.b.pk}/").content.decode()
+        self.assertIn("data-head-add", body)
+        self.assertIn('data-tile-pick="people"', body); self.assertIn('data-tile-pick="due"', body)
+        self.assertIn('data-tile-pop="people"', body)
+        self.u.simple_mode = False; self.u.save()
+        self.assertNotIn("data-head-add", self.c.get(f"/b/{self.b.pk}/").content.decode())

@@ -2558,3 +2558,61 @@ html.simple .tile-check:not(.on) { color: var(--text-2); }
 html.simple .tile-check:not(.on) svg { opacity: .55; }
 html.simple .tile-badges .tile-members { order: -2; margin: 0 2px 0 0; }                    /* people first, then the date */
 html.simple .tile-badges .badge[class*="due-"] { order: -1; }
+
+/* ---- Board, Asana-style (Simple mode) ---- */
+/* Page header in three rows on a computer: name and sharing; the views; then the tools for this view. */
+@media (min-width: 901px) {
+  html.simple .board-head { row-gap: 8px; padding: 14px 20px 10px; align-items: center; }
+  html.simple .board-head > .board-title { order: 1; font-size: 22px; font-weight: 700; }
+  html.simple .board-head > .vis-wrap { order: 1; }
+  html.simple .board-head > .board-head-right { display: contents; }
+  html.simple .board-head-right > * { order: 2; }
+  html.simple .board-head-right > .avatar-stack { margin-left: auto; }
+  html.simple .board-head-right:not(:has(.avatar-stack)) > :first-child { margin-left: auto; }
+  html.simple .board-head::before { content: ""; order: 3; flex-basis: 100%; height: 0; }
+  html.simple .board-head > .view-tabs, html.simple .board-head > .vt-more, html.simple .board-head > .all-toggle { order: 4; }
+  html.simple .board-head:has(.head-add, .filter-wrap)::after { content: ""; order: 5; flex-basis: 100%; height: 1px; background: currentColor; opacity: .14; margin: 2px 0; }
+  html.simple .board-head { color: #fff; }
+  html.simple .board.bg-light .board-head { color: #172b4d; }
+  html.simple .board-head > .head-add { order: 6; }
+  html.simple .board-head-right > .filter-wrap { order: 6; margin-left: auto; }
+  html.simple .board-head:has(.head-add) .filter-wrap { margin-left: auto; }
+  html.simple .board-head-right > .press-btn { order: 6; }
+  html.simple .view-tabs { background: none !important; padding: 0; gap: 4px; }
+  html.simple .view-tabs a { font-size: 15px; font-weight: 500; padding: 6px 12px; border-radius: 8px; }
+  html.simple .board-head .menu-panel, html.simple .board-head .pop { color: var(--text); }
+}
+html.simple .head-add { font-weight: 600; }
+
+/* A list is two blocks: its name, then its cards. */
+html.simple .list { --lbg: var(--list); background: transparent; box-shadow: none; }
+html.simple .list.list-c { --lbg: color-mix(in srgb, var(--lc) 38%, var(--list)); background: transparent; }
+html.simple .list.collapsed { background: var(--lbg); }
+html.simple .list > .list-head { background: var(--lbg); border-radius: 10px; margin-bottom: 8px; padding: 12px 10px 12px 14px; }
+html.simple .list > .list-cards { background: var(--lbg); border-radius: 10px 10px 0 0; padding: 10px 10px 4px; }
+html.simple .list > .list-cards:last-child { border-radius: 10px; padding-bottom: 10px; }
+html.simple .list > .list-foot { background: var(--lbg); border-radius: 0 0 10px 10px; }
+html.simple .list-head .list-collapse { display: inline-grid; opacity: 0; transition: opacity .12s; }
+html.simple .list:hover .list-head .list-collapse, html.simple .list-head:focus-within .list-collapse { opacity: .8; }
+@media (hover: none) { html.simple .list-head .list-collapse { opacity: .8; } }
+
+/* The bottom of a card: who, then when. Each is a button that opens a small picker. */
+html:not(.simple) .tile-badges:not(:has(> .badge, > .tile-members)) { display: none; }
+html.simple .tile-badges > .tile-members, html.simple .tile-badges > .badge[class*="due-"] { display: none; }
+.tile-pick { display: inline-flex; align-items: center; gap: 2px; min-height: 26px; padding: 0; border: 0; border-radius: 13px; background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.tile-pick.tile-who { order: -2; margin-right: 2px; }
+.tile-pick.tile-when { order: -1; padding: 0 6px; border-radius: 6px; }
+.tile-pick.tile-when.unset { padding: 0; }
+.tile-pick:hover { box-shadow: 0 0 0 2px var(--surface-3); background: var(--surface-3); }
+.tile-pick.due-overdue { color: #c9372c; font-weight: 600; }
+.tile-pick.due-soon { color: #b65c02; font-weight: 600; }
+.tile-pick.due-complete { color: #1f845a; }
+.tile-empty { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1.5px dashed var(--text-2); color: var(--text-2); font-style: normal; opacity: .75; }
+.tile-empty .ic { width: 14px; height: 14px; }
+.tile-when.unset { opacity: 0; transition: opacity .12s; }
+.card-tile:hover .tile-when.unset, .tile-when.unset:focus-visible { opacity: 1; }
+@media (hover: none) { .tile-when.unset { opacity: 1; } }
+html.simple .card-tile .tile-badges .avatar { width: 26px; height: 26px; font-size: 11px; }
+html.simple .board .list:not(.collapsed) { background: transparent; box-shadow: none; border: 0; }
+.tile-pick.tile-when.unset { order: 10; }
+@media (max-width: 900px) { .head-add { display: none; } }

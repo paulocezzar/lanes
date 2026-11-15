@@ -13,4 +13,15 @@
     </div>
     {% endif %}
   </div>
+{% if can_edit %}
+<div class="pop lv-pop" data-tile-pop="people" hidden>
+  <div class="pop-head">Who is on this card?</div>
+  {% for u in people %}<button type="button" class="lv-pick" data-tile-person="{{ u.pk }}">{% include "boards/_avatar.html" with size="sm" %}<span>{{ u.display_name }}</span><i class="lv-picked" aria-hidden="true">✓</i></button>{% endfor %}
+</div>
+<form class="pop lv-pop" data-tile-pop="due" hidden>
+  <div class="pop-head">Due date</div>
+  <input type="date" name="day" aria-label="Due date">
+  <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-tile-due-clear>No date</button></div>
+</form>
+{% endif %}
 {% endblock %}
