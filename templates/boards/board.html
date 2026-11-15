@@ -18,10 +18,15 @@
   <div class="pop-head">Who is on this card?</div>
   {% for u in people %}<button type="button" class="lv-pick" data-tile-person="{{ u.pk }}">{% include "boards/_avatar.html" with size="sm" %}<span>{{ u.display_name }}</span><i class="lv-picked" aria-hidden="true">✓</i></button>{% endfor %}
 </div>
-<form class="pop lv-pop" data-tile-pop="due" hidden>
+<form class="pop lv-pop dr-pop" data-tile-pop="due" hidden>
   <div class="pop-head">Due date</div>
-  <label class="lv-datelabel">Starts <small>(optional)</small><input type="date" name="start" aria-label="Start date"></label>
-  <label class="lv-datelabel">Due<input type="date" name="day" aria-label="Due date"></label>
+  <input type="hidden" name="start"><input type="hidden" name="day">
+  <div class="dr-ends">
+    <button type="button" class="dr-end" data-dr-end="start"><small>Starts</small><b data-dr-show="start">—</b></button>
+    <button type="button" class="dr-end on" data-dr-end="day"><small>Due</small><b data-dr-show="day">—</b></button>
+  </div>
+  <div class="dr-nav"><button type="button" class="icon-btn" data-dr-move="-1" aria-label="Previous month">‹</button><b data-dr-month></b><button type="button" class="icon-btn" data-dr-move="1" aria-label="Next month">›</button></div>
+  <div class="dr-grid" data-dr-grid></div>
   <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-tile-due-clear>No dates</button></div>
 </form>
 <div class="pop lv-pop field-pop" data-field-pop hidden></div>
@@ -40,7 +45,7 @@
       <div class="field-opts" data-field-opts></div>
       <button type="button" class="btn ghost sm" data-field-opt-add>{% include "boards/_icon.html" with i="plus" %}Add an option</button>
     </div>
-    <p class="muted small" data-field-note>Everyone on this board can then set this on any card. Options get their colour from their place in the list.</p>
+    <p class="muted small" data-field-note>Everyone on this board can then set this on any card. Click an option's coloured dot to change its colour.</p>
     <div class="dialog-actions"><button type="button" class="btn ghost" data-field-cancel>Cancel</button><button class="btn primary" data-field-save>Create field</button></div>
   </form>
 </dialog>

@@ -469,6 +469,7 @@ class CustomField(models.Model):
     name = models.CharField(max_length=60)
     kind = models.CharField(max_length=10, choices=KINDS, default=TEXT)
     options = models.JSONField(default=list, blank=True)     # dropdown choices
+    option_colours = models.JSONField(default=dict, blank=True)   # {"High": "orange"}; unset ones follow their place in the list
     show_on_card = models.BooleanField(default=True)          # badge on the card tile
     position = models.FloatField(default=1000)
 
@@ -481,6 +482,8 @@ class CustomField(models.Model):
     OPTION_COLOURS = ["red", "orange", "yellow", "green", "blue", "purple", "pink", "sky", "grey"]
 
     def option_colour(self, value):
+        if self.option_colours.get(value) in self.OPTION_COLOURS:
+            return self.option_colours[value]
         try:
             return self.OPTION_COLOURS[self.options.index(value) % len(self.OPTION_COLOURS)]
         except ValueError:

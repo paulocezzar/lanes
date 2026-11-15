@@ -246,3 +246,9 @@ class CardFieldsTests(ListViewTests):
         self.assertIn("11 Jan – 15 Jan", body)
         self.assertIn('id="field-dialog"', body); self.assertIn('id="field-data"', body); self.assertIn("data-tile-field-add", body)
         self.card.refresh_from_db(); self.assertEqual(self.card.start_date, date(2027, 1, 11))
+        # each option can be given its own colour; ones left alone keep the colour of their place in the list
+        r = self.c.post(f"/api/boards/{self.b.pk}/fields/", {"field_id": f.pk, "name": "Priority", "options": ["Critical", "High", "Low"], "colours": {"High": "purple", "Low": "not-a-colour"}}, content_type="application/json")
+        self.assertEqual(r.status_code, 200); f.refresh_from_db()
+        self.assertEqual([f.option_colour(o) for o in f.options], ["red", "purple", "yellow"])
+        self.assertIn("lc-purple", self.c.get(f"/b/{self.b.pk}/").content.decode())
+        self.assertIn("data-dr-grid", body)

@@ -8,6 +8,7 @@
   const canEdit = boardEl.dataset.canEdit === '1';
   const csrf = document.querySelector('meta[name=csrf-token]').content;
   const listsEl = document.getElementById('lists') || document.createElement('div');  // other views have no lists
+  const newCardIds = new Set();                 // cards added on this visit
   const dialog = document.getElementById('card-dialog');
   const dialogBody = document.getElementById('card-dialog-body');
   // A missing root (e.g. the Set up dialog, which only the Board view has) finds nothing rather than throwing.
@@ -320,6 +321,7 @@
     chip.hidden = true; delete chip.dataset.off; delete chip.dataset.for;
     const cards = $('[data-list-cards]', listEl);
     cards.appendChild(fromHTML(data.tile));
+    newCardIds.add(String(cards.lastElementChild.dataset.cardId)); offerFields(cards.lastElementChild);
     cards.scrollTop = cards.scrollHeight;
     ta.value = '';
     ta.focus();
@@ -2213,12 +2215,11 @@ Invite the press`,
     if (kind === 'people') {
       const on = new Set(b.dataset.members.trim().split(/\s+/).filter(Boolean));
       $$('[data-tile-person]', pop).forEach(x => x.classList.toggle('on', on.has(x.dataset.tilePerson)));
-    } else { pop.day.value = b.dataset.due || ''; pop.start.value = b.dataset.start || ''; }
+    } else { pop.day.value = b.dataset.due || ''; pop.start.value = b.dataset.start || ''; drOpen(); }
     pop.hidden = false;
     const r = b.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8))}px`;
     pop.style.top = `${r.bottom + 6 + pop.offsetHeight > innerHeight ? Math.max(8, r.top - pop.offsetHeight - 6) : r.bottom + 6}px`;
-    if (kind === 'due') pop.day.focus();
   }, true);
   tilePops.people?.addEventListener('click', async e => {
     const x = e.target.closest('[data-tile-person]');
@@ -2228,6 +2229,42 @@ Invite the press`,
     catch (err) { toast(err.message || 'Could not update the card.'); }
     finally { x.disabled = false; }
   });
+  // The date picker: a month to click on. "Starts" and "Due" along the top say which end the next click sets.
+  const dr = tilePops.due, iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const nice = v => v ? new Date(`${v}T12:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  let drMonth = new Date(), drEnd = 'day';
+  function drDraw() {
+    const st = dr.start.value, due = dr.day.value, y = drMonth.getFullYear(), m = drMonth.getMonth(), today = iso(new Date());
+    $('[data-dr-month]', dr).textContent = drMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    $('[data-dr-show="start"]', dr).textContent = nice(st); $('[data-dr-show="day"]', dr).textContent = nice(due);
+    $$('[data-dr-end]', dr).forEach(b => b.classList.toggle('on', b.dataset.drEnd === drEnd));
+    const first = new Date(y, m, 1), lead = (first.getDay() + 6) % 7;           // weeks start on Monday
+    let html = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<i>${d}</i>`).join('');
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(y, m, 1 - lead + i), v = iso(d);
+      const cls = [d.getMonth() !== m && 'dr-out', v === today && 'dr-today', (v === st || v === due) && 'dr-pick', st && due && v > st && v < due && 'dr-mid'].filter(Boolean).join(' ');
+      html += `<button type="button" data-dr-day="${v}" class="${cls}">${d.getDate()}</button>`;
+    }
+    $('[data-dr-grid]', dr).innerHTML = html;
+  }
+  function drOpen() {
+    drEnd = 'day';
+    const at = dr.day.value || dr.start.value;
+    drMonth = at ? new Date(`${at}T12:00`) : new Date(); drMonth.setDate(1);
+    drDraw();
+  }
+  dr?.addEventListener('click', e => {
+    const end = e.target.closest('[data-dr-end]'), move = e.target.closest('[data-dr-move]'), day = e.target.closest('[data-dr-day]');
+    if (end) { drEnd = end.dataset.drEnd; drDraw(); }
+    if (move) { drMonth.setMonth(drMonth.getMonth() + (+move.dataset.drMove)); drDraw(); }
+    if (day) {
+      const v = day.dataset.drDay;
+      if (drEnd === 'start') { dr.start.value = dr.start.value === v ? '' : v; if (dr.day.value && v > dr.day.value) dr.day.value = v; drEnd = 'day'; }
+      else { dr.day.value = v; if (dr.start.value && dr.start.value > v) dr.start.value = ''; }
+      drDraw();
+    }
+  });
+
   const saveTileDue = async (due_at, start_date) => {
     if (!picking) return;
     const id = picking.id; closeTilePops();
@@ -2247,6 +2284,14 @@ Invite the press`,
   let fielding = null;
   const closeFieldPop = () => { if (fieldPop) fieldPop.hidden = true; fielding = null; };
   const tileValues = tile => Object.fromEntries(($('[data-tile-field-add]', tile)?.dataset.values || '').split('\u001f').filter(Boolean).map(p => { const i = p.indexOf('='); return [p.slice(0, i), p.slice(i + 1)]; }));
+  function offerFields(tile) {                   // dashed "Priority"-style chips for the choose-one fields a new card hasn't got yet
+    if (!tile || boardEl.dataset.canEdit !== '1') return;
+    const vals = tileValues(tile), missing = boardFields.filter(f => f.kind === 'dropdown' && vals[f.id] == null).slice(0, 4);
+    if (!missing.length) return;
+    let row = $('.tile-fields', tile);
+    if (!row) { row = fromHTML('<div class="tile-fields"></div>'); tile.insertBefore(row, $('.tile-badges', tile)); }
+    missing.forEach(f => row.appendChild(fromHTML(`<button type="button" class="tile-field-unset" data-tile-field="${f.id}" tabindex="-1">${esc(f.name)}</button>`)));
+  }
   function openFieldPop(anchor, tile, onlyId) {
     closeTilePops();
     const vals = tileValues(tile), drops = boardFields.filter(f => f.kind === 'dropdown' && (!onlyId || String(f.id) === String(onlyId)));
@@ -2279,14 +2324,16 @@ Invite the press`,
     $('[data-field-save]', fieldDlg).textContent = field ? 'Save' : 'Create field';
     $('[data-field-kind-wrap]', fieldDlg).hidden = !!field;               // a field keeps its type
     const opts = $('[data-field-opts]', fieldDlg); opts.innerHTML = '';
-    (field?.options?.length ? field.options : ['', '']).forEach(o => addFieldOpt(o));
+    if (field?.options?.length) field.options.forEach((o, i) => addFieldOpt(o, field.colours[i])); else { addFieldOpt(); addFieldOpt(); }
     syncFieldKind();
     fieldDlg.showModal(); f.name.focus();
   }
   const OPT_COLOURS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'sky', 'grey'];
-  function recolourOpts() { $$('.field-opt i', fieldDlg).forEach((d, i) => { d.className = `fo-dot lc-${OPT_COLOURS[i % OPT_COLOURS.length]}`; }); }
-  function addFieldOpt(value = '') {
-    const row = fromHTML(`<div class="field-opt"><i class="fo-dot"></i><input maxlength="60" placeholder="Type an option name" autocomplete="off"><button type="button" class="icon-btn" data-field-opt-del aria-label="Remove this option">×</button></div>`);
+  function recolourOpts() { $$('.field-opt', fieldDlg).forEach(r => { $('.fo-dot', r).className = `fo-dot lc-${r.dataset.colour}`; }); }
+  function addFieldOpt(value = '', colour) {
+    const used = $$('.field-opt', fieldDlg).map(r => r.dataset.colour);
+    const row = fromHTML(`<div class="field-opt"><button type="button" class="fo-dot" data-field-opt-colour title="Click to change the colour" aria-label="Change the colour"></button><input maxlength="60" placeholder="Type an option name" autocomplete="off"><button type="button" class="icon-btn" data-field-opt-del aria-label="Remove this option">×</button></div>`);
+    row.dataset.colour = colour || OPT_COLOURS.find(c => !used.includes(c)) || OPT_COLOURS[used.length % OPT_COLOURS.length];
     row.querySelector('input').value = value;
     $('[data-field-opts]', fieldDlg).appendChild(row); recolourOpts();
     return row;
@@ -2296,14 +2343,18 @@ Invite the press`,
     const set = e.target.closest('[data-fp-set]'), edit = e.target.closest('[data-fp-edit]');
     if (set && fielding) {
       const id = fielding.id; closeFieldPop();
-      try { await onCard(id, 'fields', { field_id: +set.dataset.fpSet, value: set.dataset.value }); }
-      catch (err) { toast(err.message || 'Could not update the card.'); }
+      try {
+        await onCard(id, 'fields', { field_id: +set.dataset.fpSet, value: set.dataset.value });
+        if (newCardIds.has(String(id))) offerFields($(`.card-tile[data-card-id="${id}"]:not([data-mirror-id])`, listsEl));
+      } catch (err) { toast(err.message || 'Could not update the card.'); }
     } else if (edit) { const f = boardFields.find(x => String(x.id) === edit.dataset.fpEdit); closeFieldPop(); openFieldDialog(f); }
     else if (e.target.closest('[data-fp-new]')) { closeFieldPop(); openFieldDialog(null); }
   });
   fieldDlg?.addEventListener('click', e => {
     if (e.target.closest('[data-field-cancel]')) fieldDlg.close();
     if (e.target.closest('[data-field-opt-add]')) addFieldOpt().querySelector('input').focus();
+    const dot = e.target.closest('[data-field-opt-colour]');
+    if (dot) { const r = dot.closest('.field-opt'); r.dataset.colour = OPT_COLOURS[(OPT_COLOURS.indexOf(r.dataset.colour) + 1) % OPT_COLOURS.length]; recolourOpts(); }
     const del = e.target.closest('[data-field-opt-del]');
     if (del) { del.closest('.field-opt').remove(); recolourOpts(); }
   });
@@ -2316,15 +2367,18 @@ Invite the press`,
     const f = e.target, body = { name: f.name.value.trim() };
     if (f.field_id.value) body.field_id = +f.field_id.value; else { body.kind = f.kind.value; body.show_on_card = true; }
     const isDrop = f.field_id.value ? boardFields.find(x => String(x.id) === f.field_id.value)?.kind === 'dropdown' : f.kind.value === 'dropdown';
-    if (isDrop) body.options = $$('.field-opt input', fieldDlg).map(i => i.value.trim()).filter(Boolean);
+    if (isDrop) {
+      const rows = $$('.field-opt', fieldDlg).map(r => [$('input', r).value.trim(), r.dataset.colour]).filter(r => r[0]);
+      body.options = rows.map(r => r[0]); body.colours = Object.fromEntries(rows);
+    }
     if (isDrop && !body.options.length) return toast('Give it at least one option.');
     try { await post(`/api/boards/${boardId}/fields/`, body); location.reload(); }
     catch (err) { toast(err.message || 'Could not save the field.'); }
   });
-  document.addEventListener('click', e => { if (fielding && !e.target.closest('[data-field-pop], [data-tile-field], [data-tile-field-add]')) closeFieldPop(); });
+  document.addEventListener('click', e => { if (fielding && e.target.isConnected && !e.target.closest('[data-field-pop], [data-tile-field], [data-tile-field-add]')) closeFieldPop(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && fielding) closeFieldPop(); });
   listsEl.addEventListener('scroll', closeFieldPop, true);
-  document.addEventListener('click', e => { if (picking && !e.target.closest('[data-tile-pop], [data-tile-pick]')) closeTilePops(); });
+  document.addEventListener('click', e => { if (picking && e.target.isConnected && !e.target.closest('[data-tile-pop], [data-tile-pick]')) closeTilePops(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && picking) closeTilePops(); });
   listsEl.addEventListener('scroll', closeTilePops, true);
   $('[data-head-add]')?.addEventListener('click', () => $('.list:not(.collapsed) [data-add-card-top]', listsEl)?.click());

@@ -903,6 +903,10 @@ def field_save(request, board_id):
         if not cleaned:
             raise ApiError("Give the dropdown at least one option.")
         field.options = cleaned
+        if isinstance(d.get("colours"), dict):
+            field.option_colours = {o: c for o, c in d["colours"].items() if o in cleaned and c in CustomField.OPTION_COLOURS}
+        else:
+            field.option_colours = {o: c for o, c in field.option_colours.items() if o in cleaned}
         if field.pk:  # drop values that are no longer valid options
             stale = [v.pk for v in CardFieldValue.objects.filter(field=field) if v.value not in cleaned]
             CardFieldValue.objects.filter(pk__in=stale).delete()

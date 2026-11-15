@@ -2650,3 +2650,29 @@ button.tile-label.tile-field:hover { filter: brightness(1.08); box-shadow: 0 0 0
   #card-dialog .cm-main, #card-dialog .cm-side { overflow: visible; }
   #card-dialog .cm-side { border-left: 0; border-top: 1px solid var(--border); }
 }
+
+/* ---- Month-grid date picker, option colours, and the new-card box ---- */
+.dr-pop { width: 286px; max-height: none; overflow: visible; }
+.dr-ends { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 10px; }
+.dr-end { display: grid; gap: 2px; text-align: left; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: none; color: var(--text); font: inherit; cursor: pointer; }
+.dr-end small { color: var(--text-2); font-size: 11px; font-weight: 600; }
+.dr-end b { font-size: 13px; font-weight: 600; }
+.dr-end.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.dr-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.dr-nav b { font-size: 14px; }
+.dr-nav .icon-btn { font-size: 20px; line-height: 1; }
+.dr-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; margin-bottom: 10px; }
+.dr-grid i { font-style: normal; font-size: 11px; font-weight: 700; color: var(--text-2); text-align: center; padding: 4px 0; }
+.dr-grid button { height: 32px; border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; border-radius: 8px; }
+.dr-grid button:hover { background: var(--surface-3); }
+.dr-grid button.dr-out { color: var(--text-2); opacity: .55; }
+.dr-grid button.dr-today { box-shadow: inset 0 0 0 1px var(--text-2); }
+.dr-grid button.dr-mid { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 0; }
+.dr-grid button.dr-pick { background: var(--accent); color: #fff; font-weight: 700; opacity: 1; }
+button.fo-dot { border: 0; padding: 0; cursor: pointer; }
+button.fo-dot:hover { box-shadow: 0 0 0 3px var(--surface-3); }
+.tile-field-unset { border: 1.5px dashed var(--text-2); background: none; color: var(--text-2); border-radius: 6px; padding: 1px 8px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.tile-field-unset:hover { color: var(--text); border-color: var(--text); }
+/* Adding a card: you type into a card-shaped box, in the place the card will sit. */
+html:is(.simple,.full) .add-card-form { background: var(--card); border-radius: 10px; padding: 12px 14px 12px; box-shadow: inset 0 0 0 1.5px var(--accent); }
+html:is(.simple,.full) .add-card-form textarea { background: transparent; border: 0; box-shadow: none; padding: 2px 0; margin-bottom: 10px; font-size: 15px; font-weight: 500; outline: none; }
