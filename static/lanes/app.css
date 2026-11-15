@@ -2768,3 +2768,10 @@ html:is(.simple,.full) .list:hover .list-foot .foot-row > .icon-btn, html:is(.si
 /* Finished cards: the whole card steps back, not only its chips. */
 html:is(.simple,.full) .card-tile.is-complete:not(.is-open) { background: color-mix(in srgb, var(--card) 70%, transparent); }
 html:is(.simple,.full) .card-tile.is-complete:not(.is-open) > .tile-title .tile-title-text { opacity: .6; }
+
+/* ---- Small nudge: neutral greys on dark coloured boards, cards clearly a shade lighter, finished cards keep their shape ---- */
+.board:not(.bg-light):not(.bg-plain) { --list: rgb(37 38 41 / .94); --card: #313336; --card-hover: #393b3f; }
+html:is(.simple,.full) .list > .list-head { margin-bottom: 10px; }
+html:is(.simple,.full) .card-tile.is-complete:not(.is-open) { background: var(--card); }
+html:is(.simple,.full) .card-tile.is-complete .tile-pick.due-complete { color: var(--text-2); font-weight: 400; }
+html:is(.simple,.full) .list-foot .add-card-btn { color: var(--text-2); font-weight: 500; }
