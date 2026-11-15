@@ -2730,3 +2730,26 @@ html:is(.simple,.full) .tile-check { width: 20px; height: 20px; margin: 1px 10px
 html:is(.simple,.full) .card-tile:hover .tile-check, html:is(.simple,.full) .tile-check.shown { width: 20px; margin-right: 10px; }
 html:is(.simple,.full) .add-card-form { padding: 16px 18px 14px; }
 html:is(.simple,.full) .card-tile .tile-pick.tile-addfield { position: absolute; right: 14px; bottom: 14px; margin: 0; background: var(--card); }
+
+/* ---- A calmer open card (Board tab): a Mark complete button, detail rows, and the less-used buttons behind "More…" ---- */
+.cm-done-btn { display: none; }
+main.board[data-view="board"] ~ #card-dialog .cm-done-btn { display: inline-flex; font-weight: 600; }
+main.board[data-view="board"] ~ #card-dialog .cm-done-btn.on { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+main.board[data-view="board"] ~ #card-dialog .cm-top { padding: 14px 20px; }
+main.board[data-view="board"] ~ #card-dialog .cm-main { padding: 26px 30px 30px; }
+main.board[data-view="board"] ~ #card-dialog .cm-title { font-size: 26px; }
+main.board[data-view="board"] ~ #card-dialog .cm-details { gap: 6px; margin-top: 20px; margin-bottom: 14px; max-width: none; }
+main.board[data-view="board"] ~ #card-dialog .cmd-row { grid-template-columns: 170px 1fr; min-height: 42px; }
+main.board[data-view="board"] ~ #card-dialog .cmd-name { font-size: 14px; }
+main.board[data-view="board"] ~ #card-dialog .cmd-value { font-size: 15px; flex-wrap: wrap; }
+main.board[data-view="board"] ~ #card-dialog .cm-details ~ .cm-meta { display: none; }
+main.board[data-view="board"] ~ #card-dialog .cm-actions:not(.cm-all) .cm-desk { display: none; }
+main.board[data-view="board"] ~ #card-dialog .cm-actions:not(.cm-all) .pop-wrap.cm-desk:has(> [data-pop="labels"]) { display: block; width: 0; margin-right: -8px; }      /* its picker opens from the Labels row */
+main.board[data-view="board"] ~ #card-dialog .cm-actions:not(.cm-all) .pop-wrap.cm-desk > [data-pop="labels"] { display: none; }
+main.board[data-view="board"] ~ #card-dialog .cm-more { display: inline-flex; }
+main.board[data-view="board"] ~ #card-dialog .cm-actions > .pop-wrap > [data-pop="dates"], main.board[data-view="board"] ~ #card-dialog .cm-actions > .pop-wrap > [data-pop="members"] { display: none; }   /* the People and Dates rows do this */
+main.board[data-view="board"] ~ #card-dialog .cm-actions { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--border); }
+main.board[data-view="board"] ~ #card-dialog .cm-section, main.board[data-view="board"] ~ #card-dialog .cm-desc { margin-top: 22px; }
+/* On the board, finished cards step back a little. */
+html:is(.simple,.full) .card-tile.is-complete:not(.is-open) > .tile-labels, html:is(.simple,.full) .card-tile.is-complete:not(.is-open) > .tile-fields,
+html:is(.simple,.full) .card-tile.is-complete:not(.is-open) > .tile-badges { opacity: .55; }

@@ -1,5 +1,6 @@
 {% load lanes_extras %}<div class="cm" data-card="{{ card.pk }}">
   <header class="cm-top">
+    {% if can_edit %}<button type="button" class="chip-btn cm-done-btn{% if card.is_complete %} on{% endif %}" data-toggle-complete title="{% if card.is_complete %}Mark incomplete{% else %}Mark complete{% endif %}">{% include "boards/_icon.html" with i="check" %}{% if card.is_complete %}Completed{% else %}Mark complete{% endif %}</button>{% endif %}
     {% if can_move and move_tree %}
     <div class="pop-wrap">
       <button class="list-chip{% if card.list.colour %} lc-{{ card.list.colour }}{% endif %}" data-pop="movecard" title="Move card">{{ card.list.title }} <span aria-hidden="true">▾</span></button>
@@ -34,6 +35,8 @@
           <button type="button" class="cmd-value" data-cm-pick="people" data-members="{% for u in card.members.all %}{{ u.pk }} {% endfor %}">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% if card.members.all|length == 1 %}<span>{{ u.display_name }}</span>{% endif %}{% empty %}<span class="cmd-none">Nobody yet</span>{% endfor %}</button></div>
         <div class="cmd-row"><span class="cmd-name">{% include "boards/_icon.html" with i="calendar" %}Dates</span>
           <button type="button" class="cmd-value{% if card.due_at %} due-{{ card.due_state|default:'none' }}{% endif %}" data-cm-pick="due" data-due="{{ card.due_at|date:'Y-m-d' }}" data-start="{{ card.start_date|date:'Y-m-d' }}" data-time="{{ card.due_at|date:'H:i' }}">{% if card.due_at %}<span>{% if card.start_date %}{{ card.start_date|date:"j M" }} – {% endif %}{{ card.due_at|date:"j M Y" }}</span>{% elif card.start_date %}<span>From {{ card.start_date|date:"j M Y" }}</span>{% else %}<span class="cmd-none">No dates</span>{% endif %}</button></div>
+        <div class="cmd-row"><span class="cmd-name">{% include "boards/_icon.html" with i="label" %}Labels</span>
+          <button type="button" class="cmd-value" data-cm-open="labels">{% for l in card.labels.all %}<b class="tile-label lc-{{ l.colour }}">{{ l.name|default:"&nbsp;" }}</b>{% empty %}<span class="cmd-none">None</span>{% endfor %}</button></div>
         {% for row in fields %}{% if row.field.kind == "dropdown" %}
         <div class="cmd-row"><span class="cmd-name">{% include "boards/_icon.html" with i="field" %}{{ row.field.name }}</span>
           <button type="button" class="cmd-value" data-cm-field="{{ row.field.pk }}" data-value="{{ row.value|default:'' }}">{% if row.value %}<b class="tile-label lc-{{ row.colour }}">{{ row.value }}</b>{% else %}<span class="cmd-none">—</span>{% endif %}</button></div>
@@ -222,7 +225,7 @@
       {% if card.labels.all or card.members.all or card.due_at or card.start_date %}
       <div class="cm-meta">
         {% if card.members.all %}<div class="cm-meta-people"><h4 class="section-label">Members</h4><div class="avatar-row">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="lg" %}{% endfor %}</div></div>{% endif %}
-        {% if card.labels.all %}<div><h4 class="section-label">Labels</h4><div class="label-row">{% for l in card.labels.all %}<span class="label-swatch lc-{{ l.colour }}">{{ l.name }}</span>{% endfor %}</div></div>{% endif %}
+        {% if card.labels.all %}<div class="cm-meta-labels"><h4 class="section-label">Labels</h4><div class="label-row">{% for l in card.labels.all %}<span class="label-swatch lc-{{ l.colour }}">{{ l.name }}</span>{% endfor %}</div></div>{% endif %}
         {% if card.start_date or card.due_at %}<div class="cm-meta-dates"><h4 class="section-label">{% if card.start_date and card.due_at %}Dates{% elif card.due_at %}Due date{% else %}Start date{% endif %}</h4>
           {% if can_edit %}<div class="pop-wrap"><button type="button" class="date-pill date-btn due-{{ card.due_state|default:'none' }}" data-pop="dates" title="Change the dates">{% else %}<span class="date-pill due-{{ card.due_state|default:'none' }}">{% endif %}{% if card.start_date %}{{ card.start_date|date:"j M" }}{% if card.due_at %} – {% endif %}{% endif %}{% if card.due_at %}{{ card.due_at|date:"j M, H:i" }}{% endif %}
           {% if card.due_state == 'overdue' %}<em>Overdue</em>{% elif card.due_state == 'soon' %}<em>Due soon</em>{% elif card.due_state == 'complete' %}<em>Complete</em>{% endif %}{% if can_edit %}<span class="date-chev" aria-hidden="true">▾</span></button></div>{% else %}</span>{% endif %}</div>{% endif %}

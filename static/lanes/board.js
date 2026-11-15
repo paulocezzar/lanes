@@ -2238,6 +2238,8 @@ Invite the press`,
     pop.style.top = `${r.bottom + 6 + pop.offsetHeight > innerHeight ? Math.max(8, r.top - pop.offsetHeight - 6) : r.bottom + 6}px`;
   }
   dialogBody.addEventListener('click', e => {      // the People, Dates and field rows at the top of an open card
+    const opener = e.target.closest('[data-cm-open]');                 // a row that opens one of the card's own pickers (Labels)
+    if (opener) { e.preventDefault(); e.stopPropagation(); $(`.cm-actions [data-pop="${opener.dataset.cmOpen}"]`, dialogBody)?.click(); return; }
     const b = e.target.closest('[data-cm-pick]'), fb = e.target.closest('[data-cm-field]');
     if (!b && !fb) return;
     e.preventDefault(); e.stopPropagation();
