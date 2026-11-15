@@ -2381,3 +2381,30 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
 html:not(.simple) .simple-only { display: none; }
 /* Simple mode: the unlabelled list icons go; the same actions are in the list's ⋯ menu, by name. */
 html.simple .list-head .list-collapse, html.simple .list-foot [data-from-template] { display: none; }
+
+/* ---------- Light board backgrounds ---------- */
+.bg-paper { background: #ffffff; }
+.bg-cloud { background: linear-gradient(160deg, #f4f5f7 0%, #e3e6ea 100%); }
+.bg-sky   { background: linear-gradient(160deg, #eaf4ff 0%, #cfe4fb 100%); }
+.bg-mint  { background: linear-gradient(160deg, #eaf8ee 0%, #cfeedb 100%); }
+.bg-sand  { background: linear-gradient(160deg, #fbf5e6 0%, #f1e3c2 100%); }
+.bg-blush { background: linear-gradient(160deg, #fdeef1 0%, #f8d5dd 100%); }
+.bg-lilac { background: linear-gradient(160deg, #f3eefc 0%, #dfd3f5 100%); }
+/* Anything showing a light background as a small swatch or tile needs an edge, and dark words. */
+:is(.bg-swatch, .mitem-swatch, .gal-cover, .gal-badge, .gal-board, .cm-tpl i, .board-tile):is(.bg-paper, .bg-cloud, .bg-sky, .bg-mint, .bg-sand, .bg-blush, .bg-lilac) {
+  box-shadow: inset 0 0 0 1px rgb(9 30 66 / .18); }
+.board-tile:is(.bg-paper, .bg-cloud, .bg-sky, .bg-mint, .bg-sand, .bg-blush, .bg-lilac) { color: #172b4d; }
+/* On the board itself: dark words on a light header, and lists get an edge so they stand off the page. */
+.board.bg-light .board-head { background: rgb(255 255 255 / .6); border-bottom: 1px solid rgb(9 30 66 / .12); }
+.board.bg-light .board-title, .board.bg-light .board-vis, .board.bg-light .icon-btn.light { color: #172b4d; }
+.board.bg-light .board-title[contenteditable]:hover { background: rgb(9 30 66 / .08); }
+.board.bg-light .icon-btn.light:hover { background: rgb(9 30 66 / .08); }
+.board.bg-light .btn.light { background: #fff; box-shadow: inset 0 0 0 1px rgb(9 30 66 / .22); }
+.board.bg-light .btn.light:hover { background: #f1f2f4; }
+.board.bg-light .view-tabs { background: rgb(9 30 66 / .08); }
+.board.bg-light .view-tabs a { color: #172b4d; }
+.board.bg-light .view-tabs a:hover { background: rgb(9 30 66 / .08); }
+.board.bg-light .view-tabs a.on { background: #172b4d; color: #fff; }
+.board.bg-light .add-list-btn { background: rgb(9 30 66 / .07); color: #172b4d; }
+.board.bg-light .add-list-btn:hover { background: rgb(9 30 66 / .13); }
+.board.bg-light .list { box-shadow: 0 0 0 1px rgb(9 30 66 / .14), 0 1px 2px rgb(9 30 66 / .12); }

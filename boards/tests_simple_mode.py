@@ -58,3 +58,27 @@ class SimpleModeTests(TestCase):
         self.assertIn('class="icon-btn light switch-btn"', head)
         for attr in ("data-star", "data-watch-board", "data-open-drawer", "data-switch-boards"):
             self.assertEqual(head.count(attr), 1)
+
+
+class LightBackgroundTests(TestCase):
+    def setUp(self):
+        ws = Workspace.objects.create(name="Team")
+        self.u = User.objects.create_user("b@x.com", "pw")
+        self.b = Board.objects.create(workspace=ws, title="Plan")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def test_light_backgrounds_can_be_chosen_and_switch_the_header_to_dark_text(self):
+        self.assertNotIn("bg-light", self.c.get(f"/b/{self.b.pk}/").content.decode().split("<main")[1].split(">")[0])
+        for key in Board.LIGHT_BACKGROUNDS:
+            self.assertIn(key, dict(Board.BACKGROUNDS))
+            r = self.c.post(f"/api/boards/{self.b.pk}/update/", {"background": key}, content_type="application/json")
+            self.assertEqual(r.status_code, 200)
+            main = self.c.get(f"/b/{self.b.pk}/").content.decode().split("<main")[1].split(">")[0]
+            self.assertIn(f"bg-{key} bg-light", main)
+
+    def test_every_background_has_a_colour_in_the_stylesheet(self):
+        from pathlib import Path
+        css = (Path(__file__).resolve().parent.parent / "static/lanes/app.css").read_text()
+        for key, _ in Board.BACKGROUNDS:
+            self.assertIn(f".bg-{key}", css)

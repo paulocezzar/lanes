@@ -78,7 +78,16 @@ class Board(models.Model):
         ("ember", "Ember"),
         ("slate", "Slate"),
         ("wheat", "Wheat"),
+        # Light backgrounds — the board's header and labels switch to dark text on these (see LIGHT_BACKGROUNDS).
+        ("paper", "White"),
+        ("cloud", "Light grey"),
+        ("sky", "Pale blue"),
+        ("mint", "Pale green"),
+        ("sand", "Cream"),
+        ("blush", "Pale pink"),
+        ("lilac", "Pale purple"),
     ]
+    LIGHT_BACKGROUNDS = {"paper", "cloud", "sky", "mint", "sand", "blush", "lilac"}
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="boards")
     title = models.CharField(max_length=120)

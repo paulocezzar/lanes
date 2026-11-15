@@ -13,7 +13,7 @@
   {% if can_edit %}<form method="post" action="{% url 'stockup_refresh' board.pk %}">{% csrf_token %}<button class="btn primary sm">Check StockUp now</button></form>{% endif %}
   <a class="tpl-more" href="{% url 'stockup' %}">StockUp plans</a>
 </div>{% endif %}
-<main class="board bg-{{ board.background }}{% if board.is_template or board.stockup_plan_id %} has-banner{% endif %}" id="board"
+<main class="board bg-{{ board.background }}{% if board.background in board.LIGHT_BACKGROUNDS %} bg-light{% endif %}{% if board.is_template or board.stockup_plan_id %} has-banner{% endif %}" id="board"
       data-board-id="{{ board.pk }}" data-user-id="{{ user.pk }}" data-view="{{ view }}" data-version="{{ board.version }}" data-can-edit="{{ can_edit|yesno:'1,0' }}" data-open-card="{{ open_card|default:'' }}" data-label-ids="[{% for l in labels %}{{ l.pk }}{% if not forloop.last %},{% endif %}{% endfor %}]">
   <header class="board-head">
     <h1 class="board-title" {% if can_manage %}contenteditable="plaintext-only" spellcheck="false" data-board-title{% endif %}>{{ board.title }}</h1>
@@ -475,7 +475,7 @@ Setup:
   <div class="drawer-pane" data-pane="background" hidden>
     <p class="muted small">Pick a background for everyone on this board.</p>
     <div class="bg-picker">
-      {% for key, name in board.BACKGROUNDS %}<button class="bg-swatch bg-{{ key }}{% if key == board.background %} on{% endif %}" data-bg="{{ key }}" title="{{ name }}"></button>{% endfor %}
+      {% for key, name in board.BACKGROUNDS %}<button class="bg-swatch bg-{{ key }}{% if key == board.background %} on{% endif %}" data-bg="{{ key }}"{% if key in board.LIGHT_BACKGROUNDS %} data-light="1"{% endif %} title="{{ name }}"></button>{% endfor %}
     </div>
   </div>
   <div class="drawer-pane" data-pane="visibility" hidden>
