@@ -1,0 +1,39 @@
+"""Simple mode — everyone starts with the everyday controls; "Show all features" brings the rest back."""
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+
+from .models import Board, BoardMember, List, Workspace
+
+User = get_user_model()
+
+
+class SimpleModeTests(TestCase):
+    def setUp(self):
+        ws = Workspace.objects.create(name="Team")
+        self.u = User.objects.create_user("s@x.com", "pw", first_name="Sam")
+        self.b = Board.objects.create(workspace=ws, title="Plan")
+        BoardMember.objects.create(board=self.b, user=self.u, role="admin")
+        List.objects.create(board=self.b, title="To do")
+        self.c = Client(); self.c.force_login(self.u)
+
+    def full(self):
+        self.c.post("/account/theme/", {"simple_mode": "0"})
+
+    def test_new_people_start_simple(self):
+        self.assertTrue(self.u.simple_mode)
+
+    def test_simple_board_shows_two_views_and_the_rest_under_more_views(self):
+        page = self.c.get(f"/b/{self.b.pk}/").content.decode()
+        tabs = page.split('<nav class="view-tabs"')[1].split("</nav>")[0]
+        self.assertIn("vt-board", tabs); self.assertIn("vt-calendar", tabs)
+        for hidden in ("vt-table", "vt-timeline", "vt-swimlanes", "vt-gantt", "vt-dashboard", "vt-map"):
+            self.assertNotIn(hidden, tabs)
+        more = page.split("vt-more")[1].split("</details>")[0]
+        for label in ("Table", "Timeline", "Swimlanes", "Gantt", "Dashboard", "Map"):
+            self.assertIn(f">{label}</a>", more)          # still one click away
+
+    def test_a_view_opened_from_more_views_gets_its_tab(self):
+        page = self.c.get(f"/b/{self.b.pk}/table/").content.decode()
+        tabs = page.split('<nav class="view-tabs"')[1].split("</nav>")[0]
+        self.assertIn("vt-table on", tabs)
+        self.assertTrue(User.objects.get(pk=self.u.pk).simple_mode)      # opening it doesn't switch modes

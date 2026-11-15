@@ -16,6 +16,7 @@ VIEW_TABS = [
     ("dashboard", "Dashboard", "board_dashboard"),
     ("map", "Map", "board_map"),
 ]
+SIMPLE_TABS = ("board", "calendar")
 
 
 def board_context(request, board_id, view):
@@ -40,11 +41,18 @@ def board_context(request, board_id, view):
                                       "first": u.first_name or u.email.split("@")[0], "title": u.job_title,
                                       "role": dict(BoardMember.ROLES).get(roles.get(u.pk), ""),
                                       "open": open_counts.get(u.pk, 0)} for u in people})
+    # Simple mode keeps Board and Calendar (and whichever view is open) as tabs; the rest sit under "More views".
+    if getattr(request.user, "simple_mode", False):
+        main_tabs = [t for t in VIEW_TABS if t[0] in SIMPLE_TABS or t[0] == view]
+        more_tabs = [t for t in VIEW_TABS if t not in main_tabs]
+    else:
+        main_tabs, more_tabs = VIEW_TABS, []
     return board, {
         "member_cards": member_cards.replace("</", "<\\/"),
         "board": board,
         "view": view,
-        "view_tabs": VIEW_TABS,
+        "view_tabs": main_tabs,
+        "more_tabs": more_tabs,
         "people": people,
         "labels": board.labels.all(),
         "me": BoardMember.objects.filter(board=board, user=request.user).first(),

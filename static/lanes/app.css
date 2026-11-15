@@ -2369,3 +2369,9 @@ button.board-vis { color: #fff; opacity: .9; display: inline-flex; align-items: 
   .mnav-count { position: absolute; top: 2px; right: calc(50% - 22px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
     background: #e2483d; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
 }
+
+/* ---------- Simple mode ---------- */
+.board-head details.menu > summary { list-style: none; cursor: pointer; }
+.board-head details.menu > summary::-webkit-details-marker { display: none; }
+.board-head .menu-panel .menu-item { color: var(--text); font-weight: 500; font-size: 14px; }
+.vt-more > summary::after { content: " ▾"; opacity: .8; }
