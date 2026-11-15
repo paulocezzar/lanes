@@ -163,7 +163,9 @@ def _time_ctx(card, user):
 
 def _field_rows(card, board):
     values = {v.field_id: v.value for v in card.field_values.all()}
-    return [{"field": f, "value": values.get(f.pk)} for f in board.custom_fields.all()]
+    return [{"field": f, "value": values.get(f.pk),
+             "colour": f.option_colour(values[f.pk]) if f.kind == "dropdown" and values.get(f.pk) else ""}
+            for f in board.custom_fields.all()]
 
 
 def _feed(card, user):

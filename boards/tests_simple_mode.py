@@ -252,3 +252,9 @@ class CardFieldsTests(ListViewTests):
         self.assertEqual([f.option_colour(o) for o in f.options], ["red", "purple", "yellow"])
         self.assertIn("lc-purple", self.c.get(f"/b/{self.b.pk}/").content.decode())
         self.assertIn("data-dr-grid", body)
+
+
+class CardPanelDetailsTests(ListViewTests):
+    def test_open_card_has_rows_to_click(self):
+        body = self.c.get(f"/cards/{self.card.pk}/").content.decode()
+        self.assertIn('data-cm-pick="people"', body); self.assertIn('data-cm-pick="due"', body)

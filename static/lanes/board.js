@@ -599,7 +599,14 @@ Invite the press`,
     if (!dialog.open) dialog.showModal();
     history.replaceState(null, '', `?card=${id}`);
     wireModal();
+    markOpenTile();
   }
+  // The card that is open in the panel stays picked out on the board.
+  function markOpenTile() {
+    $$('.card-tile.is-open', listsEl).forEach(t => { if (t.dataset.cardId !== openCardId) t.classList.remove('is-open'); });
+    if (openCardId && dialog.open) $$(`.card-tile[data-card-id="${openCardId}"]:not(.is-open)`, listsEl).forEach(t => t.classList.add('is-open'));
+  }
+  new MutationObserver(markOpenTile).observe(listsEl, { childList: true, subtree: true });
 
   function closeCard() {
     dialog.close();
@@ -614,7 +621,7 @@ Invite the press`,
     } catch { return false; }
   })();
   dialog.addEventListener('close', () => {
-    openCardId = null;
+    openCardId = null; markOpenTile();
     if (backTo) { history.back(); return; }
     history.replaceState(null, '', location.pathname);
   });
@@ -2207,10 +2214,19 @@ Invite the press`,
     if (!b) return;
     e.stopImmediatePropagation(); e.preventDefault();                 // don't open the card
     if (boardEl.dataset.canEdit !== '1') return;
-    const kind = b.dataset.tilePick, pop = tilePops[kind], id = b.closest('.card-tile').dataset.cardId;
+    openTilePop(b, b.closest('.card-tile').dataset.cardId, b.dataset.tilePick);
+  }, true);
+  const popHome = new Map();
+  const placePop = (pop, anchor) => {              // inside the open card's window when that is where it was asked for
+    if (!popHome.has(pop)) popHome.set(pop, pop.parentNode);
+    (anchor.closest('dialog') || popHome.get(pop)).appendChild(pop);
+  };
+  const refreshPanel = id => { if (dialog.open && openCardId === String(id)) return openCard(id); };
+  function openTilePop(b, id, kind) {
+    const pop = tilePops[kind];
     if (!pop) return;
     if (picking && picking.id === id && picking.kind === kind) return closeTilePops();
-    closeTilePops();
+    closeTilePops(); closeFieldPop(); placePop(pop, b);
     picking = { id, kind, time: b.dataset.time };
     if (kind === 'people') {
       const on = new Set(b.dataset.members.trim().split(/\s+/).filter(Boolean));
@@ -2220,12 +2236,19 @@ Invite the press`,
     const r = b.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8))}px`;
     pop.style.top = `${r.bottom + 6 + pop.offsetHeight > innerHeight ? Math.max(8, r.top - pop.offsetHeight - 6) : r.bottom + 6}px`;
-  }, true);
+  }
+  dialogBody.addEventListener('click', e => {      // the People, Dates and field rows at the top of an open card
+    const b = e.target.closest('[data-cm-pick]'), fb = e.target.closest('[data-cm-field]');
+    if (!b && !fb) return;
+    e.preventDefault(); e.stopPropagation();
+    if (b) openTilePop(b, openCardId, b.dataset.cmPick);
+    else openFieldPop(fb, openCardId, fb.dataset.value ? { [fb.dataset.cmField]: fb.dataset.value } : {}, fb.dataset.cmField);
+  });
   tilePops.people?.addEventListener('click', async e => {
     const x = e.target.closest('[data-tile-person]');
     if (!x || !picking) return;
     x.disabled = true;
-    try { await onCard(picking.id, 'members', { user_id: +x.dataset.tilePerson }); x.classList.toggle('on'); }
+    try { const id = picking.id; await onCard(id, 'members', { user_id: +x.dataset.tilePerson }); x.classList.toggle('on'); refreshPanel(id); }
     catch (err) { toast(err.message || 'Could not update the card.'); }
     finally { x.disabled = false; }
   });
@@ -2268,7 +2291,7 @@ Invite the press`,
   const saveTileDue = async (due_at, start_date) => {
     if (!picking) return;
     const id = picking.id; closeTilePops();
-    try { await onCard(id, 'update', { due_at, start_date }); } catch (err) { toast(err.message || 'Could not update the card.'); }
+    try { await onCard(id, 'update', { due_at, start_date }); refreshPanel(id); } catch (err) { toast(err.message || 'Could not update the card.'); }
   };
   tilePops.due?.addEventListener('submit', e => {
     e.preventDefault();
@@ -2292,10 +2315,10 @@ Invite the press`,
     if (!row) { row = fromHTML('<div class="tile-fields"></div>'); tile.insertBefore(row, $('.tile-badges', tile)); }
     missing.forEach(f => row.appendChild(fromHTML(`<button type="button" class="tile-field-unset" data-tile-field="${f.id}" tabindex="-1">${esc(f.name)}</button>`)));
   }
-  function openFieldPop(anchor, tile, onlyId) {
-    closeTilePops();
-    const vals = tileValues(tile), drops = boardFields.filter(f => f.kind === 'dropdown' && (!onlyId || String(f.id) === String(onlyId)));
-    fielding = { id: tile.dataset.cardId };
+  function openFieldPop(anchor, cardId, vals, onlyId) {
+    closeTilePops(); placePop(fieldPop, anchor);
+    const drops = boardFields.filter(f => f.kind === 'dropdown' && (!onlyId || String(f.id) === String(onlyId)));
+    fielding = { id: String(cardId) };
     fieldPop.innerHTML = drops.map(f => `<div class="fp-field"><div class="pop-head">${esc(f.name)}</div>
         <button type="button" class="lv-pick${vals[f.id] == null ? ' on' : ''}" data-fp-set="${f.id}" data-value=""><span class="fp-none">—</span><i class="lv-picked">✓</i></button>
         ${f.options.map((o, i) => `<button type="button" class="lv-pick${vals[f.id] === o ? ' on' : ''}" data-fp-set="${f.id}" data-value="${esc(o)}"><span><b class="tile-label lc-${f.colours[i]}">${esc(o)}</b></span><i class="lv-picked">✓</i></button>`).join('')}
@@ -2314,7 +2337,7 @@ Invite the press`,
     if (boardEl.dataset.canEdit !== '1' || !fieldPop) return;
     const tile = (chip || add).closest('.card-tile');
     if (fielding && fielding.id === tile.dataset.cardId && !fieldPop.hidden) return closeFieldPop();
-    openFieldPop(chip || add, tile, chip?.dataset.tileField);
+    openFieldPop(chip || add, tile.dataset.cardId, tileValues(tile), chip?.dataset.tileField);
   }, true);
   function openFieldDialog(field) {
     const f = $('[data-field-form]', fieldDlg);
@@ -2345,6 +2368,7 @@ Invite the press`,
       const id = fielding.id; closeFieldPop();
       try {
         await onCard(id, 'fields', { field_id: +set.dataset.fpSet, value: set.dataset.value });
+        refreshPanel(id);
         if (newCardIds.has(String(id))) offerFields($(`.card-tile[data-card-id="${id}"]:not([data-mirror-id])`, listsEl));
       } catch (err) { toast(err.message || 'Could not update the card.'); }
     } else if (edit) { const f = boardFields.find(x => String(x.id) === edit.dataset.fpEdit); closeFieldPop(); openFieldDialog(f); }

@@ -28,6 +28,18 @@
         <button class="complete-toggle{% if card.is_complete %} on{% endif %}" {% if can_edit %}data-toggle-complete{% else %}disabled{% endif %} title="{% if card.is_complete %}Mark incomplete{% else %}Mark complete{% endif %}">✓</button>
         <h2 class="cm-title" {% if can_edit %}contenteditable="plaintext-only" spellcheck="false" data-card-title{% endif %}>{{ card.title }}</h2>
       </div>
+      {% if can_edit %}
+      <div class="cm-details">
+        <div class="cmd-row"><span class="cmd-name">{% include "boards/_icon.html" with i="person" %}People</span>
+          <button type="button" class="cmd-value" data-cm-pick="people" data-members="{% for u in card.members.all %}{{ u.pk }} {% endfor %}">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="sm" %}{% if card.members.all|length == 1 %}<span>{{ u.display_name }}</span>{% endif %}{% empty %}<span class="cmd-none">Nobody yet</span>{% endfor %}</button></div>
+        <div class="cmd-row"><span class="cmd-name">{% include "boards/_icon.html" with i="calendar" %}Dates</span>
+          <button type="button" class="cmd-value{% if card.due_at %} due-{{ card.due_state|default:'none' }}{% endif %}" data-cm-pick="due" data-due="{{ card.due_at|date:'Y-m-d' }}" data-start="{{ card.start_date|date:'Y-m-d' }}" data-time="{{ card.due_at|date:'H:i' }}">{% if card.due_at %}<span>{% if card.start_date %}{{ card.start_date|date:"j M" }} – {% endif %}{{ card.due_at|date:"j M Y" }}</span>{% elif card.start_date %}<span>From {{ card.start_date|date:"j M Y" }}</span>{% else %}<span class="cmd-none">No dates</span>{% endif %}</button></div>
+        {% for row in fields %}{% if row.field.kind == "dropdown" %}
+        <div class="cmd-row"><span class="cmd-name">{% include "boards/_icon.html" with i="field" %}{{ row.field.name }}</span>
+          <button type="button" class="cmd-value" data-cm-field="{{ row.field.pk }}" data-value="{{ row.value|default:'' }}">{% if row.value %}<b class="tile-label lc-{{ row.colour }}">{{ row.value }}</b>{% else %}<span class="cmd-none">—</span>{% endif %}</button></div>
+        {% endif %}{% endfor %}
+      </div>
+      {% endif %}
       {% if parent_card %}<p class="cm-parent">Part of <a href="{% url 'board' parent_card.list.board_id %}?card={{ parent_card.pk }}"{% if parent_card.list.board_id == board.pk %} data-card-open="{{ parent_card.pk }}"{% endif %}><b>{{ parent_card.title }}</b></a>{% if parent_card.list.board_id != board.pk %} <span class="muted small">on {{ parent_card.list.board.title }}</span>{% endif %}
         {% if can_edit %}<button type="button" class="link-btn" data-parent-set="" title="Take this card out of {{ parent_card.title }}">Remove</button>{% endif %}</p>{% endif %}
       {% with am=card.amount per=card.per_one_lines %}
@@ -209,9 +221,9 @@
 
       {% if card.labels.all or card.members.all or card.due_at or card.start_date %}
       <div class="cm-meta">
-        {% if card.members.all %}<div><h4 class="section-label">Members</h4><div class="avatar-row">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="lg" %}{% endfor %}</div></div>{% endif %}
+        {% if card.members.all %}<div class="cm-meta-people"><h4 class="section-label">Members</h4><div class="avatar-row">{% for u in card.members.all %}{% include "boards/_avatar.html" with size="lg" %}{% endfor %}</div></div>{% endif %}
         {% if card.labels.all %}<div><h4 class="section-label">Labels</h4><div class="label-row">{% for l in card.labels.all %}<span class="label-swatch lc-{{ l.colour }}">{{ l.name }}</span>{% endfor %}</div></div>{% endif %}
-        {% if card.start_date or card.due_at %}<div><h4 class="section-label">{% if card.start_date and card.due_at %}Dates{% elif card.due_at %}Due date{% else %}Start date{% endif %}</h4>
+        {% if card.start_date or card.due_at %}<div class="cm-meta-dates"><h4 class="section-label">{% if card.start_date and card.due_at %}Dates{% elif card.due_at %}Due date{% else %}Start date{% endif %}</h4>
           {% if can_edit %}<div class="pop-wrap"><button type="button" class="date-pill date-btn due-{{ card.due_state|default:'none' }}" data-pop="dates" title="Change the dates">{% else %}<span class="date-pill due-{{ card.due_state|default:'none' }}">{% endif %}{% if card.start_date %}{{ card.start_date|date:"j M" }}{% if card.due_at %} – {% endif %}{% endif %}{% if card.due_at %}{{ card.due_at|date:"j M, H:i" }}{% endif %}
           {% if card.due_state == 'overdue' %}<em>Overdue</em>{% elif card.due_state == 'soon' %}<em>Due soon</em>{% elif card.due_state == 'complete' %}<em>Complete</em>{% endif %}{% if can_edit %}<span class="date-chev" aria-hidden="true">▾</span></button></div>{% else %}</span>{% endif %}</div>{% endif %}
       </div>
@@ -222,7 +234,7 @@
         <h4 class="cm-h">{% include "boards/_icon.html" with i="label" %}Custom fields</h4>
         <div class="field-grid">
           {% for row in fields %}{% with f=row.field v=row.value %}
-          <label class="field-cell">{{ f.name }}
+          <label class="field-cell{% if f.kind == "dropdown" %} fc-dropdown{% endif %}">{{ f.name }}
             {% if f.kind == "checkbox" %}
               <span class="check-inline dark"><input type="checkbox" data-field="{{ f.pk }}" {% if v %}checked{% endif %} {% if not can_edit %}disabled{% endif %}> Yes</span>
             {% elif f.kind == "dropdown" %}

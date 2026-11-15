@@ -2676,3 +2676,21 @@ button.fo-dot:hover { box-shadow: 0 0 0 3px var(--surface-3); }
 /* Adding a card: you type into a card-shaped box, in the place the card will sit. */
 html:is(.simple,.full) .add-card-form { background: var(--card); border-radius: 10px; padding: 12px 14px 12px; box-shadow: inset 0 0 0 1.5px var(--accent); }
 html:is(.simple,.full) .add-card-form textarea { background: transparent; border: 0; box-shadow: none; padding: 2px 0; margin-bottom: 10px; font-size: 15px; font-weight: 500; outline: none; }
+
+/* ---- The open card: its tile stays picked out on the board; People, Dates and fields are rows you click to change ---- */
+.card-tile.is-open { box-shadow: inset 0 0 0 2px var(--accent) !important; background: color-mix(in srgb, var(--accent) 16%, var(--card)); }
+.cm-details { display: none; gap: 2px; margin: 14px 0 6px 34px; max-width: 520px; }
+.cmd-row { display: grid; grid-template-columns: 150px 1fr; align-items: center; min-height: 36px; }
+.cmd-name { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 13px; font-weight: 600; }
+.cmd-name .ic { width: 15px; height: 15px; }
+.cmd-value { display: inline-flex; align-items: center; gap: 6px; justify-self: start; min-height: 32px; padding: 3px 10px; margin-left: -10px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+.cmd-value:hover { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+.cmd-value .tile-label { display: inline-block; height: auto; font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 6px; color: #1d2125; }
+.cmd-value.due-overdue { color: #c9372c; font-weight: 600; }
+.cmd-value.due-complete { color: #1f845a; }
+.cmd-none { color: var(--text-2); }
+main.board[data-view="board"] ~ #card-dialog .cm-details { display: grid; }
+main.board[data-view="board"] ~ #card-dialog .cm-details ~ .cm-meta > .cm-meta-people, main.board[data-view="board"] ~ #card-dialog .cm-details ~ .cm-meta > .cm-meta-dates { display: none; }
+main.board[data-view="board"] ~ #card-dialog .field-cell.fc-dropdown { display: none; }
+main.board[data-view="board"] ~ #card-dialog .cm-section[data-opt="fields"]:not(:has(.field-cell:not(.fc-dropdown))) { display: none; }
+dialog > .lv-pop { z-index: 5; }
