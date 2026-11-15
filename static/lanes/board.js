@@ -616,7 +616,14 @@ Invite the press`,
     if (backTo) { history.back(); return; }
     history.replaceState(null, '', location.pathname);
   });
-  dialog.addEventListener('click', e => { if (e.target === dialog) closeCard(); });
+  dialog.addEventListener('click', e => {
+    if (e.target !== dialog) return;
+    const r = dialog.getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return;
+    closeCard();
+    const under = document.elementsFromPoint(e.clientX, e.clientY).find(el => el.closest?.('.card-tile'))?.closest('.card-tile');
+    if (under && !document.elementsFromPoint(e.clientX, e.clientY).some(el => el.closest?.('button, a, input'))) setTimeout(() => openCard(under.dataset.cardId), 0);
+  });
 
   // Apply a card payload from the server: update the tile and the open dialog.
   function applyCard(data) {
@@ -2206,7 +2213,7 @@ Invite the press`,
     if (kind === 'people') {
       const on = new Set(b.dataset.members.trim().split(/\s+/).filter(Boolean));
       $$('[data-tile-person]', pop).forEach(x => x.classList.toggle('on', on.has(x.dataset.tilePerson)));
-    } else pop.day.value = b.dataset.due || '';
+    } else { pop.day.value = b.dataset.due || ''; pop.start.value = b.dataset.start || ''; }
     pop.hidden = false;
     const r = b.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8))}px`;
@@ -2221,13 +2228,102 @@ Invite the press`,
     catch (err) { toast(err.message || 'Could not update the card.'); }
     finally { x.disabled = false; }
   });
-  const saveTileDue = async due_at => {
+  const saveTileDue = async (due_at, start_date) => {
     if (!picking) return;
     const id = picking.id; closeTilePops();
-    try { await onCard(id, 'update', { due_at }); } catch (err) { toast(err.message || 'Could not update the card.'); }
+    try { await onCard(id, 'update', { due_at, start_date }); } catch (err) { toast(err.message || 'Could not update the card.'); }
   };
-  tilePops.due?.addEventListener('submit', e => { e.preventDefault(); const d = tilePops.due.day.value; saveTileDue(d ? `${d}T${picking?.time || '17:00'}` : ''); });
-  tilePops.due?.addEventListener('click', e => { if (e.target.closest('[data-tile-due-clear]')) saveTileDue(''); });
+  tilePops.due?.addEventListener('submit', e => {
+    e.preventDefault();
+    const d = tilePops.due.day.value, st = tilePops.due.start.value;
+    if (d && st && st > d) return toast('The start date is after the due date.');
+    saveTileDue(d ? `${d}T${picking?.time || '17:00'}` : '', st);
+  });
+  tilePops.due?.addEventListener('click', e => { if (e.target.closest('[data-tile-due-clear]')) saveTileDue('', ''); });
+
+  // ---------- fields on the card: coloured "choose one" values, and a window to add or edit a field ----------
+  const fieldPop = $('[data-field-pop]'), fieldDlg = document.getElementById('field-dialog');
+  const boardFields = JSON.parse(document.getElementById('field-data')?.textContent || '[]');
+  let fielding = null;
+  const closeFieldPop = () => { if (fieldPop) fieldPop.hidden = true; fielding = null; };
+  const tileValues = tile => Object.fromEntries(($('[data-tile-field-add]', tile)?.dataset.values || '').split('\u001f').filter(Boolean).map(p => { const i = p.indexOf('='); return [p.slice(0, i), p.slice(i + 1)]; }));
+  function openFieldPop(anchor, tile, onlyId) {
+    closeTilePops();
+    const vals = tileValues(tile), drops = boardFields.filter(f => f.kind === 'dropdown' && (!onlyId || String(f.id) === String(onlyId)));
+    fielding = { id: tile.dataset.cardId };
+    fieldPop.innerHTML = drops.map(f => `<div class="fp-field"><div class="pop-head">${esc(f.name)}</div>
+        <button type="button" class="lv-pick${vals[f.id] == null ? ' on' : ''}" data-fp-set="${f.id}" data-value=""><span class="fp-none">—</span><i class="lv-picked">✓</i></button>
+        ${f.options.map((o, i) => `<button type="button" class="lv-pick${vals[f.id] === o ? ' on' : ''}" data-fp-set="${f.id}" data-value="${esc(o)}"><span><b class="tile-label lc-${f.colours[i]}">${esc(o)}</b></span><i class="lv-picked">✓</i></button>`).join('')}
+        <button type="button" class="lv-pick fp-edit" data-fp-edit="${f.id}">✎ <span>Edit options</span></button></div>`).join('')
+      + (drops.length || onlyId ? '' : '<p class="muted small fp-empty">This board has no fields to choose from yet. A field is something like Priority, with options such as High and Low.</p>')
+      + (onlyId ? '' : '<button type="button" class="lv-pick fp-new" data-fp-new>＋ <span>Add field…</span></button>');
+    fieldPop.hidden = false;
+    const r = anchor.getBoundingClientRect();
+    fieldPop.style.left = `${Math.max(8, Math.min(r.left, innerWidth - fieldPop.offsetWidth - 8))}px`;
+    fieldPop.style.top = `${r.bottom + 6 + fieldPop.offsetHeight > innerHeight ? Math.max(8, r.top - fieldPop.offsetHeight - 6) : r.bottom + 6}px`;
+  }
+  listsEl.addEventListener('click', e => {
+    const chip = e.target.closest('[data-tile-field]'), add = e.target.closest('[data-tile-field-add]');
+    if (!chip && !add) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    if (boardEl.dataset.canEdit !== '1' || !fieldPop) return;
+    const tile = (chip || add).closest('.card-tile');
+    if (fielding && fielding.id === tile.dataset.cardId && !fieldPop.hidden) return closeFieldPop();
+    openFieldPop(chip || add, tile, chip?.dataset.tileField);
+  }, true);
+  function openFieldDialog(field) {
+    const f = $('[data-field-form]', fieldDlg);
+    f.reset(); f.field_id.value = field?.id || '';
+    f.name.value = field?.name || ''; f.kind.value = field?.kind || 'dropdown';
+    $('[data-field-heading]', fieldDlg).textContent = field ? 'Edit field' : 'Add field';
+    $('[data-field-save]', fieldDlg).textContent = field ? 'Save' : 'Create field';
+    $('[data-field-kind-wrap]', fieldDlg).hidden = !!field;               // a field keeps its type
+    const opts = $('[data-field-opts]', fieldDlg); opts.innerHTML = '';
+    (field?.options?.length ? field.options : ['', '']).forEach(o => addFieldOpt(o));
+    syncFieldKind();
+    fieldDlg.showModal(); f.name.focus();
+  }
+  const OPT_COLOURS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'sky', 'grey'];
+  function recolourOpts() { $$('.field-opt i', fieldDlg).forEach((d, i) => { d.className = `fo-dot lc-${OPT_COLOURS[i % OPT_COLOURS.length]}`; }); }
+  function addFieldOpt(value = '') {
+    const row = fromHTML(`<div class="field-opt"><i class="fo-dot"></i><input maxlength="60" placeholder="Type an option name" autocomplete="off"><button type="button" class="icon-btn" data-field-opt-del aria-label="Remove this option">×</button></div>`);
+    row.querySelector('input').value = value;
+    $('[data-field-opts]', fieldDlg).appendChild(row); recolourOpts();
+    return row;
+  }
+  function syncFieldKind() { $('[data-field-options]', fieldDlg).hidden = $('[data-field-form]', fieldDlg).kind.value !== 'dropdown'; }
+  fieldPop?.addEventListener('click', async e => {
+    const set = e.target.closest('[data-fp-set]'), edit = e.target.closest('[data-fp-edit]');
+    if (set && fielding) {
+      const id = fielding.id; closeFieldPop();
+      try { await onCard(id, 'fields', { field_id: +set.dataset.fpSet, value: set.dataset.value }); }
+      catch (err) { toast(err.message || 'Could not update the card.'); }
+    } else if (edit) { const f = boardFields.find(x => String(x.id) === edit.dataset.fpEdit); closeFieldPop(); openFieldDialog(f); }
+    else if (e.target.closest('[data-fp-new]')) { closeFieldPop(); openFieldDialog(null); }
+  });
+  fieldDlg?.addEventListener('click', e => {
+    if (e.target.closest('[data-field-cancel]')) fieldDlg.close();
+    if (e.target.closest('[data-field-opt-add]')) addFieldOpt().querySelector('input').focus();
+    const del = e.target.closest('[data-field-opt-del]');
+    if (del) { del.closest('.field-opt').remove(); recolourOpts(); }
+  });
+  fieldDlg?.addEventListener('change', e => { if (e.target.name === 'kind') syncFieldKind(); });
+  fieldDlg?.addEventListener('keydown', e => {                          // Enter in an option adds the next one
+    if (e.key === 'Enter' && e.target.closest('.field-opt')) { e.preventDefault(); addFieldOpt().querySelector('input').focus(); }
+  });
+  $('[data-field-form]', fieldDlg || document)?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target, body = { name: f.name.value.trim() };
+    if (f.field_id.value) body.field_id = +f.field_id.value; else { body.kind = f.kind.value; body.show_on_card = true; }
+    const isDrop = f.field_id.value ? boardFields.find(x => String(x.id) === f.field_id.value)?.kind === 'dropdown' : f.kind.value === 'dropdown';
+    if (isDrop) body.options = $$('.field-opt input', fieldDlg).map(i => i.value.trim()).filter(Boolean);
+    if (isDrop && !body.options.length) return toast('Give it at least one option.');
+    try { await post(`/api/boards/${boardId}/fields/`, body); location.reload(); }
+    catch (err) { toast(err.message || 'Could not save the field.'); }
+  });
+  document.addEventListener('click', e => { if (fielding && !e.target.closest('[data-field-pop], [data-tile-field], [data-tile-field-add]')) closeFieldPop(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && fielding) closeFieldPop(); });
+  listsEl.addEventListener('scroll', closeFieldPop, true);
   document.addEventListener('click', e => { if (picking && !e.target.closest('[data-tile-pop], [data-tile-pick]')) closeTilePops(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && picking) closeTilePops(); });
   listsEl.addEventListener('scroll', closeTilePops, true);

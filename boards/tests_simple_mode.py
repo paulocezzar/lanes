@@ -226,3 +226,23 @@ class BoardLookTests(ListViewTests):
         self.u.simple_mode = False; self.u.save()          # the look is the same with all features showing
         body = self.c.get(f"/b/{self.b.pk}/").content.decode()
         self.assertIn("data-head-add", body); self.assertIn('data-tile-pick="people"', body)
+
+
+class CardFieldsTests(ListViewTests):
+    """Choose-one fields show as coloured chips on the card and can be set from it; dates can be a range."""
+
+    def test_dropdown_field_shows_as_a_coloured_chip(self):
+        from datetime import date
+        from boards.models import CustomField
+        r = self.c.post(f"/api/boards/{self.b.pk}/fields/", {"name": "Priority", "kind": "dropdown", "options": ["Critical", "High", "Low"], "show_on_card": True}, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        f = CustomField.objects.get(board=self.b, name="Priority")
+        self.assertEqual([f.option_colour(o) for o in f.options], ["red", "orange", "yellow"])
+        r = self.c.post(f"/api/cards/{self.card.pk}/fields/", {"field_id": f.pk, "value": "High"}, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.c.post(f"/api/cards/{self.card.pk}/update/", {"start_date": "2027-01-11", "due_at": "2027-01-15T17:00"}, content_type="application/json")
+        body = self.c.get(f"/b/{self.b.pk}/").content.decode()
+        self.assertIn(f'class="tile-label tile-field lc-orange" data-tile-field="{f.pk}"', body)
+        self.assertIn("11 Jan – 15 Jan", body)
+        self.assertIn('id="field-dialog"', body); self.assertIn('id="field-data"', body); self.assertIn("data-tile-field-add", body)
+        self.card.refresh_from_db(); self.assertEqual(self.card.start_date, date(2027, 1, 11))

@@ -20,8 +20,30 @@
 </div>
 <form class="pop lv-pop" data-tile-pop="due" hidden>
   <div class="pop-head">Due date</div>
-  <input type="date" name="day" aria-label="Due date">
-  <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-tile-due-clear>No date</button></div>
+  <label class="lv-datelabel">Starts <small>(optional)</small><input type="date" name="start" aria-label="Start date"></label>
+  <label class="lv-datelabel">Due<input type="date" name="day" aria-label="Due date"></label>
+  <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn ghost sm" data-tile-due-clear>No dates</button></div>
 </form>
+<div class="pop lv-pop field-pop" data-field-pop hidden></div>
+<dialog id="field-dialog" class="dialog wide" aria-label="Field">
+  <form method="dialog" data-field-form>
+    <div class="dialog-head"><h3 data-field-heading>Add field</h3><button type="button" class="icon-btn" data-field-cancel aria-label="Close">{% include "boards/_icon.html" with i="close" %}</button></div>
+    <input type="hidden" name="field_id">
+    <div class="field-row">
+      <label>Field title<input name="name" maxlength="60" placeholder="Priority, Stage, Status…" required autocomplete="off"></label>
+      <label data-field-kind-wrap>Field type<select name="kind">
+        <option value="dropdown">Choose one (coloured)</option><option value="text">Text</option><option value="number">Number</option><option value="date">Date</option><option value="checkbox">Tick box</option>
+      </select></label>
+    </div>
+    <div data-field-options>
+      <span class="section-label">Options</span>
+      <div class="field-opts" data-field-opts></div>
+      <button type="button" class="btn ghost sm" data-field-opt-add>{% include "boards/_icon.html" with i="plus" %}Add an option</button>
+    </div>
+    <p class="muted small" data-field-note>Everyone on this board can then set this on any card. Options get their colour from their place in the list.</p>
+    <div class="dialog-actions"><button type="button" class="btn ghost" data-field-cancel>Cancel</button><button class="btn primary" data-field-save>Create field</button></div>
+  </form>
+</dialog>
+{{ field_data|json_script:"field-data" }}
 {% endif %}
 {% endblock %}

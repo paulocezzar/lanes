@@ -2616,3 +2616,37 @@ html:is(.simple,.full) .board .list:not(.collapsed) { background: transparent; b
 .tile-pick.tile-when.unset { order: 10; }
 @media (max-width: 900px) { .head-add { display: none; } }
 @media (min-width: 901px) { .board-head > .switch-btn { order: 1; } }
+
+/* ---- Fields on cards, date range, and the card as a panel on the right ---- */
+html:is(.simple,.full) .card-tile:not(.cover-full) > .tile-fields { margin-top: 8px; gap: 6px; }
+button.tile-label.tile-field { border: 0; font-family: inherit; cursor: pointer; }
+button.tile-label.tile-field:hover { filter: brightness(1.08); box-shadow: 0 0 0 2px var(--surface-3); }
+.tile-pick.tile-addfield { order: 11; margin-left: auto; width: 26px; height: 26px; justify-content: center; border-radius: 6px; color: var(--text-2); opacity: 0; transition: opacity .12s; }
+.tile-pick.tile-addfield .ic { width: 15px; height: 15px; }
+.card-tile:hover .tile-addfield, .tile-addfield:focus-visible { opacity: 1; }
+@media (hover: none) { .tile-pick.tile-addfield { opacity: .7; } }
+.lv-datelabel { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-2); margin-top: 8px; }
+.lv-datelabel small { font-weight: 400; }
+.field-pop { min-width: 250px; max-height: min(460px, 70vh); }
+.fp-field + .fp-field, .fp-field + .fp-new { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
+.fp-field .pop-head { text-align: left; border: 0; padding: 4px 8px 2px; }
+.fp-none { color: var(--text-2); }
+.field-pop .tile-label { display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 6px; color: #1d2125; height: auto; }
+.fp-edit, .fp-new { color: var(--text-2); }
+.fp-empty { padding: 6px 8px; margin: 0; max-width: 250px; }
+.field-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+.field-row label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.field-opts { display: grid; gap: 8px; margin: 8px 0; }
+.field-opt { display: flex; align-items: center; gap: 10px; }
+.field-opt input { flex: 1; }
+.fo-dot { width: 18px; height: 18px; border-radius: 50%; flex: none; }
+
+/* The card opens as a panel on the right, so the board stays in view beside it. */
+@media (min-width: 1100px) {
+  #card-dialog.card-dialog[open] { margin: 0 0 0 auto; width: min(760px, 52vw); height: 100vh; max-height: none; border-radius: 0; box-shadow: -8px 0 28px rgb(0 0 0 / .28); }
+  #card-dialog.card-dialog::backdrop { background: rgb(0 0 0 / .12); }
+  #card-dialog .cm { max-height: none; height: 100%; }
+  #card-dialog .cm-body { display: block; overflow-y: auto; }
+  #card-dialog .cm-main, #card-dialog .cm-side { overflow: visible; }
+  #card-dialog .cm-side { border-left: 0; border-top: 1px solid var(--border); }
+}

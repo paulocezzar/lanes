@@ -478,6 +478,14 @@ class CustomField(models.Model):
     def __str__(self):
         return self.name
 
+    OPTION_COLOURS = ["red", "orange", "yellow", "green", "blue", "purple", "pink", "sky", "grey"]
+
+    def option_colour(self, value):
+        try:
+            return self.OPTION_COLOURS[self.options.index(value) % len(self.OPTION_COLOURS)]
+        except ValueError:
+            return "grey"
+
     def clean_value(self, raw):
         """Normalise an incoming value; returns None to clear. Raises ValueError if invalid."""
         if raw in (None, "", []):
@@ -518,6 +526,11 @@ class CardFieldValue(models.Model):
     def map_url(self):
         from urllib.parse import quote
         return f"https://www.google.com/maps/search/?api=1&query={quote(str(self.value))}"
+
+    @property
+    def colour(self):
+        """Dropdown values show as coloured chips; the colour follows the option's place in the list."""
+        return self.field.option_colour(self.value)
 
     def display(self):
         f, v = self.field, self.value

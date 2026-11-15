@@ -111,6 +111,8 @@ def board_create(request):
 def board_page(request, board_id):
     board, ctx = board_context(request, board_id, "board")
     ctx["lists"] = lists_with_entries(board)
+    ctx["field_data"] = [{"id": f.pk, "name": f.name, "kind": f.kind, "options": f.options,
+                          "colours": [f.option_colour(o) for o in f.options]} for f in board.custom_fields.all()]
     # A board with lists but no cards yet opens with "What needs doing?" instead of bare columns.
     ctx["start_panel"] = bool(ctx["can_edit"] and ctx["lists"] and not board.is_template
                               and not any(lst.entries() for lst in ctx["lists"]))
