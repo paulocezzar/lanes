@@ -122,6 +122,17 @@
   <div id="toast" class="toast floating" hidden></div>
   {% if user.is_authenticated %}{% include "_mobile_nav.html" %}{% endif %}
   <script>
+    /* A "Plain" board follows the person's theme: dark words on a light page, light words on a dark one. */
+    window.LanesPlain = () => {
+      const t = document.documentElement.dataset.theme;
+      const light = t === 'light' || (t !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+      document.querySelectorAll('.board.bg-plain').forEach(b => b.classList.toggle('bg-light', light));
+    };
+    window.LanesPlain();
+    matchMedia('(prefers-color-scheme: light)').addEventListener('change', window.LanesPlain);
+    new MutationObserver(window.LanesPlain).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  </script>
+  <script>
     setTimeout(() => document.querySelectorAll('.toasts .toast').forEach(t => t.remove()), 5000);
     document.querySelectorAll('[data-theme-set]').forEach(b => b.addEventListener('click', async () => {
       const theme = b.dataset.themeSet;

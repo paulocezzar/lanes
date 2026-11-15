@@ -72,6 +72,8 @@ class Board(models.Model):
     VISIBILITY = [(PRIVATE, "Private — only people added to the board"), (WORKSPACE, "Department — everyone in it can see")]
 
     BACKGROUNDS = [
+        # Plain: a flat, neutral page that follows each person's light or dark theme. The default for new boards.
+        ("plain", "Plain"),
         ("dusk", "Dusk"),
         ("ocean", "Ocean"),
         ("forest", "Forest"),
@@ -92,7 +94,7 @@ class Board(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="boards")
     title = models.CharField(max_length=120)
     description = models.TextField(blank=True)
-    background = models.CharField(max_length=20, choices=BACKGROUNDS, default="dusk")
+    background = models.CharField(max_length=20, choices=BACKGROUNDS, default="plain")
     visibility = models.CharField(max_length=10, choices=VISIBILITY, default=WORKSPACE)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)

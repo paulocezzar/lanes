@@ -1517,6 +1517,7 @@ Invite the press`,
       await post(`/api/boards/${boardId}/update/`, { background: bg.dataset.bg });
       boardEl.className = boardEl.className.replace(/bg-\w+/, `bg-${bg.dataset.bg}`);
       boardEl.classList.toggle('bg-light', bg.dataset.light === '1');     // light backgrounds take dark header text
+      window.LanesPlain?.();                                                // "Plain" follows the person's theme
       $$('[data-bg]', drawer).forEach(s => s.classList.toggle('on', s === bg));
       return;
     }

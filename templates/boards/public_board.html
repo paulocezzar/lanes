@@ -3,7 +3,7 @@
 {% block body_class %}board-page public-page{% endblock %}
 {% block head %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block content %}
-<main class="board bg-{{ board.background }}{% if board.background in board.LIGHT_BACKGROUNDS %} bg-light{% endif %}" id="public-board">
+<main class="board bg-{{ board.background }}{% if board.background in board.LIGHT_BACKGROUNDS or board.background == "plain" and user.theme == "light" %} bg-light{% endif %}" id="public-board">
   <header class="board-head">
     <h1 class="board-title">{{ board.title }}</h1>
     <span class="board-vis">👁 Read-only public view</span>

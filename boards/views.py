@@ -90,7 +90,7 @@ def board_create(request):
     bg = request.POST.get("background")
     board = Board.objects.create(
         workspace=ws, title=title, created_by=request.user,
-        background=bg if bg in dict(Board.BACKGROUNDS) else "dusk",
+        background=bg if bg in dict(Board.BACKGROUNDS) else "plain",
         visibility=request.POST.get("visibility") if request.POST.get("visibility") in dict(Board.VISIBILITY) else Board.WORKSPACE,
     )
     if board.visibility == Board.PRIVATE and not permissions.can_make_private(board, request.user):

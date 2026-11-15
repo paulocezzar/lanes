@@ -157,3 +157,29 @@ class ListViewTests(TestCase):
         c = Client(); c.force_login(viewer)
         body = c.get(f"/b/{self.b.pk}/list/").content.decode().split("data-listview")[1].split("</main>")[0]
         self.assertNotIn("data-lv-add", body); self.assertIn("disabled", body)
+
+
+class PlainBackgroundTests(TestCase):
+    def setUp(self):
+        self.ws = Workspace.objects.create(name="Team")
+        from .models import WorkspaceMember
+        self.u = User.objects.create_user("pl@x.com", "pw")
+        WorkspaceMember.objects.create(workspace=self.ws, user=self.u)
+        self.c = Client(); self.c.force_login(self.u)
+
+    def test_a_new_board_starts_plain_and_follows_the_theme(self):
+        self.assertEqual(Board.BACKGROUNDS[0][0], "plain")          # first in the picker, so the create form's default
+        r = self.c.post("/boards/new/", {"workspace": self.ws.pk, "title": "Fresh"})
+        b = Board.objects.get(title="Fresh")
+        self.assertEqual(b.background, "plain")
+        main = lambda: self.c.get(f"/b/{b.pk}/").content.decode().split("<main")[1].split(">")[0]
+        self.assertIn("bg-plain", main()); self.assertNotIn("bg-light", main())      # theme not chosen: the page script decides
+        self.c.post("/account/theme/", {"theme": "light"})
+        self.assertIn("bg-plain bg-light", main())
+        self.c.post("/account/theme/", {"theme": "dark"})
+        self.assertNotIn("bg-light", main())
+
+    def test_existing_boards_keep_their_background(self):
+        b = Board.objects.create(workspace=self.ws, title="Old", background="dusk")
+        BoardMember.objects.create(board=b, user=self.u, role="admin")
+        self.assertIn("bg-dusk", self.c.get(f"/b/{b.pk}/").content.decode().split("<main")[1].split(">")[0])
