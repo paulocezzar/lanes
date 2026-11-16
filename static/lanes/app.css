@@ -2841,3 +2841,21 @@ html:is(.simple,.full) .tile-pick.tile-who { margin-right: 2px; }
 /* List name block: slimmer. */
 html:is(.simple,.full) .list > .list-head { padding: 7px 10px 7px 12px; min-height: 46px; }
 html:is(.simple,.full) .list-count { font-weight: 400; }
+
+/* ---- Dark theme: neutral greys throughout (top bar, menus, windows, the open card), in place of the blue-tinted ones.
+        Text is a shade brighter for contrast. The light theme is untouched. ---- */
+:root[data-theme="dark"] {
+  --bg: #1e1f21; --surface: #252628; --surface-2: #2e2f32; --surface-3: #3b3c40;
+  --card: #2b2c2f; --card-hover: #333437; --border: #3b3c40;
+  --text: #f0f1f2; --text-2: #a6a8ad; --accent-ink: #1e1f21;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --bg: #1e1f21; --surface: #252628; --surface-2: #2e2f32; --surface-3: #3b3c40;
+    --card: #2b2c2f; --card-hover: #333437; --border: #3b3c40;
+    --text: #f0f1f2; --text-2: #a6a8ad; --accent-ink: #1e1f21;
+  }
+}
+.board.bg-plain:not(.bg-light), .board.bg-plain:not(.bg-light) .board-head { background: #1e1f21; }
+/* Chips on dark boards: softer pastel fills with dark text, so they read clearly without shouting. */
+:root:not([data-theme="light"]) .board:not(.bg-light) .card-tile .tile-label:not(:empty) { color: #1e1f21; filter: saturate(.85) brightness(1.08); }
