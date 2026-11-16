@@ -2827,3 +2827,17 @@ html:is(.simple,.full) .add-card-form { border-radius: 8px; padding: 16px 16px 1
   :root[data-theme="system"] .board:not(.bg-light) .card-tile, :root[data-theme="system"] .board:not(.bg-light) .card-tile:hover { box-shadow: 0 1px 1px rgb(9 30 66 / .25); }
 }
 html:is(.simple,.full) .list > .list-head, html:is(.simple,.full) .list > .list-foot { flex: none; }   /* a long list scrolls its cards; its name keeps its height */
+
+/* ---- Side-by-side pass: quieter header controls on dark boards, lighter chips, a slimmer list name block ---- */
+/* Header buttons and the current tab were solid white on dark boards and pulled the eye away from the cards. */
+html:is(.simple,.full) .board:not(.bg-light) .board-head .btn.light { background: transparent; color: #fff; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .28); }
+html:is(.simple,.full) .board:not(.bg-light) .board-head .btn.light:hover { background: rgb(255 255 255 / .1); }
+html:is(.simple,.full) .board:not(.bg-light) .view-tabs a.on { background: rgb(255 255 255 / .14); color: #fff; }
+html:is(.simple,.full) .board:not(.bg-light) .add-list-btn { background: transparent; color: rgb(255 255 255 / .75); font-weight: 500; }
+html:is(.simple,.full) .board:not(.bg-light) .add-list-btn:hover { background: rgb(255 255 255 / .08); color: #fff; }
+/* Chips: regular weight and a touch narrower, so the title stays the strongest thing on the card. */
+html:is(.simple,.full) .card-tile .tile-label:not(:empty) { font-size: 13px; font-weight: 400; padding: 2px 6px; }
+html:is(.simple,.full) .tile-pick.tile-who { margin-right: 2px; }
+/* List name block: slimmer. */
+html:is(.simple,.full) .list > .list-head { padding: 7px 10px 7px 12px; min-height: 46px; }
+html:is(.simple,.full) .list-count { font-weight: 400; }
